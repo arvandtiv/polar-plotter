@@ -1,0 +1,25 @@
+# ESP-IDF build artifacts
+/build/
+sdkconfig
+sdkconfig.old
+*.bin
+*.elf
+*.map
+
+# Python (tools/weave etc.)
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Host-side test binaries
+/tmp/ktest
+
+# Editor / tooling caches
+.cache/
+
+# Generated preview output
+tools/weave/tmp/
+
+# macOS
+.DS_Store
