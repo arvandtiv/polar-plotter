@@ -30,6 +30,9 @@
 #include <math.h>
 #include <stdint.h>
 
+#define PLT_PI      3.14159265358979323846f
+#define PLT_TWO_PI  (2.0f * PLT_PI)
+
 typedef struct {
     float span_mm;       /* anchor-to-anchor distance (MOTOR_SPAN_MM) */
     float drop_mm;       /* origin below the motor line (ORIGIN_DROP_MM) */
@@ -83,6 +86,36 @@ static inline void plt_xy_to_steps(const plotter_geom_t *g, float x, float y,
                                     (plt_belt_left(g, x, y)  - l0) * g->steps_per_mm);
     *right_steps = (int32_t)lroundf((float)g->right_sign *
                                     (plt_belt_right(g, x, y) - l0) * g->steps_per_mm);
+}
+
+/* Number of straight chords to approximate a circle/arc of `radius_mm` so that
+ * the chord's bulge (sagitta) stays within `max_chord_err_mm`. Sagitta of a
+ * chord spanning angle a on radius r is r*(1 - cos(a/2)); solving for a and
+ * dividing 2*pi by it gives the count. Adaptive segmentation is the real
+ * efficiency win: small circles get few segments, big ones get enough to look
+ * round, neither over- nor under-shoots. Clamped to [8, 720]. */
+static inline int plt_arc_segments(float radius_mm, float max_chord_err_mm)
+{
+    if (radius_mm <= 0.0f || max_chord_err_mm <= 0.0f) return 8;
+    float ratio = 1.0f - max_chord_err_mm / radius_mm;   /* cos(a/2) */
+    if (ratio < -1.0f) ratio = -1.0f;
+    if (ratio >  1.0f) ratio =  1.0f;
+    float a = 2.0f * acosf(ratio);                        /* angle per chord */
+    int n = (a > 1e-6f) ? (int)ceilf(PLT_TWO_PI / a) : 720;
+    if (n < 8)   n = 8;
+    if (n > 720) n = 720;
+    return n;
+}
+
+/* Number of sub-segments to split a straight Cartesian line of `len_mm` into so
+ * each piece is at most `max_seg_mm` long. A single coordinated move draws a line
+ * that is straight in STEP space, which bows in Cartesian space on a polargraph;
+ * keeping each piece short makes that bow negligible. Always >= 1. */
+static inline int plt_line_segments(float len_mm, float max_seg_mm)
+{
+    if (max_seg_mm <= 0.0f) return 1;
+    int n = (int)ceilf(len_mm / max_seg_mm);
+    return (n < 1) ? 1 : n;
 }
 
 /* Inverse kinematics: motor microsteps -> (x, y) mm. Recovers the two belt

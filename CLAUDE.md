@@ -25,7 +25,7 @@ idf.py -p <PORT> flash monitor   # PORT e.g. /dev/cu.usbmodemXXXX (native USB-Se
 idf.py menuconfig
 ```
 
-There are no unit tests yet; "running" means flashing to the board and watching the serial log (`app_main` in `main/main.c` does a bring-up self-test).
+"Running" means flashing to the board and watching the serial log: `app_main` in `main/main.c` does a safe bring-up (no motor motion) then opens the console. The one host-runnable test is the kinematics dry run: `cc tools/kinematics_test/test_kinematics.c -o /tmp/ktest -lm && /tmp/ktest` — keep it passing before flashing geometry changes.
 
 ## Architecture
 
@@ -33,8 +33,13 @@ There are no unit tests yet; "running" means flashing to the board and watching 
   - The 5072 is **dual** — almost every register exists per-motor. Per-motor macros take `m = 0` (driver 1) or `m = 1` (driver 2); **the address stride differs per register group**, so each group encodes its own offset. Don't assume a single uniform offset.
   - SPI is **40-bit, mode 3, MSB-first**. Writes OR the address with `0x80`. **Reads are two-phase**: the first transfer latches the address, the data returns on the *second*. The first reply byte is the SPI status.
   - Uses the **integrated sixPoint motion controller** (`RAMPMODE=0`): you write `XTARGET` and the chip ramps there. No STEP/DIR — consistent with the wiring (SPI + ENN only).
+  - **Coordinated moves** (`tmc5072_move_coordinated`): writes both motors' targets so they finish at the **same time** by scaling the shorter-travel motor's ramp by its distance ratio (geometrically-similar ramps take equal time — no explicit T math). Every gondola move goes through this; single-motor positioning helpers were deliberately removed because they desync the belts / clobber the origin.
+  - `position_reached` uses `RAMP_STAT` bit 9 (the chip's own flag). Velocity mode (`tmc5072_move_velocity`/`_stop`) + an experimental stallGuard2 sensorless-home (`tmc5072_home_stallguard`) also exist.
 - **`components/servo/`** — SG90 via the LEDC peripheral (50 Hz, 14-bit). `servo_write_deg()` / `servo_write_us()`.
-- **`main/`** — `board_config.h` (all pin/tuning constants) + `main.c` (`app_main` bring-up).
+- **`main/`** — `board_config.h` (all pin/tuning constants), `main.c` (`app_main` bring-up + console), and **`kinematics.h`** (pure, dependency-free polargraph (x,y)↔microstep math, also host-tested by `tools/kinematics_test/`).
+
+### Drawing & calibration console
+The firmware does the (x,y) mm ↔ belt-length ↔ microstep geometry itself (no PC needed). Key commands: `belt <x> <y>` (DRY RUN — prints targets, no motion; use first), `goto <x> <y>`, `line`/`circle`/`square` (each takes an optional trailing `[cycles]` to retrace and darken a faint pen), `where` (XACTUAL→mm), `jog`/`stop` (velocity jog for sign-checking), `sethome` (the ONLY origin-setter: bare = manual zero-both-here; `sethome sg <m> <vel> [sgt]` = experimental stallGuard home). Straight edges are sub-segmented (`LINE_SEG_MM`) and **streamed with look-ahead** (`LINE_LOOKAHEAD_MM`) so motion flows instead of stopping at every sub-point, with a true stop only at corners.
 
 ## Things that will bite you (verify before powering motors)
 
@@ -49,7 +54,7 @@ There are no unit tests yet; "running" means flashing to the board and watching 
 **🎉 BRING-UP COMPLETE — first motion confirmed (2026-06-08).** Full chain proven on real hardware via the console:
 - `status` → both drivers report `CHOPCONF=0x000100c3`, `GSTAT=0`, no fault flags
 - `cur 300` → current control (IRUN/IHOLD) confirmed correct
-- `wig 1 6400 1` / `wig 2 6400 1` → **both motors physically rotate** back-and-forth via the integrated ramp generator
+- both motors physically rotate via the integrated ramp generator (originally proven with a `wig` command, since removed — use `goto`/`jog` now)
 - `pen up` / `pen down` → SG90 pen servo moves to configured angles
 
 Note: `status` shows `openloadA`/`openloadB` set **at standstill** (`stst` also set) — this is a **known false positive** in Trinamic open-load detection (the comparator only works meaningfully while the chopper is actively switching during motion, not at hold). Not a wiring fault. Only worth investigating if the flag persists *while the motor is actively turning*.
@@ -72,7 +77,7 @@ Note: `status` shows `openloadA`/`openloadB` set **at standstill** (`stst` also 
 - **The agent's shell cannot see `/dev/cu.usbmodem*`** (sandbox doesn't expose the device node), so flashing/monitoring must be done by the user from their own terminal.
 
 ### Bring-up command sequence (for reference / re-flashing)
-With the TMC live: `status` (expect `CHOPCONF 0x000100C3`) → `cur 300` → `wig 1 6400 1` / `wig 2 6400 1` → `pen up` / `pen down`. All confirmed working 2026-06-08.
+With the TMC live: `status` (expect `CHOPCONF 0x000100C3`) → `cur 300` → `jog 1 20000` / `stop 1` (confirm a motor turns) → `pen up` / `pen down`. Then calibrate: `belt 0 0` (dry run) → place gondola at the midpoint origin → `sethome` → `goto`/`line`/`circle`/`square`.
 
 ## Mechanical setup & calibration
 
@@ -93,9 +98,11 @@ With the TMC live: `status` (expect `CHOPCONF 0x000100C3`) → `cur 300` → `wi
 - Origin (0,0) = **midpoint between the anchors**. X+ = right, Y+ = down. **Defined by the measured belt length, not the drop:** set `HOME_BELT_MM` = the belt length (motor→gondola) with the gondola parked at the midpoint — both belts are equal there, so one tape measurement defines home. Current build: **`HOME_BELT_MM = 700 mm`**. The firmware derives the vertical drop at startup: `drop = √(HOME_BELT_MM² − (span/2)²)` = √(700² − 492.5²) ≈ **497.44 mm** (logged on boot). (The earlier convention specified a 400 mm drop directly → 634.5 mm belts; superseded because the belt is far easier to measure than the drop.)
 - Motor A = right anchor (`MOTOR_RHO`), Motor B = left anchor (`MOTOR_THETA`); **B is mirror-mounted** (unwind direction is opposite A). The per-motor step-direction signs `LEFT_DIR_SIGN`/`RIGHT_DIR_SIGN` (both `+1` by default) capture this and **must be confirmed on hardware** — verify with the `belt` dry-run + `jog` before trusting `goto`.
 
-**Console (Python-free calibration):** `belt <x> <y>` (dry run — prints belt lengths + motor targets, no motion), `goto <x> <y>` (coordinated move via kinematics), `where` (read XACTUAL back as mm), `jog`/`stop` (velocity-mode jog), `shome` (experimental stallGuard2 home).
+**Console (Python-free calibration):** `belt <x> <y>` (dry run — prints belt lengths + motor targets, no motion), `goto <x> <y>` (coordinated move via kinematics), `line`/`circle`/`square` (with optional `[cycles]`), `where` (read XACTUAL back as mm), `jog`/`stop` (velocity-mode jog), `sethome` (set origin).
 
-**Homing** — no endstops / no sensorless homing yet. It is **manual**: physically place the gondola at the midpoint origin (both belts = `HOME_BELT_MM`), then run `setorigin` to zero XACTUAL there. From then on XTARGET=0 = true origin. stallGuard2 sensorless homing (TMC5072 datasheet §12) is scaffolded in `tmc5072_home_stallguard()` / the `shome` command but **experimental** — SGT needs per-machine tuning.
+**Homing** — no endstops / no sensorless homing yet. It is **manual**: physically place the gondola at the midpoint origin (both belts = `HOME_BELT_MM`), then run **`sethome`** to zero XACTUAL there. From then on XTARGET=0 = true origin. `sethome` is the ONLY origin-setter (the old `setorigin`/`shome` were merged into it; bare `sethome` = manual zero-both, `sethome sg <m> <vel> [sgt]` = experimental stallGuard2 home). stallGuard2 (datasheet §12) is scaffolded in `tmc5072_home_stallguard()` but **experimental** — SGT needs per-machine tuning.
+
+**⚠️ Open calibration issue (drawn square bows):** a commanded square comes out with bowed horizontal edges and non-90° corners (2 obtuse / 2 acute), **mirror-symmetric about the Y axis, straight down the vertical centerline.** With the Cartesian interpolation in place, that signature = a wrong **shared, symmetric** geometry constant, not a code bug. Prime suspect is **`MOTOR_SPAN_MM`** (the carried-over 985 guess — measure between the two belt *take-off* points, not shaft centers). `STEPS_PER_MM` is derived (200·256/40=1280; only wrong if pulley teeth/belt pitch differ); `HOME_BELT_MM` was measured. Diagnose: `goto 0 100` should drop ~100 mm (immune to span error → isolates steps/mm); `goto ±100 0` should stay level (sag/rise ⇒ span too small/large). Second-order residual after span: pen-tip offset from the belt convergence point, and finite belt wrap on the pulley.
 
 **Pen servo** — up = **180°**, down = **120°**, ~200 ms dwell (in `board_config.h`).
 

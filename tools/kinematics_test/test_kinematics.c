@@ -115,6 +115,32 @@ int main(void)
         chk_true("right negated by right_sign",  sr == -srf);
     }
 
+    /* 7. Adaptive arc segmentation: count rises with radius, clamps, and the
+     *    resulting chord sagitta actually stays within tolerance. */
+    printf("\n[7] adaptive circle segmentation (chord err 0.3mm)\n");
+    {
+        int n_small = plt_arc_segments(5.0f,   0.3f);
+        int n_big   = plt_arc_segments(200.0f, 0.3f);
+        chk_true("clamps small radius to >= 8", n_small >= 8);
+        chk_true("bigger radius -> more segs",  n_big > n_small);
+        chk_true("clamps to <= 720",            plt_arc_segments(1e6f, 0.001f) <= 720);
+        /* verify the actual sagitta of the chosen segmentation is within tol */
+        float r = 200.0f, tol = 0.3f;
+        int n = plt_arc_segments(r, tol);
+        float sagitta = r * (1.0f - cosf((float)M_PI / (float)n));
+        chk("r=200 sagitta within tol", sagitta, 0.0, tol + 1e-4);
+    }
+
+    /* 8. Straight-line sub-segmentation: at least 1, and every piece <= max. */
+    printf("\n[8] line sub-segmentation (max 2mm)\n");
+    {
+        chk_true("zero-length line -> 1 seg", plt_line_segments(0.0f, 2.0f) == 1);
+        int n = plt_line_segments(100.0f, 2.0f);
+        chk_true("100mm/2mm -> 50 segs", n == 50);
+        chk_true("7mm/2mm -> 4 segs (rounds up)", plt_line_segments(7.0f, 2.0f) == 4);
+        chk_true("piece length <= max", (100.0f / (float)n) <= 2.0f + 1e-4f);
+    }
+
     printf("\n%s (%d failure%s)\n", g_fail ? "TESTS FAILED" : "ALL TESTS PASSED",
            g_fail, g_fail == 1 ? "" : "s");
     return g_fail ? 1 : 0;

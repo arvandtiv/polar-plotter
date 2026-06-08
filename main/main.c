@@ -1,38 +1,43 @@
-/* Polar plotter hardware bring-up / self-test.
+/* Polar plotter firmware: bring-up + interactive drawing console.
  *
- * On boot it runs an automatic sequence (SPI link check -> servo sweep ->
- * motor 1 back-and-forth -> motor 2 back-and-forth) then drops into an
- * interactive serial console so you can change current/speed/travel and
- * re-run individual tests while checking the wiring.
+ * On boot it runs a safe bring-up (SPI link check -> driver config -> register
+ * dump -> servo sweep; NO motor motion), derives the machine geometry from
+ * board_config.h, then drops into an interactive serial console for calibration
+ * and drawing. All gondola motion goes through the coordinated (same-execution-
+ * time) move path so the two belts always finish together.
  *
  * Console (type `help`):
  *   link                 re-read the TMC over SPI (VERSION should be 0x10)
  *   cur <run_mA> [hold]  set run/hold current on both motors
  *   speed <vmax>         set VMAX (speed) on both motors
- *   move <m> <pos>       absolute move, motor m = 1 or 2
- *   vmove <m1> <m2>      coordinated move: both motors reach target together
- *                        (ramp of the shorter-travel motor scaled so the two
- *                        finish in the same time -- straight-line segments)
  *   belt <x> <y>         DRY RUN: print belt lengths + motor targets for (x,y)
  *                        mm without moving -- use this first when calibrating
  *   goto <x> <y>         move gondola to (x,y) mm via firmware kinematics
+ *   line <x0> <y0> <x1> <y1> [cycles]
+ *                        draw a straight line (pen auto up/down)
+ *   circle <cx> <cy> <r> [cycles]
+ *                        draw a circle (pen auto up/down); segment count auto
+ *                        from radius + CIRCLE_CHORD_ERR_MM
+ *   square <cx> <cy> <z> [cycles]
+ *                        draw an axis-aligned square, side length z mm (pen
+ *                        auto up/down); edges Cartesian-interpolated (LINE_SEG_MM)
+ *   [cycles]             optional repeat count: retrace the shape N times with the
+ *                        pen DOWN to darken a faint line (default 1)
  *   where                read XACTUAL back as an (x,y) mm coordinate
  *   jog  <m> <vel>       velocity-mode jog (RAMPMODE 1/2); `stop` to halt
  *   stop [m]             decelerate a jog to standstill (both if no motor given)
- *   shome <m> <vel>[sgt] EXPERIMENTAL stallGuard2 sensorless home of one motor
- *   wig  <m> [amp] [n]   back-and-forth n times by +/- amp microsteps
  *   pen  <up|down|deg>   servo position
  *   en   <0|1>           disable / enable the drivers (ENN)
  *   stat                 dump DRV_STATUS + positions for both motors
- *   test                 re-run the full self-test
  *   home                 return both motors to XTARGET=0 (also triggered by UDP boundary hits)
- *   setorigin            calibrate: define the gondola's CURRENT physical spot as
- *                        (0,0) -- place it at the true geometric origin first! This
- *                        is the manual-homing step tools/weave/kinematics.py assumes
- *                        has been done; nothing else in the firmware performs it
- *                        (do_wiggle/cmd_verify zero XACTUAL too, but only as a side
- *                        effect of their own bring-up checks, wherever they happen
- *                        to run from -- not a deliberate origin calibration).
+ *   sethome              set the origin (0,0). Two forms:
+ *                          sethome                      manual: place gondola at the
+ *                                                       midpoint (both belts = HOME_BELT_MM)
+ *                                                       and zero BOTH motors here
+ *                          sethome sg <m> <vel> [sgt]   EXPERIMENTAL stallGuard2
+ *                                                       sensorless home of one motor
+ *                        The kinematics assume this has been done; it is the ONLY
+ *                        command that (re)defines the origin.
  *
  * WiFi / UDP boundary-hit listener (port UDP_LISTEN_PORT):
  *   Joins WIFI_SSID and listens for the single-byte edge codes that
@@ -84,7 +89,6 @@ static float    g_run_ma  = TEST_RUN_MA;
 static float    g_hold_ma = TEST_HOLD_MA;
 static uint32_t g_vmax    = TEST_VMAX;
 static uint32_t g_accel   = 500;          /* AMAX/DMAX */
-static int32_t  g_amp     = TEST_AMPLITUDE;
 
 /* Machine geometry for the firmware-side kinematics (see kinematics.h). Built
  * from board_config.h so calibration is a matter of editing constants there.
@@ -280,31 +284,6 @@ static bool wait_reached(int m, int timeout_ms)
     return true;
 }
 
-static void do_wiggle(int m, int32_t amp, int cycles)
-{
-    tmc5072_enable(&tmc, true);
-    /* Single-motor test: undo any ramp down-scaling a coordinated move may have
-     * left on this motor, so it wiggles at the full configured speed. */
-    tmc5072_set_ramp_scale(&tmc, m, 1.0f);
-    /* Zero both XTARGET and XACTUAL together so the ramp generator sees target==actual
-     * (no motion is triggered) while redefining "wherever the gondola physically is right
-     * now" as position 0 -- i.e. treat the current spot as the new coordinate origin for
-     * this test, regardless of what XACTUAL held before. */
-    tmc5072_write(&tmc, TMC5072_XTARGET(m), 0);
-    tmc5072_write(&tmc, TMC5072_XACTUAL(m), 0);
-
-    for (int i = 0; i < cycles; i++) {
-        tmc5072_move_to(&tmc, m, amp);
-        wait_reached(m, MOVE_TIMEOUT_MS);
-        tmc5072_move_to(&tmc, m, -amp);
-        wait_reached(m, MOVE_TIMEOUT_MS);
-        ESP_LOGI(TAG, "M%d cycle %d/%d done", m + 1, i + 1, cycles);
-    }
-    tmc5072_move_to(&tmc, m, 0);
-    wait_reached(m, MOVE_TIMEOUT_MS);
-    print_status(m);
-}
-
 /* "Home" the gondola: lift the pen, then return both motors to XTARGET=0.
  *
  * NOTE on what "home" means here: per CLAUDE.md this machine has no endstops
@@ -313,7 +292,7 @@ static void do_wiggle(int m, int32_t amp, int cycles)
  * manual homing procedure). This routine does NOT perform that procedure; it
  * just returns to wherever position 0 currently is for each motor. That is
  * the true origin only if it was established that way earlier in the session
- * (e.g. fresh after manual homing, before any do_wiggle/wig call redefined it).
+ * (i.e. via `sethome` after manual placement; only `sethome` sets the origin).
  *
  * Triggered by: the `home` console command, and by udp_listener_task() on any
  * boundary-hit code from the camera tracker. */
@@ -323,13 +302,13 @@ static void home_gondola(void)
      * XACTUAL. The sixPoint ramp generator (RAMPMODE=0) recomputes its ramp
      * the instant XTARGET changes, so this makes it decelerate to a stop
      * right where the gondola already is -- as fast as DMAX/D1/VSTOP allow --
-     * instead of finishing whatever distant move (e.g. a `move 1 40000` test)
-     * was in flight and THEN turning back to home. That "finish first, home
+     * instead of finishing whatever distant move (e.g. an in-flight `goto`)
+     * was running and THEN turning back to home. That "finish first, home
      * after" behaviour is exactly what this avoids: the redirect is a single
      * register write per motor, so it lands within the current SPI mutex's
      * microsecond-scale hold time regardless of what `wait_reached` elsewhere
      * is doing -- no shared abort flag or extra polling loop needed, so the
-     * normal move path (cmd_move/do_wiggle/wait_reached) is untouched and free
+     * normal move path (move_coordinated/wait_reached) is untouched and free
      * motion keeps its full performance. */
     int32_t stop_t = tmc5072_position(&tmc, MOTOR_THETA);
     int32_t stop_r = tmc5072_position(&tmc, MOTOR_RHO);
@@ -357,19 +336,16 @@ static void home_gondola(void)
 /* Defines "wherever the gondola physically is right now" as the coordinate
  * origin (0,0): hard-stops both motors in place, then writes XTARGET=XACTUAL=0
  * for each. This is the manual-homing calibration step CLAUDE.md describes
- * ("place the gondola at the true origin, then zero XACTUAL there") -- until
- * now nothing in the firmware actually performed it. (do_wiggle/cmd_verify
- * also zero XACTUAL, but at whatever position they happen to run from -- a
- * side effect of their own bring-up checks, not a deliberate calibration --
- * which is exactly what was silently redefining "0" out from under any
- * earlier calibration and throwing off Python-side pattern placement.)
+ * ("place the gondola at the true origin, then zero XACTUAL there"). It is the
+ * default action of `sethome`, the ONLY origin-setter: the old single-motor test
+ * commands that zeroed XACTUAL as a side effect (wig/verify/test) were removed
+ * precisely because they silently redefined "0" out from under calibration.
  *
  * Use: physically place the gondola at the true geometric origin (midpoint
  * between the anchors, where both belts measure HOME_BELT_MM -- see CLAUDE.md
- * "Mechanical setup & calibration"), then run `setorigin`. From that point on
- * XTARGET=0 means "true origin" -- until the next `setorigin`, `test`, or
- * `verify` redefines it -- which is the assumption tools/weave/kinematics.py
- * makes when it converts (x, y) mm to absolute XTARGET microsteps. */
+ * "Mechanical setup & calibration"), then run `sethome`. From that point on
+ * XTARGET=0 means "true origin" -- and the firmware kinematics (goto/circle/
+ * square/where) convert (x, y) mm to absolute XTARGET microsteps from it. */
 static void set_origin_here(void)
 {
     int32_t stop_t = tmc5072_position(&tmc, MOTOR_THETA);
@@ -440,20 +416,8 @@ static void run_bringup(void)
     if (!link_ok) {
         ESP_LOGE(TAG, "SPI link FAILED — fix wiring before moving motors.");
     }
-    ESP_LOGI(TAG, "Motors NOT moved. Commands: 'wig 1' / 'wig 2' (one motor),");
-    ESP_LOGI(TAG, "'test' (full motion), 'status', 'help'.");
-}
-
-/* Full self-test: safe bring-up, then back-and-forth on both motors. */
-static void run_selftest(void)
-{
-    run_bringup();
-    ESP_LOGI(TAG, "Motor 1 (left): back-and-forth +/-%ld x%d", (long)g_amp, TEST_CYCLES);
-    do_wiggle(MOTOR_THETA, g_amp, TEST_CYCLES);
-    ESP_LOGI(TAG, "Motor 2 (right): back-and-forth +/-%ld x%d", (long)g_amp, TEST_CYCLES);
-    do_wiggle(MOTOR_RHO, g_amp, TEST_CYCLES);
-    tmc5072_enable(&tmc, false);
-    ESP_LOGI(TAG, "========== SELF TEST DONE ==========");
+    ESP_LOGI(TAG, "Motors NOT moved. Calibrate: 'belt 0 0' (dry run) -> place gondola");
+    ESP_LOGI(TAG, "at origin -> 'sethome' -> 'goto'/'line'/'circle'/'square'. 'help' for all.");
 }
 
 /* ---------------------------- console commands ----------------------------- */
@@ -488,30 +452,6 @@ static int cmd_accel(int argc, char **argv)
     if (argc < 2) { printf("usage: accel <amax>\n"); return 0; }
     g_accel = strtoul(argv[1], NULL, 0);
     apply_accel(g_accel);
-    return 0;
-}
-
-static int cmd_move(int argc, char **argv)
-{
-    if (argc < 3) { printf("usage: move <1|2> <position>\n"); return 0; }
-    int m = motor_arg(argv[1]);
-    if (m < 0) { printf("motor must be 1 or 2\n"); return 0; }
-    tmc5072_enable(&tmc, true);
-    tmc5072_set_ramp_scale(&tmc, m, 1.0f);   /* full speed for a single-motor move */
-    tmc5072_move_to(&tmc, m, (int32_t)strtol(argv[2], NULL, 0));
-    wait_reached(m, MOVE_TIMEOUT_MS);
-    print_status(m);
-    return 0;
-}
-
-static int cmd_wig(int argc, char **argv)
-{
-    if (argc < 2) { printf("usage: wig <1|2> [amp] [cycles]\n"); return 0; }
-    int m = motor_arg(argv[1]);
-    if (m < 0) { printf("motor must be 1 or 2\n"); return 0; }
-    int32_t amp = (argc >= 3) ? (int32_t)strtol(argv[2], NULL, 0) : g_amp;
-    int cycles  = (argc >= 4) ? atoi(argv[3]) : TEST_CYCLES;
-    do_wiggle(m, amp, cycles);
     return 0;
 }
 
@@ -550,7 +490,7 @@ static int cmd_belt(int argc, char **argv)
 
 /* Move the gondola to an (x,y) mm coordinate using the firmware kinematics and a
  * coordinated (time-synced) move so the segment is straight. Requires the origin
- * to have been set (manual home + `setorigin`) for the coordinates to be true. */
+ * to have been set (manual placement + `sethome`) for the coordinates to be true. */
 static int cmd_goto(int argc, char **argv)
 {
     if (argc < 3) { printf("usage: goto <x_mm> <y_mm>\n"); return 0; }
@@ -578,6 +518,191 @@ static int cmd_where(int argc, char **argv)
     plt_steps_to_xy(&g_geom, sl, sr, &x, &y);
     printf("where: LEFT(M1)=%ld RIGHT(M2)=%ld steps -> (x=%.2f, y=%.2f) mm\n",
            (long)sl, (long)sr, (double)x, (double)y);
+    return 0;
+}
+
+/* Pen lift/drop with the configured settle dwell. */
+static void pen_lift(void) { servo_write_deg(PEN_UP_DEG);   vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
+static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
+
+/* Coordinated move to an (x,y) mm point (does not touch the pen). */
+static void move_to_xy(float x, float y)
+{
+    int32_t sl, sr;
+    plt_xy_to_steps(&g_geom, x, y, &sl, &sr);
+    tmc5072_move_coordinated(&tmc, sl, sr);
+    wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
+    wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+}
+
+/* Block until BOTH motors are within `lookahead` microsteps of their targets
+ * (tl, tr) -- "near", not necessarily "reached". Used to issue the next line
+ * sub-segment early so the ramp generator never decelerates to a full stop. */
+static void wait_both_near(int32_t tl, int32_t tr, int32_t lookahead, int timeout_ms)
+{
+    int waited = 0;
+    while (waited < timeout_ms) {
+        int32_t al = tmc5072_position(&tmc, MOTOR_THETA);
+        int32_t ar = tmc5072_position(&tmc, MOTOR_RHO);
+        if (labs(tl - al) <= lookahead && labs(tr - ar) <= lookahead) return;
+        vTaskDelay(pdMS_TO_TICKS(2));
+        waited += 2;
+    }
+}
+
+/* Draw a straight Cartesian line from (x0,y0) to (x1,y1) mm, assuming the pen is
+ * already at (x0,y0). Splits the line into <= LINE_SEG_MM pieces (so the path
+ * stays straight -- a single coordinated move would be straight only in step
+ * space and would bow), and STREAMS them: each sub-segment's target is issued as
+ * soon as the gondola comes within LINE_LOOKAHEAD_MM of the previous one, so the
+ * motion flows continuously instead of dead-stopping at every 2 mm. The final
+ * sub-segment waits for a true stop, so the endpoint/corner is hit exactly. Pen
+ * state is the caller's responsibility. */
+static void draw_line_mm(float x0, float y0, float x1, float y1)
+{
+    float dx = x1 - x0, dy = y1 - y0;
+    float len = sqrtf(dx * dx + dy * dy);
+    int n = plt_line_segments(len, LINE_SEG_MM);
+    int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * STEPS_PER_MM);
+    int32_t sl, sr;
+    for (int i = 1; i <= n; i++) {
+        float t = (float)i / (float)n;
+        plt_xy_to_steps(&g_geom, x0 + dx * t, y0 + dy * t, &sl, &sr);
+        tmc5072_move_coordinated(&tmc, sl, sr);
+        if (i < n) {
+            wait_both_near(sl, sr, lookahead, MOVE_TIMEOUT_MS);   /* keep flowing */
+        } else {
+            wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);           /* exact at corner */
+            wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+        }
+    }
+}
+
+/* The optional trailing [cycles] arg on line/circle/square repeats the shape
+ * that many times WITHOUT lifting the pen, retracing the same path to darken a
+ * faint line. Defaults to 1. */
+static int parse_cycles(const char *s)
+{
+    int c = atoi(s);
+    return (c < 1) ? 1 : c;
+}
+
+/* Draw a straight line from (x0,y0) to (x1,y1) mm. Repeats [cycles] times by
+ * retracing back-and-forth with the pen down (each extra pass reverses
+ * direction, so no pen-up travel between passes). */
+static int cmd_line(int argc, char **argv)
+{
+    if (argc < 5) { printf("usage: line <x0> <y0> <x1> <y1> [cycles]\n"); return 0; }
+    float x0 = atof(argv[1]);
+    float y0 = atof(argv[2]);
+    float x1 = atof(argv[3]);
+    float y1 = atof(argv[4]);
+    int cycles = (argc >= 6) ? parse_cycles(argv[5]) : 1;
+
+    tmc5072_enable(&tmc, true);
+    pen_lift();
+    move_to_xy(x0, y0);
+    pen_drop();
+
+    printf("line (%.1f,%.1f)->(%.1f,%.1f) x%d pass%s\n",
+           (double)x0, (double)y0, (double)x1, (double)y1, cycles, cycles == 1 ? "" : "es");
+
+    /* Pass 0 goes start->end; each subsequent pass reverses, retracing in place. */
+    for (int c = 0; c < cycles; c++) {
+        if (c & 1) draw_line_mm(x1, y1, x0, y0);
+        else       draw_line_mm(x0, y0, x1, y1);
+    }
+
+    pen_lift();
+    printf("line done\n");
+    return 0;
+}
+
+/* Draw an axis-aligned square centered at (cx, cy) mm with side length `size`
+ * mm (the "diameter" = full width across, NOT the diagonal). Pen auto up/down;
+ * edges are Cartesian-interpolated via draw_line_mm. Optional [cycles] retraces
+ * the outline that many times (pen stays down between passes) to darken it. */
+static int cmd_square(int argc, char **argv)
+{
+    if (argc < 4) { printf("usage: square <cx_mm> <cy_mm> <size_mm> [cycles]\n"); return 0; }
+    float cx = atof(argv[1]);
+    float cy = atof(argv[2]);
+    float z  = atof(argv[3]);
+    if (z <= 0.0f) { printf("size must be > 0\n"); return 0; }
+    int cycles = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    float h = z * 0.5f;
+
+    /* Corners in order (Y+ = down): top-left -> top-right -> bottom-right ->
+     * bottom-left, then close back to top-left. */
+    float xs[4] = { cx - h, cx + h, cx + h, cx - h };
+    float ys[4] = { cy - h, cy - h, cy + h, cy + h };
+
+    tmc5072_enable(&tmc, true);
+    pen_lift();
+    move_to_xy(xs[0], ys[0]);
+    pen_drop();
+
+    printf("square (%.1f, %.1f) size=%.1f mm (side length), seg<=%.1f mm, x%d pass%s\n",
+           (double)cx, (double)cy, (double)z, (double)LINE_SEG_MM, cycles, cycles == 1 ? "" : "es");
+
+    /* Each cycle ends back at corner 0, so passes retrace with the pen still down. */
+    for (int c = 0; c < cycles; c++) {
+        for (int e = 0; e < 4; e++) {
+            int b = (e + 1) & 3;   /* next corner, wrapping 3->0 to close */
+            draw_line_mm(xs[e], ys[e], xs[b], ys[b]);
+        }
+    }
+
+    pen_lift();
+    printf("square done\n");
+    return 0;
+}
+
+/* Draw a circle of radius r mm centered at (cx, cy) mm. Segment count is chosen
+ * adaptively from the radius and CIRCLE_CHORD_ERR_MM. Each chord is a coordinated
+ * (straight, time-synced) move; the radial vector is rotated incrementally (one
+ * precomputed cos/sin, no per-point trig) and the final vertex is snapped back to
+ * the exact start for a clean closure. Optional [cycles] retraces the circle that
+ * many times (pen stays down between passes) to darken it. */
+static int cmd_circle(int argc, char **argv)
+{
+    if (argc < 4) { printf("usage: circle <cx_mm> <cy_mm> <r_mm> [cycles]\n"); return 0; }
+    float cx = atof(argv[1]);
+    float cy = atof(argv[2]);
+    float r  = atof(argv[3]);
+    if (r <= 0.0f) { printf("radius must be > 0\n"); return 0; }
+    int cycles = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    int n = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    if (n < 3) n = 3;
+
+    /* Precompute the per-segment rotation once. */
+    float dth = PLT_TWO_PI / (float)n;
+    float c = cosf(dth), s = sinf(dth);
+
+    tmc5072_enable(&tmc, true);
+    pen_lift();
+    move_to_xy(cx + r, cy);   /* start at angle 0 (+x) */
+    pen_drop();
+
+    printf("circle (%.1f, %.1f) r=%.1f mm in %d segments (chord err <= %.2f mm), x%d pass%s\n",
+           (double)cx, (double)cy, (double)r, n, (double)CIRCLE_CHORD_ERR_MM,
+           cycles, cycles == 1 ? "" : "es");
+
+    for (int cyc = 0; cyc < cycles; cyc++) {
+        float vx = r, vy = 0.0f;   /* reset the radial vector at the start of each pass */
+        for (int k = 1; k <= n; k++) {
+            float nvx = vx * c - vy * s;   /* rotate the radial vector by dth */
+            float nvy = vx * s + vy * c;
+            vx = nvx; vy = nvy;
+            float px = cx + vx;
+            float py = cy + vy;
+            if (k == n) { px = cx + r; py = cy; }   /* snap to exact start -> clean close */
+            move_to_xy(px, py);
+        }
+    }
+
+    pen_lift();
+    printf("circle done\n");
     return 0;
 }
 
@@ -612,40 +737,37 @@ static int cmd_stop(int argc, char **argv)
     return 0;
 }
 
-/* EXPERIMENTAL stallGuard2 sensorless homing of one motor (see
- * tmc5072_home_stallguard). Drives toward a hard stop until the belt stalls,
- * then zeroes that motor. SGT needs tuning -- start coarse. */
-static int cmd_shome(int argc, char **argv)
+/* Establish the coordinate origin (0,0). The single home-setting command:
+ *   sethome                       manual: zero BOTH motors at the current spot
+ *                                 (place the gondola at the midpoint origin,
+ *                                 both belts = HOME_BELT_MM, then run this)
+ *   sethome sg <1|2> <vel> [sgt]  EXPERIMENTAL stallGuard2 sensorless home of
+ *                                 one motor: drive toward a hard stop until the
+ *                                 belt stalls, then zero that motor. SGT needs
+ *                                 tuning -- start coarse.
+ * These are the ONLY deliberate origin-setters in the firmware. */
+static int cmd_sethome(int argc, char **argv)
 {
-    if (argc < 3) {
-        printf("usage: shome <1|2> <velocity> [sgt]   (EXPERIMENTAL — tune sgt!)\n");
+    if (argc >= 2 && !strcmp(argv[1], "sg")) {
+        if (argc < 4) {
+            printf("usage: sethome sg <1|2> <velocity> [sgt]   (EXPERIMENTAL — tune sgt!)\n");
+            return 0;
+        }
+        int m = motor_arg(argv[2]);
+        if (m < 0) { printf("motor must be 1 or 2\n"); return 0; }
+        int32_t v = (int32_t)strtol(argv[3], NULL, 0);
+        int sgt   = (argc >= 5) ? atoi(argv[4]) : 4;
+        tmc5072_enable(&tmc, true);
+        printf("M%d stallGuard home at v=%ld sgt=%d ...\n", m + 1, (long)v, sgt);
+        esp_err_t r = tmc5072_home_stallguard(&tmc, m, v, g_accel, sgt, MOVE_TIMEOUT_MS);
+        printf("  -> %s (XACTUAL now %ld)\n",
+               (r == ESP_OK) ? "STALL detected, zeroed" : "NO stall (timeout) — adjust sgt/velocity",
+               (long)tmc5072_position(&tmc, m));
         return 0;
     }
-    int m = motor_arg(argv[1]);
-    if (m < 0) { printf("motor must be 1 or 2\n"); return 0; }
-    int32_t v = (int32_t)strtol(argv[2], NULL, 0);
-    int sgt   = (argc >= 4) ? atoi(argv[3]) : 4;
-    tmc5072_enable(&tmc, true);
-    printf("M%d stallGuard homing at v=%ld sgt=%d ...\n", m + 1, (long)v, sgt);
-    esp_err_t r = tmc5072_home_stallguard(&tmc, m, v, g_accel, sgt, MOVE_TIMEOUT_MS);
-    printf("  -> %s (XACTUAL now %ld)\n",
-           (r == ESP_OK) ? "STALL detected, zeroed" : "NO stall (timeout) — adjust sgt/velocity",
-           (long)tmc5072_position(&tmc, m));
-    return 0;
-}
 
-static int cmd_vmove(int argc, char **argv)
-{
-    if (argc < 3) { printf("usage: vmove <m1_target> <m2_target>\n"); return 0; }
-    int32_t t0 = (int32_t)strtol(argv[1], NULL, 0);
-    int32_t t1 = (int32_t)strtol(argv[2], NULL, 0);
-    tmc5072_enable(&tmc, true);
-    /* Coordinated, time-synced move of both motors (same as the pattern stream). */
-    tmc5072_move_coordinated(&tmc, t0, t1);
-    wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
-    wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
-    print_status(MOTOR_THETA);
-    print_status(MOTOR_RHO);
+    /* Default: manual in-place origin set for both motors. */
+    set_origin_here();
     return 0;
 }
 
@@ -685,54 +807,7 @@ static int cmd_status(int argc, char **argv)
     return 0;
 }
 
-/* Adapted from the wall-plotter `verify`: there it proved two UART-addressed
- * drivers were independent. Here the two drivers share one SPI chip and are
- * addressed by register offset, so we prove the per-motor offsets are correct
- * by writing distinct currents + positions and confirming they read back
- * independently. */
-static int cmd_verify(int argc, char **argv)
-{
-    (void)argc; (void)argv;
-    printf("\n-- verify per-motor independence --\n");
-
-    /* Test 1: write DIFFERENT currents to each driver, then read back via the
-     * IHOLD_IRUN shadow. If the per-motor register-offset macros (CLAUDE.md:
-     * "the address stride differs per register group") were wrong, both reads
-     * would alias to the same physical register and come back equal -> FAIL. */
-    tmc5072_set_current_ma(&tmc, MOTOR_THETA, 400, g_hold_ma);
-    tmc5072_set_current_ma(&tmc, MOTOR_RHO,   900, g_hold_ma);
-    uint8_t csA = (tmc5072_get_ihold_irun(&tmc, MOTOR_THETA) >> 8) & 0x1F;
-    uint8_t csB = (tmc5072_get_ihold_irun(&tmc, MOTOR_RHO)   >> 8) & 0x1F;
-    printf("  current: M1 IRUN=%u (wrote 400mA)  M2 IRUN=%u (wrote 900mA) -> %s\n",
-           csA, csB, (csA != csB) ? "PASS" : "FAIL");
-
-    /* Test 2: same idea for the position registers. Disable the output stage first
-     * (ENN) so this is a pure register exercise that cannot spin the motors, and
-     * write XTARGET == XACTUAL together so even with the driver re-enabled later,
-     * the ramp generator sees "already at target" and won't suddenly move. */
-    tmc5072_enable(&tmc, false);
-    tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_THETA), 1111);
-    tmc5072_write(&tmc, TMC5072_XACTUAL(MOTOR_THETA), 1111);
-    tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_RHO),   2222);
-    tmc5072_write(&tmc, TMC5072_XACTUAL(MOTOR_RHO),   2222);
-    int32_t pA = tmc5072_position(&tmc, MOTOR_THETA);
-    int32_t pB = tmc5072_position(&tmc, MOTOR_RHO);
-    printf("  position: M1 XACTUAL=%ld (wrote 1111)  M2 XACTUAL=%ld (wrote 2222) -> %s\n",
-           (long)pA, (long)pB, (pA == 1111 && pB == 2222) ? "PASS" : "FAIL");
-
-    /* Reset origins and restore configured current. */
-    for (int m = 0; m < 2; m++) {
-        tmc5072_write(&tmc, TMC5072_XTARGET(m), 0);
-        tmc5072_write(&tmc, TMC5072_XACTUAL(m), 0);
-    }
-    apply_current(g_run_ma, g_hold_ma);
-    printf("  current restored to run=%.0f mA\n", (double)g_run_ma);
-    return 0;
-}
-
-static int cmd_test(int argc, char **argv) { (void)argc; (void)argv; run_selftest(); return 0; }
 static int cmd_home(int argc, char **argv) { (void)argc; (void)argv; home_gondola(); return 0; }
-static int cmd_setorigin(int argc, char **argv) { (void)argc; (void)argv; set_origin_here(); return 0; }
 
 static void register_commands(void)
 {
@@ -741,23 +816,20 @@ static void register_commands(void)
         { .command = "cur",    .help = "Set current: cur <run_mA> [hold_mA]",       .func = cmd_cur },
         { .command = "speed",  .help = "Set speed: speed <vmax>",                   .func = cmd_speed },
         { .command = "accel",  .help = "Set acceleration: accel <amax>",            .func = cmd_accel },
-        { .command = "move",   .help = "Absolute move: move <1|2> <position>",      .func = cmd_move },
-        { .command = "vmove",  .help = "Coordinated move (both finish together): vmove <m1> <m2>", .func = cmd_vmove },
         { .command = "belt",   .help = "DRY RUN: print belt lengths + targets for goto <x> <y> (no motion)", .func = cmd_belt },
         { .command = "goto",   .help = "Move gondola to (x,y) mm via kinematics: goto <x_mm> <y_mm>", .func = cmd_goto },
+        { .command = "line",   .help = "Draw a line: line <x0> <y0> <x1> <y1> [cycles]", .func = cmd_line },
+        { .command = "circle", .help = "Draw a circle: circle <cx> <cy> <r_mm> [cycles]", .func = cmd_circle },
+        { .command = "square", .help = "Draw a square: square <cx> <cy> <size_mm> [cycles] (side length)", .func = cmd_square },
         { .command = "where",  .help = "Read XACTUAL back as an (x,y) mm coordinate", .func = cmd_where },
         { .command = "jog",    .help = "Velocity-mode jog: jog <1|2> <velocity> (stop to halt)", .func = cmd_jog },
         { .command = "stop",   .help = "Stop velocity jog: stop [1|2]",             .func = cmd_stop },
-        { .command = "shome",  .help = "EXPERIMENTAL stallGuard home: shome <1|2> <vel> [sgt]", .func = cmd_shome },
-        { .command = "wig",    .help = "Back-and-forth: wig <1|2> [amp] [cycles]",  .func = cmd_wig },
         { .command = "pen",    .help = "Servo: pen <up|down|degrees>",              .func = cmd_pen },
         { .command = "en",     .help = "Enable/disable drivers: en <0|1>",          .func = cmd_en },
         { .command = "home",   .help = "Home: return both motors to XTARGET=0",     .func = cmd_home },
-        { .command = "setorigin", .help = "Calibrate: define current spot as (0,0) -- place gondola at the true origin first!", .func = cmd_setorigin },
+        { .command = "sethome", .help = "Set origin: sethome (manual, both) | sethome sg <1|2> <vel> [sgt]", .func = cmd_sethome },
         { .command = "stat",   .help = "Brief DRV_STATUS + positions",              .func = cmd_stat },
         { .command = "status", .help = "Full register readback (both motors)",      .func = cmd_status },
-        { .command = "verify", .help = "Prove the two motors are independent",      .func = cmd_verify },
-        { .command = "test",   .help = "Re-run the full self-test",                 .func = cmd_test },
     };
     for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
         ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));

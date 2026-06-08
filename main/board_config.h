@@ -73,6 +73,25 @@
 #define LEFT_DIR_SIGN    (+1)
 #define RIGHT_DIR_SIGN   (+1)
 
+/* Max chord bulge (sagitta) when approximating arcs/circles with line segments.
+ * Smaller = rounder but more (slower) segments. 0.3 mm is a good plotter default;
+ * the `circle` command sizes its segment count from this and the radius. */
+#define CIRCLE_CHORD_ERR_MM  0.3f
+
+/* Max length of a single straight-line sub-segment (mm). Straight Cartesian
+ * lines (e.g. `square` edges) are split into pieces this long so the step-space
+ * interpolation stays visually straight. Smaller = straighter but more segments. */
+#define LINE_SEG_MM          2.0f
+
+/* Look-ahead distance for smooth (non-stop) line drawing: while drawing an edge,
+ * the next sub-segment target is issued as soon as the gondola comes within this
+ * distance of the current one -- so the ramp generator never decelerates to a
+ * full stop mid-edge and the motion stays continuous. MUST be < LINE_SEG_MM so
+ * waypoints aren't skipped (which would let the bow back in). Larger = smoother
+ * but cuts slightly inside the path; corners stay exact (each edge ends with a
+ * real stop). */
+#define LINE_LOOKAHEAD_MM    1.0f
+
 /* ---- WiFi + UDP boundary-hit listener ----
  * Joins the same network the camera-tracking Python script (gondola_boundary_keeper.py,
  * sibling ../wall-plotter project) runs on. That script sends single-byte UDP edge
