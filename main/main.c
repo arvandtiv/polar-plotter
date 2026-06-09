@@ -74,9 +74,11 @@
 #include "tmc5072.h"
 #include "servo.h"
 #include "kinematics.h"
+#include "web_server.h"
 
 static const char *TAG = "plotter-test";
 static tmc5072_t   tmc;
+static esp_console_repl_t *s_repl = NULL;
 
 /* WiFi connection state, updated by wifi_event_handler() and surfaced in
  * print_global_status()/`status` so you can check connectivity + IP without
@@ -85,10 +87,19 @@ static volatile bool      s_wifi_connected = false;
 static esp_netif_ip_info_t s_wifi_ip;
 
 /* Live-adjustable test parameters (seeded from board_config.h). */
-static float    g_run_ma  = TEST_RUN_MA;
-static float    g_hold_ma = TEST_HOLD_MA;
-static uint32_t g_vmax    = TEST_VMAX;
-static uint32_t g_accel   = 500;          /* AMAX/DMAX */
+static float    g_run_ma       = TEST_RUN_MA;
+static float    g_hold_ma      = TEST_HOLD_MA;
+static uint32_t g_vmax         = TEST_VMAX;
+static uint32_t g_accel        = 500;          /* AMAX/DMAX */
+static float    g_home_belt_mm  = HOME_BELT_MM;  /* tunable at runtime via `setbelt` */
+static float    g_motor_span_mm  = MOTOR_SPAN_MM;  /* tunable at runtime via `setspan` */
+static float    g_steps_per_mm = 1265.0f;   /* tunable via `setsteps` */
+static float    g_x_scale      = 1.0300f;   /* tunable via `setxscale` */
+static float    g_y_scale      = 1.0f;      /* tunable via `setyscale` */
+static float    g_x_min        = X_MIN_MM;  /* tunable via `setbounds` or /api/bounds */
+static float    g_x_max        = X_MAX_MM;
+static float    g_y_min        = Y_MIN_MM;
+static float    g_y_max        = Y_MAX_MM;
 
 /* Machine geometry for the firmware-side kinematics (see kinematics.h). Built
  * from board_config.h so calibration is a matter of editing constants there.
@@ -97,17 +108,32 @@ static uint32_t g_accel   = 500;          /* AMAX/DMAX */
 static plotter_geom_t g_geom = {
     .span_mm      = MOTOR_SPAN_MM,
     .drop_mm      = 0.0f,   /* set in init_geometry() from HOME_BELT_MM */
-    .steps_per_mm = STEPS_PER_MM,
+    .steps_per_mm = 1265.0f,
+    .x_scale      = 1.0300f,
+    .y_scale      = 1.0f,
     .left_sign    = LEFT_DIR_SIGN,
     .right_sign   = RIGHT_DIR_SIGN,
 };
 
+/* Forward declarations for draw helpers (defined after the lower-level primitives,
+ * used by both console cmd_* wrappers and web_draw_task). */
+static void do_draw_goto(float x, float y);
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles);
+static void do_draw_square(float cx, float cy, float size, int cycles, bool filled, float hatch_angle, float hatch_spacing);
+static void do_draw_circle(float cx, float cy, float r, int cycles, bool filled, float hatch_angle, float hatch_spacing);
+static void do_draw_bullseye(float cx, float cy);
+static void do_draw_grid(float cx, float cy);
+
 static void init_geometry(void)
 {
-    g_geom.drop_mm = plt_drop_from_home_belt(MOTOR_SPAN_MM, HOME_BELT_MM);
-    ESP_LOGI(TAG, "geometry: span=%.1f mm  home_belt=%.1f mm  -> origin drop=%.2f mm  (%.1f steps/mm)",
-             (double)MOTOR_SPAN_MM, (double)HOME_BELT_MM,
-             (double)g_geom.drop_mm, (double)g_geom.steps_per_mm);
+    g_geom.span_mm      = g_motor_span_mm;
+    g_geom.drop_mm      = plt_drop_from_home_belt(g_motor_span_mm, g_home_belt_mm);
+    g_geom.steps_per_mm = g_steps_per_mm;
+    g_geom.x_scale      = g_x_scale;
+    g_geom.y_scale      = g_y_scale;
+    ESP_LOGI(TAG, "geometry: span=%.1f mm  home_belt=%.1f mm  -> drop=%.2f mm  (%.1f steps/mm  xs=%.4f ys=%.4f)",
+             (double)g_motor_span_mm, (double)g_home_belt_mm, (double)g_geom.drop_mm,
+             (double)g_geom.steps_per_mm, (double)g_geom.x_scale, (double)g_geom.y_scale);
 }
 
 static uint16_t mres_to_microsteps(uint8_t mres)
@@ -455,6 +481,120 @@ static int cmd_accel(int argc, char **argv)
     return 0;
 }
 
+static int cmd_exit(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    printf("Closing REPL. Press Ctrl+] to exit idf.py monitor.\n");
+    s_repl->del(s_repl);
+    return 0;
+}
+
+static void print_geom_vars(void)
+{
+    printf("  home_belt  = %.1f mm  (default %.1f)\n",  (double)g_home_belt_mm,  (double)HOME_BELT_MM);
+    printf("  motor_span = %.1f mm  (default %.1f)\n",  (double)g_motor_span_mm, (double)MOTOR_SPAN_MM);
+    printf("  steps/mm   = %.3f\n",   (double)g_steps_per_mm);
+    printf("  x_scale    = %.4f\n",   (double)g_x_scale);
+    printf("  y_scale    = %.4f\n",   (double)g_y_scale);
+    printf("  -> drop    = %.2f mm\n", (double)g_geom.drop_mm);
+}
+
+static int cmd_setsteps(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_geom_vars();
+        printf("usage: setsteps <steps_per_mm>\n");
+        return 0;
+    }
+    g_steps_per_mm = atof(argv[1]);
+    init_geometry();
+    print_geom_vars();
+    return 0;
+}
+
+static int cmd_setxscale(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_geom_vars();
+        printf("usage: setxscale <scale>   (1.0 = no correction)\n");
+        return 0;
+    }
+    g_x_scale = atof(argv[1]);
+    init_geometry();
+    print_geom_vars();
+    return 0;
+}
+
+static int cmd_setyscale(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_geom_vars();
+        printf("usage: setyscale <scale>   (1.0 = no correction)\n");
+        return 0;
+    }
+    g_y_scale = atof(argv[1]);
+    init_geometry();
+    print_geom_vars();
+    return 0;
+}
+
+static int cmd_setspan(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_geom_vars();
+        printf("usage: setspan <mm>\n");
+        return 0;
+    }
+    g_motor_span_mm = atof(argv[1]);
+    init_geometry();
+    print_geom_vars();
+    return 0;
+}
+
+static int cmd_setbounds(int argc, char **argv)
+{
+    if (argc < 5) {
+        printf("  bounds: x=[%.1f, %.1f]  y=[%.1f, %.1f] mm\n",
+               (double)g_x_min, (double)g_x_max, (double)g_y_min, (double)g_y_max);
+        printf("usage: setbounds <xmin> <xmax> <ymin> <ymax>\n");
+        return 0;
+    }
+    g_x_min = atof(argv[1]);
+    g_x_max = atof(argv[2]);
+    g_y_min = atof(argv[3]);
+    g_y_max = atof(argv[4]);
+    printf("bounds set: x=[%.1f, %.1f]  y=[%.1f, %.1f] mm\n",
+           (double)g_x_min, (double)g_x_max, (double)g_y_min, (double)g_y_max);
+    return 0;
+}
+
+static int cmd_setbelt(int argc, char **argv)
+{
+    if (argc < 2) {
+        print_geom_vars();
+        printf("usage: setbelt <mm>\n");
+        return 0;
+    }
+    g_home_belt_mm = atof(argv[1]);
+    init_geometry();
+    print_geom_vars();
+    return 0;
+}
+
+/* Clamp (x,y) to the drawable area. Returns true and logs a warning if clamped. */
+static bool clamp_xy(float *x, float *y)
+{
+    bool clamped = false;
+    if (*x > g_x_max) { *x = g_x_max; clamped = true; }
+    if (*x < g_x_min) { *x = g_x_min; clamped = true; }
+    if (*y > g_y_max) { *y = g_y_max; clamped = true; }
+    if (*y < g_y_min) { *y = g_y_min; clamped = true; }
+    if (clamped)
+        ESP_LOGW(TAG, "point clamped to drawable area (x=%.1f y=%.1f)",
+                 (double)*x, (double)*y);
+    return clamped;
+}
+
 /* DRY RUN: compute belt lengths + motor targets for (x,y) mm WITHOUT moving.
  * The first thing to use when calibrating -- check the geometry, sign, and
  * magnitude of the targets against hand calculations / a tape measure before
@@ -476,9 +616,9 @@ static int cmd_belt(int argc, char **argv)
     plt_steps_to_xy(&g_geom, sl, sr, &rx, &ry);
 
     printf("\n-- belt dry run for (x=%.1f, y=%.1f) mm --\n", (double)x, (double)y);
-    printf("  geom: span=%.1f drop=%.1f steps/mm=%.3f  home_belt=%.2f mm\n",
-           (double)g_geom.span_mm, (double)g_geom.drop_mm,
-           (double)g_geom.steps_per_mm, (double)l0);
+    printf("  geom: span=%.1f drop=%.1f steps/mm=%.3f xs=%.4f ys=%.4f  home_belt=%.2f mm\n",
+           (double)g_geom.span_mm, (double)g_geom.drop_mm, (double)g_geom.steps_per_mm,
+           (double)g_geom.x_scale, (double)g_geom.y_scale, (double)l0);
     printf("  belt length : left=%.2f mm (%+.2f from home)  right=%.2f mm (%+.2f from home)\n",
            (double)bl, (double)(bl - l0), (double)br, (double)(br - l0));
     printf("  motor target: LEFT(M1)=%ld steps  RIGHT(M2)=%ld steps  [signs L=%+d R=%+d]\n",
@@ -500,10 +640,7 @@ static int cmd_goto(int argc, char **argv)
     plt_xy_to_steps(&g_geom, x, y, &sl, &sr);
     printf("goto (%.1f, %.1f) mm -> LEFT(M1)=%ld RIGHT(M2)=%ld steps\n",
            (double)x, (double)y, (long)sl, (long)sr);
-    tmc5072_enable(&tmc, true);
-    tmc5072_move_coordinated(&tmc, sl, sr);   /* MOTOR_THETA=left, MOTOR_RHO=right */
-    wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
-    wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+    do_draw_goto(x, y);
     return 0;
 }
 
@@ -512,11 +649,11 @@ static int cmd_goto(int argc, char **argv)
 static int cmd_where(int argc, char **argv)
 {
     (void)argc; (void)argv;
-    int32_t sl = tmc5072_position(&tmc, MOTOR_THETA);
-    int32_t sr = tmc5072_position(&tmc, MOTOR_RHO);
+    int32_t sl = tmc5072_position(&tmc, MOTOR_RHO);    /* RHO is physically left */
+    int32_t sr = tmc5072_position(&tmc, MOTOR_THETA);  /* THETA is physically right */
     float x, y;
     plt_steps_to_xy(&g_geom, sl, sr, &x, &y);
-    printf("where: LEFT(M1)=%ld RIGHT(M2)=%ld steps -> (x=%.2f, y=%.2f) mm\n",
+    printf("where: LEFT(M2)=%ld RIGHT(M1)=%ld steps -> (x=%.2f, y=%.2f) mm\n",
            (long)sl, (long)sr, (double)x, (double)y);
     return 0;
 }
@@ -525,12 +662,15 @@ static int cmd_where(int argc, char **argv)
 static void pen_lift(void) { servo_write_deg(PEN_UP_DEG);   vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
 static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
 
+/* Clamp (x,y) to the drawable area. Returns true and prints a warning if
+ * the point was outside the limits defined in board_config.h. */
 /* Coordinated move to an (x,y) mm point (does not touch the pen). */
 static void move_to_xy(float x, float y)
 {
+    clamp_xy(&x, &y);
     int32_t sl, sr;
     plt_xy_to_steps(&g_geom, x, y, &sl, &sr);
-    tmc5072_move_coordinated(&tmc, sl, sr);
+    tmc5072_move_coordinated(&tmc, sr, sl);   /* THETA=right, RHO=left */
     wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
     wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
 }
@@ -542,8 +682,8 @@ static void wait_both_near(int32_t tl, int32_t tr, int32_t lookahead, int timeou
 {
     int waited = 0;
     while (waited < timeout_ms) {
-        int32_t al = tmc5072_position(&tmc, MOTOR_THETA);
-        int32_t ar = tmc5072_position(&tmc, MOTOR_RHO);
+        int32_t al = tmc5072_position(&tmc, MOTOR_RHO);    /* RHO is physically left */
+        int32_t ar = tmc5072_position(&tmc, MOTOR_THETA);  /* THETA is physically right */
         if (labs(tl - al) <= lookahead && labs(tr - ar) <= lookahead) return;
         vTaskDelay(pdMS_TO_TICKS(2));
         waited += 2;
@@ -563,12 +703,14 @@ static void draw_line_mm(float x0, float y0, float x1, float y1)
     float dx = x1 - x0, dy = y1 - y0;
     float len = sqrtf(dx * dx + dy * dy);
     int n = plt_line_segments(len, LINE_SEG_MM);
-    int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * STEPS_PER_MM);
+    int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * g_geom.steps_per_mm);
     int32_t sl, sr;
     for (int i = 1; i <= n; i++) {
         float t = (float)i / (float)n;
-        plt_xy_to_steps(&g_geom, x0 + dx * t, y0 + dy * t, &sl, &sr);
-        tmc5072_move_coordinated(&tmc, sl, sr);
+        float px = x0 + dx * t, py = y0 + dy * t;
+        clamp_xy(&px, &py);
+        plt_xy_to_steps(&g_geom, px, py, &sl, &sr);
+        tmc5072_move_coordinated(&tmc, sr, sl);   /* THETA=right, RHO=left */
         if (i < n) {
             wait_both_near(sl, sr, lookahead, MOVE_TIMEOUT_MS);   /* keep flowing */
         } else {
@@ -593,117 +735,354 @@ static int parse_cycles(const char *s)
 static int cmd_line(int argc, char **argv)
 {
     if (argc < 5) { printf("usage: line <x0> <y0> <x1> <y1> [cycles]\n"); return 0; }
-    float x0 = atof(argv[1]);
-    float y0 = atof(argv[2]);
-    float x1 = atof(argv[3]);
-    float y1 = atof(argv[4]);
+    float x0 = atof(argv[1]), y0 = atof(argv[2]);
+    float x1 = atof(argv[3]), y1 = atof(argv[4]);
     int cycles = (argc >= 6) ? parse_cycles(argv[5]) : 1;
-
-    tmc5072_enable(&tmc, true);
-    pen_lift();
-    move_to_xy(x0, y0);
-    pen_drop();
-
     printf("line (%.1f,%.1f)->(%.1f,%.1f) x%d pass%s\n",
            (double)x0, (double)y0, (double)x1, (double)y1, cycles, cycles == 1 ? "" : "es");
-
-    /* Pass 0 goes start->end; each subsequent pass reverses, retracing in place. */
-    for (int c = 0; c < cycles; c++) {
-        if (c & 1) draw_line_mm(x1, y1, x0, y0);
-        else       draw_line_mm(x0, y0, x1, y1);
-    }
-
-    pen_lift();
+    do_draw_line(x0, y0, x1, y1, cycles);
     printf("line done\n");
     return 0;
 }
 
-/* Draw an axis-aligned square centered at (cx, cy) mm with side length `size`
- * mm (the "diameter" = full width across, NOT the diagonal). Pen auto up/down;
- * edges are Cartesian-interpolated via draw_line_mm. Optional [cycles] retraces
- * the outline that many times (pen stays down between passes) to darken it. */
-static int cmd_square(int argc, char **argv)
+/* Liang-Barsky clip of infinite line through (lx,ly) in direction (dx,dy) to the
+ * axis-aligned box [cx-h, cx+h] x [cy-h, cy+h]. Returns the valid parameter range
+ * [*s0, *s1] and false if the line misses the box entirely. */
+static bool clip_to_rect(float cx, float cy, float h,
+                          float lx, float ly, float dx, float dy,
+                          float *s0, float *s1)
 {
-    if (argc < 4) { printf("usage: square <cx_mm> <cy_mm> <size_mm> [cycles]\n"); return 0; }
-    float cx = atof(argv[1]);
-    float cy = atof(argv[2]);
-    float z  = atof(argv[3]);
-    if (z <= 0.0f) { printf("size must be > 0\n"); return 0; }
-    int cycles = (argc >= 5) ? parse_cycles(argv[4]) : 1;
-    float h = z * 0.5f;
+    *s0 = -1e9f; *s1 = 1e9f;
+    float ps[4] = { -dx,  dx,  -dy,  dy  };
+    float qs[4] = { lx - (cx - h), (cx + h) - lx,
+                    ly - (cy - h), (cy + h) - ly };
+    for (int k = 0; k < 4; k++) {
+        if (fabsf(ps[k]) < 1e-7f) {
+            if (qs[k] < 0.0f) return false;
+        } else {
+            float r = qs[k] / ps[k];
+            if (ps[k] < 0.0f) { if (r > *s0) *s0 = r; }
+            else               { if (r < *s1) *s1 = r; }
+        }
+    }
+    return *s1 > *s0;
+}
 
-    /* Corners in order (Y+ = down): top-left -> top-right -> bottom-right ->
-     * bottom-left, then close back to top-left. */
+/* Clip infinite line through (lx,ly) in direction (dx,dy) to a circle of radius r
+ * centred at (cx,cy). Returns the valid parameter range [*s0, *s1]. */
+static bool clip_to_circle(float cx, float cy, float r,
+                            float lx, float ly, float dx, float dy,
+                            float *s0, float *s1)
+{
+    float ex = lx - cx, ey = ly - cy;
+    float a = dx * dx + dy * dy;
+    float b = 2.0f * (ex * dx + ey * dy);
+    float c = ex * ex + ey * ey - r * r;
+    float disc = b * b - 4.0f * a * c;
+    if (disc < 0.0f) return false;
+    float sq = sqrtf(disc);
+    *s0 = (-b - sq) / (2.0f * a);
+    *s1 = (-b + sq) / (2.0f * a);
+    return true;
+}
+
+/* General angled hatch fill. Lines run at `angle_deg` (0 = horizontal), spaced
+ * `spacing_mm` apart in the perpendicular direction. `is_circle` selects the
+ * clipping shape; `shape_param` is radius (circle) or half-side (rectangle). */
+static void hatch_lines(float cx, float cy, bool is_circle, float shape_param,
+                         float angle_deg, float spacing_mm)
+{
+    if (spacing_mm < 0.1f) spacing_mm = 0.1f;
+    float theta = angle_deg * (PLT_PI / 180.0f);
+    float cos_t = cosf(theta), sin_t = sinf(theta);
+    /* Perpendicular direction: (-sin_t, cos_t).  Extent of shape in that direction. */
+    float extent = is_circle ? shape_param
+                              : shape_param * (fabsf(cos_t) + fabsf(sin_t));
+    float t = -extent + spacing_mm;
+    while (t < extent) {
+        float lx = cx + t * (-sin_t);
+        float ly = cy + t *   cos_t;
+        float s0, s1;
+        bool ok = is_circle
+            ? clip_to_circle(cx, cy, shape_param, lx, ly, cos_t, sin_t, &s0, &s1)
+            : clip_to_rect  (cx, cy, shape_param, lx, ly, cos_t, sin_t, &s0, &s1);
+        if (ok && s1 > s0 + 0.5f) {
+            float x0 = lx + s0 * cos_t, y0 = ly + s0 * sin_t;
+            float x1 = lx + s1 * cos_t, y1 = ly + s1 * sin_t;
+            pen_lift();
+            move_to_xy(x0, y0);
+            pen_drop();
+            draw_line_mm(x0, y0, x1, y1);
+        }
+        t += spacing_mm;
+    }
+}
+
+/* ---- do_draw_* helpers: called by both console cmd_* and web_draw_task ---- */
+
+static void do_draw_goto(float x, float y)
+{
+    clamp_xy(&x, &y);
+    int32_t sl, sr;
+    plt_xy_to_steps(&g_geom, x, y, &sl, &sr);
+    tmc5072_enable(&tmc, true);
+    tmc5072_move_coordinated(&tmc, sr, sl);
+    wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
+    wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+}
+
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles)
+{
+    tmc5072_enable(&tmc, true);
+    pen_lift();
+    move_to_xy(x0, y0);
+    pen_drop();
+    for (int c = 0; c < cycles; c++) {
+        if (c & 1) draw_line_mm(x1, y1, x0, y0);
+        else       draw_line_mm(x0, y0, x1, y1);
+    }
+    pen_lift();
+}
+
+static void do_draw_square(float cx, float cy, float size, int cycles, bool filled,
+                            float hatch_angle, float hatch_spacing)
+{
+    float h = size * 0.5f;
     float xs[4] = { cx - h, cx + h, cx + h, cx - h };
     float ys[4] = { cy - h, cy - h, cy + h, cy + h };
-
     tmc5072_enable(&tmc, true);
     pen_lift();
     move_to_xy(xs[0], ys[0]);
     pen_drop();
+    for (int c = 0; c < cycles; c++)
+        for (int e = 0; e < 4; e++)
+            draw_line_mm(xs[e], ys[e], xs[(e + 1) & 3], ys[(e + 1) & 3]);
+    if (filled) hatch_lines(cx, cy, false, h, hatch_angle, hatch_spacing);
+    pen_lift();
+}
 
-    printf("square (%.1f, %.1f) size=%.1f mm (side length), seg<=%.1f mm, x%d pass%s\n",
-           (double)cx, (double)cy, (double)z, (double)LINE_SEG_MM, cycles, cycles == 1 ? "" : "es");
-
-    /* Each cycle ends back at corner 0, so passes retrace with the pen still down. */
-    for (int c = 0; c < cycles; c++) {
-        for (int e = 0; e < 4; e++) {
-            int b = (e + 1) & 3;   /* next corner, wrapping 3->0 to close */
-            draw_line_mm(xs[e], ys[e], xs[b], ys[b]);
+static void do_draw_circle(float cx, float cy, float r, int cycles, bool filled,
+                            float hatch_angle, float hatch_spacing)
+{
+    int n = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    if (n < 3) n = 3;
+    float dth = PLT_TWO_PI / (float)n;
+    float dc = cosf(dth), ds = sinf(dth);
+    tmc5072_enable(&tmc, true);
+    pen_lift();
+    move_to_xy(cx + r, cy);
+    pen_drop();
+    for (int cyc = 0; cyc < cycles; cyc++) {
+        float vx = r, vy = 0.0f;
+        for (int k = 1; k <= n; k++) {
+            float nvx = vx * dc - vy * ds;
+            float nvy = vx * ds + vy * dc;
+            vx = nvx; vy = nvy;
+            float px = (k == n) ? cx + r : cx + vx;
+            float py = (k == n) ? cy     : cy + vy;
+            move_to_xy(px, py);
         }
     }
-
+    if (filled) hatch_lines(cx, cy, true, r, hatch_angle, hatch_spacing);
     pen_lift();
+}
+
+static void do_draw_bullseye(float cx, float cy)
+{
+    const float arm = 10.0f;
+    tmc5072_enable(&tmc, true);
+    for (int c = 0; c < 5; c++) {
+        pen_lift();  move_to_xy(cx - arm, cy);
+        pen_drop();  draw_line_mm(cx - arm, cy, cx + arm, cy);
+        pen_lift();  move_to_xy(cx, cy - arm);
+        pen_drop();  draw_line_mm(cx, cy - arm, cx, cy + arm);
+    }
+    pen_lift();
+}
+
+static void do_draw_grid(float cx, float cy)
+{
+    const int   n    = 10;
+    const float gap  = 8.0f;
+    const float hlen = 50.0f;
+    tmc5072_enable(&tmc, true);
+    for (int i = 0; i < n; i++) {
+        float y = cy + (i - (n - 1) * 0.5f) * gap;
+        pen_lift();  move_to_xy(cx - hlen, y);
+        pen_drop();  draw_line_mm(cx - hlen, y, cx + hlen, y);
+    }
+    for (int i = 0; i < n; i++) {
+        float x = cx + (i - (n - 1) * 0.5f) * gap;
+        pen_lift();  move_to_xy(x, cy - hlen);
+        pen_drop();  draw_line_mm(x, cy - hlen, x, cy + hlen);
+    }
+    pen_lift();
+}
+
+/* ---- console command wrappers (thin: parse + print, then call do_draw_*) ---- */
+
+static int cmd_square(int argc, char **argv)
+{
+    if (argc < 4) { printf("usage: square <cx> <cy> <size> [cycles] [fill 0|1] [angle_deg] [spacing_mm]\n"); return 0; }
+    float cx = atof(argv[1]), cy = atof(argv[2]), z = atof(argv[3]);
+    if (z <= 0.0f) { printf("size must be > 0\n"); return 0; }
+    int   cycles  = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    bool  filled  = (argc >= 6) && (atoi(argv[5]) != 0);
+    float hangle  = (argc >= 7) ? atof(argv[6]) : 0.0f;
+    float hspac   = (argc >= 8) ? atof(argv[7]) : HATCH_SPACING_MM;
+    printf("square (%.1f, %.1f) size=%.1f mm x%d%s\n",
+           (double)cx, (double)cy, (double)z, cycles,
+           filled ? " [filled]" : "");
+    if (filled) printf("  hatch: angle=%.1f deg  spacing=%.1f mm\n",
+                       (double)hangle, (double)hspac);
+    do_draw_square(cx, cy, z, cycles, filled, hangle, hspac);
     printf("square done\n");
     return 0;
 }
 
-/* Draw a circle of radius r mm centered at (cx, cy) mm. Segment count is chosen
- * adaptively from the radius and CIRCLE_CHORD_ERR_MM. Each chord is a coordinated
- * (straight, time-synced) move; the radial vector is rotated incrementally (one
- * precomputed cos/sin, no per-point trig) and the final vertex is snapped back to
- * the exact start for a clean closure. Optional [cycles] retraces the circle that
- * many times (pen stays down between passes) to darken it. */
+static int cmd_bullseye(int argc, char **argv)
+{
+    float cx = (argc >= 3) ? atof(argv[1]) : 0.0f;
+    float cy = (argc >= 3) ? atof(argv[2]) : 0.0f;
+    printf("bullseye (%.1f, %.1f) arm=10 mm x5\n", (double)cx, (double)cy);
+    do_draw_bullseye(cx, cy);
+    printf("bullseye done\n");
+    return 0;
+}
+
+static int cmd_grid(int argc, char **argv)
+{
+    float cx = (argc >= 3) ? atof(argv[1]) : 0.0f;
+    float cy = (argc >= 3) ? atof(argv[2]) : 0.0f;
+    printf("grid center=(%.1f, %.1f) 10x10 lines 8mm spacing 100mm long\n",
+           (double)cx, (double)cy);
+    do_draw_grid(cx, cy);
+    printf("grid done\n");
+    return 0;
+}
+
 static int cmd_circle(int argc, char **argv)
 {
-    if (argc < 4) { printf("usage: circle <cx_mm> <cy_mm> <r_mm> [cycles]\n"); return 0; }
-    float cx = atof(argv[1]);
-    float cy = atof(argv[2]);
-    float r  = atof(argv[3]);
+    if (argc < 4) { printf("usage: circle <cx> <cy> <r> [cycles] [fill 0|1] [angle_deg] [spacing_mm]\n"); return 0; }
+    float cx = atof(argv[1]), cy = atof(argv[2]), r = atof(argv[3]);
     if (r <= 0.0f) { printf("radius must be > 0\n"); return 0; }
-    int cycles = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    int   cycles = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    bool  filled = (argc >= 6) && (atoi(argv[5]) != 0);
+    float hangle = (argc >= 7) ? atof(argv[6]) : 0.0f;
+    float hspac  = (argc >= 8) ? atof(argv[7]) : HATCH_SPACING_MM;
     int n = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
-    if (n < 3) n = 3;
-
-    /* Precompute the per-segment rotation once. */
-    float dth = PLT_TWO_PI / (float)n;
-    float c = cosf(dth), s = sinf(dth);
-
-    tmc5072_enable(&tmc, true);
-    pen_lift();
-    move_to_xy(cx + r, cy);   /* start at angle 0 (+x) */
-    pen_drop();
-
-    printf("circle (%.1f, %.1f) r=%.1f mm in %d segments (chord err <= %.2f mm), x%d pass%s\n",
-           (double)cx, (double)cy, (double)r, n, (double)CIRCLE_CHORD_ERR_MM,
-           cycles, cycles == 1 ? "" : "es");
-
-    for (int cyc = 0; cyc < cycles; cyc++) {
-        float vx = r, vy = 0.0f;   /* reset the radial vector at the start of each pass */
-        for (int k = 1; k <= n; k++) {
-            float nvx = vx * c - vy * s;   /* rotate the radial vector by dth */
-            float nvy = vx * s + vy * c;
-            vx = nvx; vy = nvy;
-            float px = cx + vx;
-            float py = cy + vy;
-            if (k == n) { px = cx + r; py = cy; }   /* snap to exact start -> clean close */
-            move_to_xy(px, py);
-        }
-    }
-
-    pen_lift();
+    printf("circle (%.1f, %.1f) r=%.1f mm %d segs x%d%s\n",
+           (double)cx, (double)cy, (double)r, n, cycles, filled ? " [filled]" : "");
+    if (filled) printf("  hatch: angle=%.1f deg  spacing=%.1f mm\n",
+                       (double)hangle, (double)hspac);
+    do_draw_circle(cx, cy, r, cycles, filled, hangle, hspac);
     printf("circle done\n");
     return 0;
+}
+
+/* ---- web_draw_task: dequeues web commands and executes them via do_draw_* ---- */
+static void web_draw_task(void *arg)
+{
+    (void)arg;
+    wcmd_t cmd;
+    for (;;) {
+        if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
+        switch (cmd.type) {
+            case WCMD_CIRCLE:
+                web_log("circle (%.1f,%.1f) r=%.1f x%d%s%s",
+                        (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
+                        (int)cmd.p[3], cmd.p[4] ? " [fill" : "",
+                        cmd.p[4] ? "]" : "");
+                do_draw_circle(cmd.p[0], cmd.p[1], cmd.p[2],
+                               (int)cmd.p[3], cmd.p[4] != 0.0f, cmd.p[5], cmd.p[6]);
+                web_log("circle done");
+                break;
+            case WCMD_SQUARE:
+                web_log("square (%.1f,%.1f) size=%.1f x%d%s%s",
+                        (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
+                        (int)cmd.p[3], cmd.p[4] ? " [fill" : "",
+                        cmd.p[4] ? "]" : "");
+                do_draw_square(cmd.p[0], cmd.p[1], cmd.p[2],
+                               (int)cmd.p[3], cmd.p[4] != 0.0f, cmd.p[5], cmd.p[6]);
+                web_log("square done");
+                break;
+            case WCMD_LINE:
+                web_log("line (%.1f,%.1f)->(%.1f,%.1f) x%d",
+                        (double)cmd.p[0], (double)cmd.p[1],
+                        (double)cmd.p[2], (double)cmd.p[3], (int)cmd.p[4]);
+                do_draw_line(cmd.p[0], cmd.p[1], cmd.p[2], cmd.p[3], (int)cmd.p[4]);
+                web_log("line done");
+                break;
+            case WCMD_GOTO:
+                web_log("goto (%.1f, %.1f)", (double)cmd.p[0], (double)cmd.p[1]);
+                do_draw_goto(cmd.p[0], cmd.p[1]);
+                web_log("goto done");
+                break;
+            case WCMD_HOME:
+                web_log("home");
+                home_gondola();
+                web_log("home done");
+                break;
+            case WCMD_STOP:
+                web_log("stop");
+                tmc5072_stop(&tmc, MOTOR_THETA);
+                tmc5072_stop(&tmc, MOTOR_RHO);
+                break;
+            case WCMD_PEN_UP:
+                web_log("pen up");
+                pen_lift();
+                break;
+            case WCMD_PEN_DOWN:
+                web_log("pen down");
+                pen_drop();
+                break;
+            case WCMD_PEN_DEG:
+                web_log("pen %.0f deg", (double)cmd.p[0]);
+                servo_write_deg((int)cmd.p[0]);
+                break;
+            case WCMD_BULLSEYE:
+                web_log("bullseye (%.1f, %.1f)", (double)cmd.p[0], (double)cmd.p[1]);
+                do_draw_bullseye(cmd.p[0], cmd.p[1]);
+                web_log("bullseye done");
+                break;
+            case WCMD_GRID:
+                web_log("grid (%.1f, %.1f)", (double)cmd.p[0], (double)cmd.p[1]);
+                do_draw_grid(cmd.p[0], cmd.p[1]);
+                web_log("grid done");
+                break;
+            case WCMD_SETHOME:
+                web_log("sethome");
+                set_origin_here();
+                web_log("sethome done");
+                break;
+            case WCMD_BOUNDS:
+                g_x_min = cmd.p[0]; g_x_max = cmd.p[1];
+                g_y_min = cmd.p[2]; g_y_max = cmd.p[3];
+                web_log("bounds: x=[%.1f,%.1f] y=[%.1f,%.1f] mm",
+                        (double)g_x_min, (double)g_x_max,
+                        (double)g_y_min, (double)g_y_max);
+                break;
+            case WCMD_SPEED:
+                g_vmax = (uint32_t)cmd.p[0];
+                apply_speed(g_vmax);
+                web_log("speed vmax=%lu", (unsigned long)g_vmax);
+                break;
+            case WCMD_ACCEL:
+                g_accel = (uint32_t)cmd.p[0];
+                apply_accel(g_accel);
+                web_log("accel amax=%lu", (unsigned long)g_accel);
+                break;
+            case WCMD_CURRENT:
+                g_run_ma = cmd.p[0];
+                if (cmd.p[1] >= 0.0f) g_hold_ma = cmd.p[1];
+                apply_current(g_run_ma, g_hold_ma);
+                web_log("current run=%.0f hold=%.0f mA",
+                        (double)g_run_ma, (double)g_hold_ma);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 /* Jog a motor at a constant velocity (RAMPMODE 1/2) until `stop`. Handy during
@@ -815,12 +1194,21 @@ static void register_commands(void)
         { .command = "link",   .help = "Re-read the TMC over SPI (VERSION check)",  .func = cmd_link },
         { .command = "cur",    .help = "Set current: cur <run_mA> [hold_mA]",       .func = cmd_cur },
         { .command = "speed",  .help = "Set speed: speed <vmax>",                   .func = cmd_speed },
-        { .command = "accel",  .help = "Set acceleration: accel <amax>",            .func = cmd_accel },
+        { .command = "accel",   .help = "Set acceleration: accel <amax>",                             .func = cmd_accel },
+        { .command = "setbelt", .help = "Set home belt length (mm): setbelt <mm> (recalcs geometry)", .func = cmd_setbelt },
+        { .command = "setspan",  .help = "Set motor span (mm): setspan <mm> (recalcs geometry)",          .func = cmd_setspan },
+        { .command = "setsteps",   .help = "Set steps/mm: setsteps <val> (recalcs geometry)",   .func = cmd_setsteps  },
+        { .command = "setxscale",  .help = "Set X axis scale: setxscale <val> (default 1.0)",  .func = cmd_setxscale },
+        { .command = "setyscale",  .help = "Set Y axis scale: setyscale <val> (default 1.0)",  .func = cmd_setyscale },
+        { .command = "setbounds",  .help = "Set drawable bounds (mm): setbounds <xmin> <xmax> <ymin> <ymax>", .func = cmd_setbounds },
+        { .command = "exit",    .help = "Close the REPL console (press Ctrl+] to exit monitor)",      .func = cmd_exit },
         { .command = "belt",   .help = "DRY RUN: print belt lengths + targets for goto <x> <y> (no motion)", .func = cmd_belt },
         { .command = "goto",   .help = "Move gondola to (x,y) mm via kinematics: goto <x_mm> <y_mm>", .func = cmd_goto },
         { .command = "line",   .help = "Draw a line: line <x0> <y0> <x1> <y1> [cycles]", .func = cmd_line },
-        { .command = "circle", .help = "Draw a circle: circle <cx> <cy> <r_mm> [cycles]", .func = cmd_circle },
-        { .command = "square", .help = "Draw a square: square <cx> <cy> <size_mm> [cycles] (side length)", .func = cmd_square },
+        { .command = "circle", .help = "Draw a circle: circle <cx> <cy> <r_mm> [cycles] [fill 0|1]", .func = cmd_circle },
+        { .command = "square",   .help = "Draw a square: square <cx> <cy> <size_mm> [cycles] [fill 0|1]", .func = cmd_square },
+        { .command = "bullseye", .help = "Draw calibration crosshair: bullseye [cx cy] (10mm arms, 5 passes)",        .func = cmd_bullseye },
+        { .command = "grid",     .help = "Draw calibration grid: grid [cx cy] (10x10 lines, 8mm spacing, 100mm long)", .func = cmd_grid },
         { .command = "where",  .help = "Read XACTUAL back as an (x,y) mm coordinate", .func = cmd_where },
         { .command = "jog",    .help = "Velocity-mode jog: jog <1|2> <velocity> (stop to halt)", .func = cmd_jog },
         { .command = "stop",   .help = "Stop velocity jog: stop [1|2]",             .func = cmd_stop },
@@ -851,8 +1239,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         s_wifi_ip = evt->ip_info;
         s_wifi_connected = true;
         ESP_LOGI(TAG, "WiFi: got IP " IPSTR
-                      "  <-- point gondola_boundary_keeper.py's ARDUINO_IP at this",
-                 IP2STR(&evt->ip_info.ip));
+                      "  <-- open http://" IPSTR "/ in a browser",
+                 IP2STR(&evt->ip_info.ip), IP2STR(&evt->ip_info.ip));
+        web_log("WiFi up: http://" IPSTR "/", IP2STR(&evt->ip_info.ip));
     }
 }
 
@@ -1049,18 +1438,20 @@ void app_main(void)
     run_bringup();   /* safe: link check + status + servo, no motor motion */
 
     wifi_init_sta();
-    xTaskCreate(udp_listener_task,  "udp_listener",  4096, NULL, 5, NULL);
+    xTaskCreate(udp_listener_task,   "udp_listener",   4096, NULL, 5, NULL);
     xTaskCreate(pattern_stream_task, "pattern_stream", 4096, NULL, 5, NULL);
 
+    web_server_start();
+    xTaskCreate(web_draw_task, "web_draw", 8192, NULL, 5, NULL);
+
     /* Interactive console over native USB-Serial-JTAG. */
-    esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
     repl_cfg.prompt = "plotter>";
     esp_console_dev_usb_serial_jtag_config_t hw = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw, &repl_cfg, &repl));
+    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw, &repl_cfg, &s_repl));
 
     esp_console_register_help_command();
     register_commands();
 
-    ESP_ERROR_CHECK(esp_console_start_repl(repl));
+    ESP_ERROR_CHECK(esp_console_start_repl(s_repl));
 }

@@ -54,16 +54,16 @@
 #define MICROSTEPS       256      /* TMC5072 native (MRES=0); matches CHOPCONF */
 #define BELT_MM_PER_REV  40.0f    /* GT2 2mm pitch * 20 teeth */
 /* microsteps per mm of belt = 200 * 256 / 40 = 1280 */
-#define STEPS_PER_MM     ((float)(STEPS_PER_REV * MICROSTEPS) / BELT_MM_PER_REV)
-#define MOTOR_SPAN_MM    985.0f   /* anchor-to-anchor; re-measure for this build */
+#define STEPS_PER_MM          ((float)(STEPS_PER_REV * MICROSTEPS) / BELT_MM_PER_REV)
+#define MOTOR_SPAN_MM    978.0f   /* anchor-to-anchor; re-measure for this build */
 
 /* Origin definition, the easy-to-measure way: instead of the vertical drop, give
  * the MEASURED belt length (motor -> gondola) with the gondola parked at the
  * midpoint origin. Both belts are equal there by symmetry, so one number defines
  * the home. The firmware derives the vertical drop from this and the span
  * (drop = sqrt(HOME_BELT_MM^2 - (MOTOR_SPAN_MM/2)^2)) at startup.
- * Measured for this build: 700 mm each. */
-#define HOME_BELT_MM     700.0f   /* belt length at the origin (both belts equal) */
+ * Measured for this build: 715 mm each. Update if `setbelt` finds a better value. */
+#define HOME_BELT_MM     715.0f   /* belt length at the origin (both belts equal) */
 
 /* Belt-lengthening -> step-sign per motor. The left motor is mirror-mounted
  * (CLAUDE.md), so the two often differ. THESE ARE GUESSES — confirm on the real
@@ -73,10 +73,18 @@
 #define LEFT_DIR_SIGN    (+1)
 #define RIGHT_DIR_SIGN   (+1)
 
+/* Drawable area limits (mm, origin at centre). The gondola will be clamped to
+ * this rectangle and a warning printed if any command targets outside it. */
+#define X_MAX_MM   300.0f
+#define X_MIN_MM  -300.0f
+#define Y_MAX_MM   400.0f
+#define Y_MIN_MM  -600.0f
+
 /* Max chord bulge (sagitta) when approximating arcs/circles with line segments.
  * Smaller = rounder but more (slower) segments. 0.3 mm is a good plotter default;
  * the `circle` command sizes its segment count from this and the radius. */
 #define CIRCLE_CHORD_ERR_MM  0.3f
+#define HATCH_SPACING_MM     3.0f   /* gap between fill hatch lines (mm) */
 
 /* Max length of a single straight-line sub-segment (mm). Straight Cartesian
  * lines (e.g. `square` edges) are split into pieces this long so the step-space

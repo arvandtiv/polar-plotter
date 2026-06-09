@@ -34,25 +34,27 @@
 #define PLT_TWO_PI  (2.0f * PLT_PI)
 
 typedef struct {
-    float span_mm;       /* anchor-to-anchor distance (MOTOR_SPAN_MM) */
-    float drop_mm;       /* origin below the motor line (ORIGIN_DROP_MM) */
-    float steps_per_mm;  /* microsteps per mm of belt travel (STEPS_PER_MM) */
-    int   left_sign;     /* +1/-1: sign of steps as the LEFT belt lengthens  */
-    int   right_sign;    /* +1/-1: sign of steps as the RIGHT belt lengthens */
+    float span_mm;        /* anchor-to-anchor distance (MOTOR_SPAN_MM) */
+    float drop_mm;        /* origin below the motor line */
+    float steps_per_mm;   /* microsteps per mm of belt travel */
+    float x_scale;        /* multiplier on x before belt calculation (default 1.0) */
+    float y_scale;        /* multiplier on y before belt calculation (default 1.0) */
+    int   left_sign;      /* +1/-1: sign of steps as the LEFT belt lengthens  */
+    int   right_sign;     /* +1/-1: sign of steps as the RIGHT belt lengthens */
 } plotter_geom_t;
 
 /* Belt length (mm) from each anchor to the gondola at (x, y). */
 static inline float plt_belt_left(const plotter_geom_t *g, float x, float y)
 {
-    float dx = g->span_mm * 0.5f + x;   /* horizontal gondola->left-anchor */
-    float dy = g->drop_mm + y;          /* vertical   gondola->motor-line  */
+    float dx = g->span_mm * 0.5f + x * g->x_scale;
+    float dy = g->drop_mm        + y * g->y_scale;
     return sqrtf(dx * dx + dy * dy);
 }
 
 static inline float plt_belt_right(const plotter_geom_t *g, float x, float y)
 {
-    float dx = g->span_mm * 0.5f - x;
-    float dy = g->drop_mm + y;
+    float dx = g->span_mm * 0.5f - x * g->x_scale;
+    float dy = g->drop_mm        + y * g->y_scale;
     return sqrtf(dx * dx + dy * dy);
 }
 
@@ -129,12 +131,14 @@ static inline void plt_steps_to_xy(const plotter_geom_t *g, int32_t left_steps,
     float l0 = plt_home_belt(g);
     float al = l0 + ((float)g->left_sign  * (float)left_steps)  / g->steps_per_mm;
     float ar = l0 + ((float)g->right_sign * (float)right_steps) / g->steps_per_mm;
-    float d  = g->span_mm;   /* horizontal distance between anchors */
+    float d  = g->span_mm;
 
-    /* aL^2 = (x + d/2)^2 + (y+drop)^2 ;  aR^2 = (x - d/2)^2 + (y+drop)^2.
-     * Subtracting eliminates the y term:  aL^2 - aR^2 = 2*d*x. */
-    *x = (al * al - ar * ar) / (2.0f * d);
-    float yy = al * al - (*x + d * 0.5f) * (*x + d * 0.5f);
-    if (yy < 0.0f) yy = 0.0f;     /* clamp tiny negatives from rounding */
-    *y = sqrtf(yy) - g->drop_mm;  /* back into the origin's frame (Y+ = down) */
+    /* With x_scale: belt eqs use (x*x_scale). Subtracting eliminates y:
+     *   aL^2 - aR^2 = 2*d*(x*x_scale)  ->  x = (aL^2-aR^2)/(2*d*x_scale) */
+    float xs = (al * al - ar * ar) / (2.0f * d);   /* = x * x_scale */
+    *x = xs / g->x_scale;
+    float yy = al * al - (xs + d * 0.5f) * (xs + d * 0.5f);
+    if (yy < 0.0f) yy = 0.0f;
+    /* With y_scale: drop + y*y_scale = sqrt(yy)  ->  y = (sqrt(yy)-drop)/y_scale */
+    *y = (sqrtf(yy) - g->drop_mm) / g->y_scale;
 }
