@@ -35,3 +35,6 @@ esp_err_t web_server_start(void);
 
 /* Push a formatted log line to the SSE event stream (called from web_draw_task). */
 void web_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
+/* Push a structured position event to the SSE stream: event: pos / data: {"x":…,"y":…} */
+void web_pos_event(float x, float y);

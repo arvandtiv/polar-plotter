@@ -26,22 +26,41 @@ QueueHandle_t g_draw_queue = NULL;
 static StreamBufferHandle_t s_log_stream = NULL;
 static SemaphoreHandle_t    s_log_mutex  = NULL;
 
-/* ---- Log sink (producer side) ---- */
+/* ---- Log/event sink (producer side) ---- */
+
+/* Write a fully-framed SSE event into the stream buffer. The SSE handler
+ * passes bytes through verbatim, so producers own the framing. */
+static void stream_write(const char *data, size_t len)
+{
+    if (!s_log_stream || !len) return;
+    if (xSemaphoreTake(s_log_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        xStreamBufferSend(s_log_stream, data, len, 0);   /* drop if full */
+        xSemaphoreGive(s_log_mutex);
+    }
+}
+
 void web_log(const char *fmt, ...)
 {
     if (!s_log_stream) return;
-    char buf[256];
+    char msg[240], event[256];
     va_list ap;
     va_start(ap, fmt);
-    int n = vsnprintf(buf, sizeof(buf) - 2, fmt, ap);
+    int n = vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
     if (n <= 0) return;
-    if (n >= (int)(sizeof(buf) - 2)) n = (int)(sizeof(buf) - 2);
-    buf[n] = '\n'; buf[n + 1] = '\0'; n++;
-    if (xSemaphoreTake(s_log_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
-        xStreamBufferSend(s_log_stream, buf, (size_t)n, 0);   /* drop if full */
-        xSemaphoreGive(s_log_mutex);
-    }
+    if (n >= (int)sizeof(msg)) n = (int)sizeof(msg) - 1;
+    int total = snprintf(event, sizeof(event), "data: %.*s\n\n", n, msg);
+    if (total > 0) stream_write(event, (size_t)total);
+}
+
+void web_pos_event(float x, float y)
+{
+    if (!s_log_stream) return;
+    char event[80];
+    int total = snprintf(event, sizeof(event),
+                         "event: pos\ndata: {\"x\":%.2f,\"y\":%.2f}\n\n",
+                         (double)x, (double)y);
+    if (total > 0) stream_write(event, (size_t)total);
 }
 
 /* ---- Query-string helpers ---- */
@@ -203,10 +222,10 @@ static esp_err_t handle_bounds(httpd_req_t *req)
 {
     char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_BOUNDS };
-    c.p[0] = qf(qs, "xmin", -300.0f);
-    c.p[1] = qf(qs, "xmax",  300.0f);
-    c.p[2] = qf(qs, "ymin", -600.0f);
-    c.p[3] = qf(qs, "ymax",  400.0f);
+    c.p[0] = qf(qs, "xn", -300.0f);   /* X− (left / negative-X limit)  */
+    c.p[1] = qf(qs, "xp",  300.0f);   /* X+ (right / positive-X limit) */
+    c.p[2] = qf(qs, "yn", -600.0f);   /* Y− (bottom / negative-Y limit) */
+    c.p[3] = qf(qs, "yp",  400.0f);   /* Y+ (top / positive-Y limit)   */
     enqueue(&c);
     resp_json(req, "ok", "bounds queued");
     return ESP_OK;
@@ -243,8 +262,9 @@ static esp_err_t handle_cur(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* SSE handler: keeps connection open, streams lines from s_log_stream.
- * Sends a heartbeat comment every 2 s to detect dead connections. */
+/* SSE handler: keeps the connection open and streams bytes from s_log_stream.
+ * Producers (web_log, web_pos_event) write fully-framed SSE events; this handler
+ * just passes bytes through. Sends a heartbeat comment every 2 s on idle. */
 static esp_err_t handle_events(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/event-stream");
@@ -252,20 +272,15 @@ static esp_err_t handle_events(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Connection",    "keep-alive");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
 
-    char line[256], packet[300];
+    char buf[300];
     for (;;) {
-        size_t n = xStreamBufferReceive(s_log_stream, line, sizeof(line) - 1,
+        size_t n = xStreamBufferReceive(s_log_stream, buf, sizeof(buf) - 1,
                                         pdMS_TO_TICKS(2000));
-        const char *chunk; size_t clen;
         if (n > 0) {
-            line[n] = '\0';
-            if (n && line[n - 1] == '\n') line[--n] = '\0';
-            clen  = (size_t)snprintf(packet, sizeof(packet), "data: %.*s\n\n", (int)n, line);
-            chunk = packet;
+            if (httpd_resp_send_chunk(req, buf, (ssize_t)n) != ESP_OK) break;
         } else {
-            chunk = ": hb\n\n"; clen = 6;
+            if (httpd_resp_send_chunk(req, ": hb\n\n", 6) != ESP_OK) break;
         }
-        if (httpd_resp_send_chunk(req, chunk, (ssize_t)clen) != ESP_OK) break;
     }
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
@@ -311,11 +326,11 @@ static const char s_html[] =
     "</div>"
     "<h2>Canvas Bounds (mm)</h2>"
     "<div class=row>"
-    "Xmin<input type=number id=bxn value=-300 style=width:60px>"
-    "Xmax<input type=number id=bxx value=300 style=width:60px>"
-    "Ymin<input type=number id=byn value=-600 style=width:60px>"
-    "Ymax<input type=number id=byx value=400 style=width:60px>"
-    "<button onclick=\"c('bounds?xmin='+v('bxn')+'&xmax='+v('bxx')+'&ymin='+v('byn')+'&ymax='+v('byx'))\">Set</button>"
+    "X&#8722;<input type=number id=bxn value=-300 style=width:60px>"
+    "X+<input type=number id=bxx value=300 style=width:60px>"
+    "Y&#8722;<input type=number id=byn value=-600 style=width:60px>"
+    "Y+<input type=number id=byx value=400 style=width:60px>"
+    "<button onclick=\"c('bounds?xn='+v('bxn')+'&xp='+v('bxx')+'&yn='+v('byn')+'&yp='+v('byx'))\">Set</button>"
     "</div>"
     "<h2>Goto</h2><div class=row>"
     "X<input type=number id=gx value=0>"
@@ -327,20 +342,22 @@ static const char s_html[] =
     "CY<input type=number id=ccy value=0>"
     "R<input type=number id=cr value=50>"
     "C<input type=number id=cc value=1 style=width:40px>"
-    "<label><input type=checkbox id=cfi> Fill</label>"
+    "Fill<select id=cfi style=background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:2px>"
+    "<option value=0>None</option><option value=1>Hatch</option><option value=2>Concentric</option></select>"
     "&#8736;<input type=number id=ca value=0 style=width:50px title='Hatch angle (deg)'>&#176;"
-    "&#9632;<input type=number id=cs value=3 step=0.5 style=width:50px title='Hatch spacing (mm)'>mm"
-    "<button onclick=\"c('circle?cx='+v('ccx')+'&cy='+v('ccy')+'&r='+v('cr')+'&cycles='+v('cc')+'&fill='+(i('cfi').checked?1:0)+'&angle='+v('ca')+'&spacing='+v('cs'))\">Draw</button>"
+    "&#9632;<input type=number id=cs value=3 step=0.5 style=width:50px title='Spacing (mm)'>mm"
+    "<button onclick=\"c('circle?cx='+v('ccx')+'&cy='+v('ccy')+'&r='+v('cr')+'&cycles='+v('cc')+'&fill='+v('cfi')+'&angle='+v('ca')+'&spacing='+v('cs'))\">Draw</button>"
     "</div>"
     "<h2>Square</h2><div class=row>"
     "CX<input type=number id=scx value=0>"
     "CY<input type=number id=scy value=0>"
-    "Sz<input type=number id=ssz value=100>"
+    "Side<input type=number id=ssz value=100 title='Side length (mm)'>"
     "C<input type=number id=sc value=1 style=width:40px>"
-    "<label><input type=checkbox id=sfi> Fill</label>"
+    "Fill<select id=sfi style=background:#222;color:#eee;border:1px solid #444;border-radius:3px;padding:2px>"
+    "<option value=0>None</option><option value=1>Hatch</option><option value=2>Concentric</option></select>"
     "&#8736;<input type=number id=sa value=0 style=width:50px title='Hatch angle (deg)'>&#176;"
-    "&#9632;<input type=number id=ss value=3 step=0.5 style=width:50px title='Hatch spacing (mm)'>mm"
-    "<button onclick=\"c('square?cx='+v('scx')+'&cy='+v('scy')+'&size='+v('ssz')+'&cycles='+v('sc')+'&fill='+(i('sfi').checked?1:0)+'&angle='+v('sa')+'&spacing='+v('ss'))\">Draw</button>"
+    "&#9632;<input type=number id=ss value=3 step=0.5 style=width:50px title='Spacing (mm)'>mm"
+    "<button onclick=\"c('square?cx='+v('scx')+'&cy='+v('scy')+'&size='+v('ssz')+'&cycles='+v('sc')+'&fill='+v('sfi')+'&angle='+v('sa')+'&spacing='+v('ss'))\">Draw</button>"
     "</div>"
     "<h2>Line</h2><div class=row>"
     "X0<input type=number id=lx0 value=0>"

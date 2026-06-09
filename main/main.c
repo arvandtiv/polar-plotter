@@ -116,11 +116,12 @@ static plotter_geom_t g_geom = {
 };
 
 /* Forward declarations for draw helpers (defined after the lower-level primitives,
- * used by both console cmd_* wrappers and web_draw_task). */
+ * used by both console cmd_* wrappers and web_draw_task).
+ * fill_mode: 0=none  1=hatch (angled lines)  2=concentric (rings/circles) */
 static void do_draw_goto(float x, float y);
 static void do_draw_line(float x0, float y0, float x1, float y1, int cycles);
-static void do_draw_square(float cx, float cy, float size, int cycles, bool filled, float hatch_angle, float hatch_spacing);
-static void do_draw_circle(float cx, float cy, float r, int cycles, bool filled, float hatch_angle, float hatch_spacing);
+static void do_draw_square(float cx, float cy, float size, int cycles, int fill_mode, float hatch_angle, float hatch_spacing);
+static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing);
 static void do_draw_bullseye(float cx, float cy);
 static void do_draw_grid(float cx, float cy);
 
@@ -820,6 +821,17 @@ static void hatch_lines(float cx, float cy, bool is_circle, float shape_param,
 
 /* ---- do_draw_* helpers: called by both console cmd_* and web_draw_task ---- */
 
+/* Read both motors' actual position and push a structured SSE pos event.
+ * No-op if the web server is not running (s_log_stream check inside web_pos_event). */
+static void emit_pos_event(void)
+{
+    int32_t sl = tmc5072_position(&tmc, MOTOR_RHO);
+    int32_t sr = tmc5072_position(&tmc, MOTOR_THETA);
+    float x, y;
+    plt_steps_to_xy(&g_geom, sl, sr, &x, &y);
+    web_pos_event(x, y);
+}
+
 static void do_draw_goto(float x, float y)
 {
     clamp_xy(&x, &y);
@@ -829,6 +841,7 @@ static void do_draw_goto(float x, float y)
     tmc5072_move_coordinated(&tmc, sr, sl);
     wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
     wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+    emit_pos_event();
 }
 
 static void do_draw_line(float x0, float y0, float x1, float y1, int cycles)
@@ -844,7 +857,7 @@ static void do_draw_line(float x0, float y0, float x1, float y1, int cycles)
     pen_lift();
 }
 
-static void do_draw_square(float cx, float cy, float size, int cycles, bool filled,
+static void do_draw_square(float cx, float cy, float size, int cycles, int fill_mode,
                             float hatch_angle, float hatch_spacing)
 {
     float h = size * 0.5f;
@@ -857,11 +870,25 @@ static void do_draw_square(float cx, float cy, float size, int cycles, bool fill
     for (int c = 0; c < cycles; c++)
         for (int e = 0; e < 4; e++)
             draw_line_mm(xs[e], ys[e], xs[(e + 1) & 3], ys[(e + 1) & 3]);
-    if (filled) hatch_lines(cx, cy, false, h, hatch_angle, hatch_spacing);
+    if (fill_mode == 1) {
+        hatch_lines(cx, cy, false, h, hatch_angle, hatch_spacing);
+    } else if (fill_mode == 2) {
+        /* Concentric rings: step inward by spacing_mm on each side → 2*spacing per ring. */
+        for (float s = size - 2.0f * hatch_spacing; s > 2.0f * hatch_spacing; s -= 2.0f * hatch_spacing) {
+            float hi = s * 0.5f;
+            float xi[4] = { cx - hi, cx + hi, cx + hi, cx - hi };
+            float yi[4] = { cy - hi, cy - hi, cy + hi, cy + hi };
+            pen_lift();
+            move_to_xy(xi[0], yi[0]);
+            pen_drop();
+            for (int e = 0; e < 4; e++)
+                draw_line_mm(xi[e], yi[e], xi[(e + 1) & 3], yi[(e + 1) & 3]);
+        }
+    }
     pen_lift();
 }
 
-static void do_draw_circle(float cx, float cy, float r, int cycles, bool filled,
+static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode,
                             float hatch_angle, float hatch_spacing)
 {
     int n = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
@@ -883,7 +910,29 @@ static void do_draw_circle(float cx, float cy, float r, int cycles, bool filled,
             move_to_xy(px, py);
         }
     }
-    if (filled) hatch_lines(cx, cy, true, r, hatch_angle, hatch_spacing);
+    if (fill_mode == 1) {
+        hatch_lines(cx, cy, true, r, hatch_angle, hatch_spacing);
+    } else if (fill_mode == 2) {
+        /* Concentric inward circles, spacing_mm apart radially. */
+        for (float ri = r - hatch_spacing; ri > hatch_spacing * 0.5f; ri -= hatch_spacing) {
+            int ni = plt_arc_segments(ri, CIRCLE_CHORD_ERR_MM);
+            if (ni < 3) ni = 3;
+            float dth_i = PLT_TWO_PI / (float)ni;
+            float dc_i = cosf(dth_i), ds_i = sinf(dth_i);
+            pen_lift();
+            move_to_xy(cx + ri, cy);
+            pen_drop();
+            float vx_i = ri, vy_i = 0.0f;
+            for (int k = 1; k <= ni; k++) {
+                float nvx = vx_i * dc_i - vy_i * ds_i;
+                float nvy = vx_i * ds_i + vy_i * dc_i;
+                vx_i = nvx; vy_i = nvy;
+                float px = (k == ni) ? cx + ri : cx + vx_i;
+                float py = (k == ni) ? cy      : cy + vy_i;
+                move_to_xy(px, py);
+            }
+        }
+    }
     pen_lift();
 }
 
@@ -923,19 +972,20 @@ static void do_draw_grid(float cx, float cy)
 
 static int cmd_square(int argc, char **argv)
 {
-    if (argc < 4) { printf("usage: square <cx> <cy> <size> [cycles] [fill 0|1] [angle_deg] [spacing_mm]\n"); return 0; }
+    if (argc < 4) { printf("usage: square <cx> <cy> <size> [cycles] [fill 0|1|2] [angle_deg] [spacing_mm]\n"); return 0; }
     float cx = atof(argv[1]), cy = atof(argv[2]), z = atof(argv[3]);
     if (z <= 0.0f) { printf("size must be > 0\n"); return 0; }
-    int   cycles  = (argc >= 5) ? parse_cycles(argv[4]) : 1;
-    bool  filled  = (argc >= 6) && (atoi(argv[5]) != 0);
-    float hangle  = (argc >= 7) ? atof(argv[6]) : 0.0f;
-    float hspac   = (argc >= 8) ? atof(argv[7]) : HATCH_SPACING_MM;
-    printf("square (%.1f, %.1f) size=%.1f mm x%d%s\n",
-           (double)cx, (double)cy, (double)z, cycles,
-           filled ? " [filled]" : "");
-    if (filled) printf("  hatch: angle=%.1f deg  spacing=%.1f mm\n",
-                       (double)hangle, (double)hspac);
-    do_draw_square(cx, cy, z, cycles, filled, hangle, hspac);
+    int   cycles    = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    int   fill_mode = (argc >= 6) ? atoi(argv[5]) : 0;
+    float hangle    = (argc >= 7) ? atof(argv[6]) : 0.0f;
+    float hspac     = (argc >= 8) ? atof(argv[7]) : HATCH_SPACING_MM;
+    static const char *fill_names[] = { "", " [hatch]", " [concentric]" };
+    int fi = (fill_mode >= 0 && fill_mode <= 2) ? fill_mode : 0;
+    printf("square (%.1f, %.1f) side=%.1f mm x%d%s\n",
+           (double)cx, (double)cy, (double)z, cycles, fill_names[fi]);
+    if (fill_mode > 0) printf("  fill: angle=%.1f deg  spacing=%.1f mm\n",
+                              (double)hangle, (double)hspac);
+    do_draw_square(cx, cy, z, cycles, fill_mode, hangle, hspac);
     printf("square done\n");
     return 0;
 }
@@ -963,19 +1013,21 @@ static int cmd_grid(int argc, char **argv)
 
 static int cmd_circle(int argc, char **argv)
 {
-    if (argc < 4) { printf("usage: circle <cx> <cy> <r> [cycles] [fill 0|1] [angle_deg] [spacing_mm]\n"); return 0; }
+    if (argc < 4) { printf("usage: circle <cx> <cy> <r> [cycles] [fill 0|1|2] [angle_deg] [spacing_mm]\n"); return 0; }
     float cx = atof(argv[1]), cy = atof(argv[2]), r = atof(argv[3]);
     if (r <= 0.0f) { printf("radius must be > 0\n"); return 0; }
-    int   cycles = (argc >= 5) ? parse_cycles(argv[4]) : 1;
-    bool  filled = (argc >= 6) && (atoi(argv[5]) != 0);
-    float hangle = (argc >= 7) ? atof(argv[6]) : 0.0f;
-    float hspac  = (argc >= 8) ? atof(argv[7]) : HATCH_SPACING_MM;
+    int   cycles    = (argc >= 5) ? parse_cycles(argv[4]) : 1;
+    int   fill_mode = (argc >= 6) ? atoi(argv[5]) : 0;
+    float hangle    = (argc >= 7) ? atof(argv[6]) : 0.0f;
+    float hspac     = (argc >= 8) ? atof(argv[7]) : HATCH_SPACING_MM;
     int n = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    static const char *fill_names[] = { "", " [hatch]", " [concentric]" };
+    int fi = (fill_mode >= 0 && fill_mode <= 2) ? fill_mode : 0;
     printf("circle (%.1f, %.1f) r=%.1f mm %d segs x%d%s\n",
-           (double)cx, (double)cy, (double)r, n, cycles, filled ? " [filled]" : "");
-    if (filled) printf("  hatch: angle=%.1f deg  spacing=%.1f mm\n",
-                       (double)hangle, (double)hspac);
-    do_draw_circle(cx, cy, r, cycles, filled, hangle, hspac);
+           (double)cx, (double)cy, (double)r, n, cycles, fill_names[fi]);
+    if (fill_mode > 0) printf("  fill: angle=%.1f deg  spacing=%.1f mm\n",
+                              (double)hangle, (double)hspac);
+    do_draw_circle(cx, cy, r, cycles, fill_mode, hangle, hspac);
     printf("circle done\n");
     return 0;
 }
@@ -987,40 +1039,45 @@ static void web_draw_task(void *arg)
     wcmd_t cmd;
     for (;;) {
         if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
+        static const char *fill_label[] = { "", " [hatch]", " [concentric]" };
         switch (cmd.type) {
-            case WCMD_CIRCLE:
-                web_log("circle (%.1f,%.1f) r=%.1f x%d%s%s",
+            case WCMD_CIRCLE: {
+                int fm = (int)cmd.p[4];
+                web_log("circle (%.1f,%.1f) r=%.1f x%d%s",
                         (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
-                        (int)cmd.p[3], cmd.p[4] ? " [fill" : "",
-                        cmd.p[4] ? "]" : "");
-                do_draw_circle(cmd.p[0], cmd.p[1], cmd.p[2],
-                               (int)cmd.p[3], cmd.p[4] != 0.0f, cmd.p[5], cmd.p[6]);
+                        (int)cmd.p[3], (fm >= 0 && fm <= 2) ? fill_label[fm] : "");
+                do_draw_circle(cmd.p[0], cmd.p[1], cmd.p[2], (int)cmd.p[3], fm, cmd.p[5], cmd.p[6]);
+                emit_pos_event();
                 web_log("circle done");
                 break;
-            case WCMD_SQUARE:
-                web_log("square (%.1f,%.1f) size=%.1f x%d%s%s",
+            }
+            case WCMD_SQUARE: {
+                int fm = (int)cmd.p[4];
+                web_log("square (%.1f,%.1f) side=%.1f x%d%s",
                         (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
-                        (int)cmd.p[3], cmd.p[4] ? " [fill" : "",
-                        cmd.p[4] ? "]" : "");
-                do_draw_square(cmd.p[0], cmd.p[1], cmd.p[2],
-                               (int)cmd.p[3], cmd.p[4] != 0.0f, cmd.p[5], cmd.p[6]);
+                        (int)cmd.p[3], (fm >= 0 && fm <= 2) ? fill_label[fm] : "");
+                do_draw_square(cmd.p[0], cmd.p[1], cmd.p[2], (int)cmd.p[3], fm, cmd.p[5], cmd.p[6]);
+                emit_pos_event();
                 web_log("square done");
                 break;
+            }
             case WCMD_LINE:
                 web_log("line (%.1f,%.1f)->(%.1f,%.1f) x%d",
                         (double)cmd.p[0], (double)cmd.p[1],
                         (double)cmd.p[2], (double)cmd.p[3], (int)cmd.p[4]);
                 do_draw_line(cmd.p[0], cmd.p[1], cmd.p[2], cmd.p[3], (int)cmd.p[4]);
+                emit_pos_event();
                 web_log("line done");
                 break;
             case WCMD_GOTO:
                 web_log("goto (%.1f, %.1f)", (double)cmd.p[0], (double)cmd.p[1]);
-                do_draw_goto(cmd.p[0], cmd.p[1]);
+                do_draw_goto(cmd.p[0], cmd.p[1]);   /* do_draw_goto calls emit_pos_event */
                 web_log("goto done");
                 break;
             case WCMD_HOME:
                 web_log("home");
                 home_gondola();
+                emit_pos_event();
                 web_log("home done");
                 break;
             case WCMD_STOP:
