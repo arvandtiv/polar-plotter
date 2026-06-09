@@ -216,6 +216,42 @@ server.tool(
   }),
 );
 
+// plot_wobbly ────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_wobbly',
+  `Draw a closed random curve using a radial Fourier series.
+
+The radius at each angle is: r(θ) = base_r + Σ amp_h·sin(h·θ + phase_h)
+
+wobble controls distortion: 0.0 = perfect circle, 1.0 = maximum randomness.
+harmonics controls shape complexity: 1 = gentle blob, 8 = complex jagged shape.
+bound_r is a hard outer limit — no part of the curve will exceed this radius
+from the centre (defaults to r * 1.5).
+seed makes the shape reproducible: same seed + same params = same curve every time.
+
+Examples:
+  wobble=0.0, harmonics=1   → circle
+  wobble=0.2, harmonics=2   → soft organic blob
+  wobble=0.5, harmonics=4   → moderately wobbly closed shape
+  wobble=0.9, harmonics=7   → complex jagged closed form`,
+  {
+    cx:        z.number().describe('Center X in mm'),
+    cy:        z.number().describe('Center Y in mm'),
+    r:         z.number().positive().describe('Base radius in mm'),
+    bound_r:   z.number().nonnegative().default(0).describe('Outer bounding radius in mm (0 = r×1.5)'),
+    wobble:    z.number().min(0).max(1).default(0.4).describe('Distortion amount 0.0–1.0 (default 0.4)'),
+    harmonics: z.number().int().min(1).max(8).default(3).describe('Shape complexity 1–8 (default 3)'),
+    seed:      z.number().int().min(0).default(42).describe('Random seed — same seed = same shape (default 42)'),
+    cycles:    z.number().int().min(1).default(1).describe('Number of passes (default 1)'),
+  },
+  async ({ cx, cy, r, bound_r, wobble, harmonics, seed, cycles }) => ({
+    content: [{ type: 'text', text: ok(await api(
+      `wobbly?cx=${cx}&cy=${cy}&r=${r}&bound_r=${bound_r}` +
+      `&wobble=${wobble}&harmonics=${harmonics}&seed=${seed}&cycles=${cycles}`,
+    )) }],
+  }),
+);
+
 // plot_bullseye ──────────────────────────────────────────────────────────────
 server.tool(
   'plot_bullseye',
@@ -253,11 +289,12 @@ Each command object must have a "type" field plus the parameters for that type:
   { "type": "stop" }
   { "type": "speed",   "vmax": 150000 }
   { "type": "accel",   "amax": 300 }
-  { "type": "current", "run_ma": 500, "hold_ma": 150 }`,
+  { "type": "current", "run_ma": 500, "hold_ma": 150 }
+  { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }`,
   {
     commands: z.array(z.object({
       type: z.enum([
-        'goto', 'line', 'circle', 'square',
+        'goto', 'line', 'circle', 'square', 'wobbly',
         'pen', 'home', 'sethome', 'stop',
         'speed', 'accel', 'current',
       ]).describe('Command type'),
@@ -337,6 +374,13 @@ function buildEndpoint(cmd) {
         `&cycles=${p.cycles ?? 1}&fill=${p.fill_mode ?? 0}` +
         `&angle=${p.hatch_angle ?? 0}&spacing=${p.spacing ?? 3}` +
         `&outline=${(p.outline ?? true) ? 1 : 0}`
+      );
+
+    case 'wobbly':
+      return (
+        `wobbly?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}&r=${p.r ?? 50}` +
+        `&bound_r=${p.bound_r ?? 0}&wobble=${p.wobble ?? 0.4}` +
+        `&harmonics=${p.harmonics ?? 3}&seed=${p.seed ?? 42}&cycles=${p.cycles ?? 1}`
       );
 
     case 'pen':

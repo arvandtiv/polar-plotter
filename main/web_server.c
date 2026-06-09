@@ -269,6 +269,26 @@ static esp_err_t handle_grid(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t handle_wobbly(httpd_req_t *req)
+{
+    char qs[256]; get_qs(req, qs, sizeof(qs));
+    wcmd_t c = { .type = WCMD_WOBBLY };
+    c.p[0] = qf(qs, "cx",        0.0f);
+    c.p[1] = qf(qs, "cy",        0.0f);
+    c.p[2] = qf(qs, "r",        50.0f);
+    c.p[3] = qf(qs, "bound_r",   0.0f);   /* 0 = use r*1.5 default (set in do_draw_wobbly) */
+    c.p[4] = qf(qs, "wobble",    0.4f);   /* 0=circle .. 1=max distortion */
+    c.p[5] = qf(qs, "harmonics", 3.0f);   /* 1=gentle blob  8=complex jagged */
+    c.p[6] = qf(qs, "seed",     42.0f);   /* integer seed for reproducibility */
+    c.p[7] = qf(qs, "cycles",    1.0f);
+    if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
+    /* default bound_r = r * 1.5 when caller passes 0 */
+    if (c.p[3] <= 0.0f) c.p[3] = c.p[2] * 1.5f;
+    enqueue(&c);
+    resp_json(req, "ok", "wobbly queued");
+    return ESP_OK;
+}
+
 static esp_err_t handle_sethome(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_SETHOME };
@@ -500,6 +520,7 @@ esp_err_t web_server_start(void)
         { .uri = "/api/pen",      .method = HTTP_GET, .handler = handle_pen      },
         { .uri = "/api/bullseye", .method = HTTP_GET, .handler = handle_bullseye },
         { .uri = "/api/grid",     .method = HTTP_GET, .handler = handle_grid     },
+        { .uri = "/api/wobbly",   .method = HTTP_GET, .handler = handle_wobbly   },
         { .uri = "/api/sethome",  .method = HTTP_GET, .handler = handle_sethome  },
         { .uri = "/api/bounds",   .method = HTTP_GET, .handler = handle_bounds   },
         { .uri = "/api/speed",    .method = HTTP_GET, .handler = handle_speed    },

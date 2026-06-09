@@ -125,6 +125,9 @@ static void do_draw_square(float cx, float cy, float size, int cycles, int fill_
 static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_bullseye(float cx, float cy);
 static void do_draw_grid(float cx, float cy);
+/* wobble: 0.0 = perfect circle … 1.0 = very distorted; harmonics controls shape complexity */
+static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
+                            float wobble, int harmonics, int seed, int cycles);
 
 static void init_geometry(void)
 {
@@ -975,6 +978,66 @@ static void do_draw_grid(float cx, float cy)
     pen_lift();
 }
 
+/* Closed random curve using a radial Fourier series.
+ *
+ * The radius at angle θ is:
+ *   r(θ) = r + Σ(h=1..harmonics) amp_h * sin(h*θ + phase_h)
+ *
+ * Amplitude of each harmonic falls off as 1/h so low harmonics dominate
+ * (natural, smooth shape). wobble=0 → perfect circle; wobble=1 → maximum
+ * distortion. bound_r clamps every sample so the curve never leaves that
+ * radius from the centre.
+ *
+ * n sample points are drawn as connected straight segments (draw_line_mm
+ * sub-divides each segment for Cartesian accuracy). The curve is closed by
+ * connecting the last point back to the first. */
+static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
+                            float wobble, int harmonics, int seed, int cycles)
+{
+#define WOBBLY_MAX_PTS 128
+    float px[WOBBLY_MAX_PTS], py[WOBBLY_MAX_PTS];
+
+    if (harmonics < 1) harmonics = 1;
+    if (harmonics > 8) harmonics = 8;
+    int n = harmonics * 16;
+    if (n < 24)  n = 24;
+    if (n > WOBBLY_MAX_PTS) n = WOBBLY_MAX_PTS;
+
+    /* Generate per-harmonic random amplitudes and phases. */
+    srand((unsigned)seed);
+    float amp[8], ph[8];
+    for (int h = 0; h < harmonics; h++) {
+        float rand_scale = (float)(rand() % 1000) / 1000.0f;
+        amp[h] = wobble * r / (float)(h + 1) * rand_scale;
+        ph[h]  = (float)(rand() % 1000) / 1000.0f * PLT_TWO_PI;
+    }
+
+    float min_r = r * 0.05f;   /* don't collapse to a point */
+
+    for (int i = 0; i < n; i++) {
+        float theta = PLT_TWO_PI * (float)i / (float)n;
+        float ri = r;
+        for (int h = 0; h < harmonics; h++)
+            ri += amp[h] * sinf((float)(h + 1) * theta + ph[h]);
+        if (bound_r > 0.0f && ri > bound_r) ri = bound_r;
+        if (ri < min_r) ri = min_r;
+        px[i] = cx + ri * cosf(theta);
+        py[i] = cy + ri * sinf(theta);
+    }
+
+    tmc5072_enable(&tmc, true);
+    pen_lift();
+    move_to_xy(px[0], py[0]);
+    pen_drop();
+    for (int c = 0; c < cycles; c++) {
+        for (int i = 1; i <= n; i++)
+            draw_line_mm(px[(i - 1) % n], py[(i - 1) % n],
+                         px[i % n],       py[i % n]);
+    }
+    pen_lift();
+#undef WOBBLY_MAX_PTS
+}
+
 /* ---- console command wrappers (thin: parse + print, then call do_draw_*) ---- */
 
 static int cmd_square(int argc, char **argv)
@@ -1131,6 +1194,15 @@ static void web_draw_task(void *arg)
                 do_draw_grid(cmd.p[0], cmd.p[1]);
                 web_log("grid done");
                 break;
+            case WCMD_WOBBLY:
+                web_log("wobbly (%.1f,%.1f) r=%.1f bound=%.1f wobble=%.2f h=%d seed=%d x%d",
+                        (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2], (double)cmd.p[3],
+                        (double)cmd.p[4], (int)cmd.p[5], (int)cmd.p[6], (int)cmd.p[7]);
+                do_draw_wobbly(cmd.p[0], cmd.p[1], cmd.p[2], cmd.p[3],
+                               cmd.p[4], (int)cmd.p[5], (int)cmd.p[6], (int)cmd.p[7]);
+                emit_pos_event();
+                web_log("wobbly done");
+                break;
             case WCMD_SETHOME:
                 web_log("sethome");
                 set_origin_here();
@@ -1231,6 +1303,31 @@ static int cmd_sethome(int argc, char **argv)
     return 0;
 }
 
+static int cmd_wobbly(int argc, char **argv)
+{
+    if (argc < 4) {
+        printf("usage: wobbly <cx> <cy> <r> [bound_r] [wobble 0-1] [harmonics 1-8] [seed] [cycles]\n");
+        printf("  wobble=0 -> circle, wobble=1 -> max distortion\n");
+        printf("  harmonics: 1=gentle blob  8=complex jagged\n");
+        return 0;
+    }
+    float cx       = atof(argv[1]);
+    float cy       = atof(argv[2]);
+    float r        = atof(argv[3]);
+    float bound_r  = (argc >= 5) ? atof(argv[4]) : r * 1.5f;
+    float wobble   = (argc >= 6) ? atof(argv[5]) : 0.4f;
+    int   harmonics= (argc >= 7) ? atoi(argv[6]) : 3;
+    int   seed     = (argc >= 8) ? atoi(argv[7]) : 42;
+    int   cycles   = (argc >= 9) ? parse_cycles(argv[8]) : 1;
+    if (r <= 0.0f) { printf("r must be > 0\n"); return 0; }
+    printf("wobbly (%.1f, %.1f) r=%.1f bound=%.1f wobble=%.2f h=%d seed=%d x%d\n",
+           (double)cx, (double)cy, (double)r, (double)bound_r,
+           (double)wobble, harmonics, seed, cycles);
+    do_draw_wobbly(cx, cy, r, bound_r, wobble, harmonics, seed, cycles);
+    printf("wobbly done\n");
+    return 0;
+}
+
 static int cmd_pen(int argc, char **argv)
 {
     if (argc < 2) { printf("usage: pen <up|down|degrees>\n"); return 0; }
@@ -1288,6 +1385,7 @@ static void register_commands(void)
         { .command = "line",   .help = "Draw a line: line <x0> <y0> <x1> <y1> [cycles]", .func = cmd_line },
         { .command = "circle", .help = "Draw a circle: circle <cx> <cy> <r_mm> [cycles] [fill 0|1]", .func = cmd_circle },
         { .command = "square",   .help = "Draw a square: square <cx> <cy> <size_mm> [cycles] [fill 0|1]", .func = cmd_square },
+        { .command = "wobbly",   .help = "Random closed curve: wobbly <cx> <cy> <r> [bound_r] [wobble 0-1] [harmonics 1-8] [seed] [cycles]", .func = cmd_wobbly },
         { .command = "bullseye", .help = "Draw calibration crosshair: bullseye [cx cy] (10mm arms, 5 passes)",        .func = cmd_bullseye },
         { .command = "grid",     .help = "Draw calibration grid: grid [cx cy] (10x10 lines, 8mm spacing, 100mm long)", .func = cmd_grid },
         { .command = "where",  .help = "Read XACTUAL back as an (x,y) mm coordinate", .func = cmd_where },

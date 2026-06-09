@@ -17,7 +17,9 @@ export interface SetHomeCmd  { type: 'sethome'; }
 export interface PenCmd      { type: 'pen';      pos: 'up' | 'down'; }
 export interface BullseyeCmd { type: 'bullseye'; cx: number; cy: number; }
 export interface GridCmd     { type: 'grid';     cx: number; cy: number; }
-export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd;
+export interface WobblyCmd   { type: 'wobbly';   cx: number; cy: number; r: number; boundR: number;
+                               wobble: number; harmonics: number; seed: number; cycles: number; }
+export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | WobblyCmd;
 
 export interface LogEntry { id: number; kind: 'cmd' | 'ok' | 'err' | 'warn' | 'sys' | 'fw'; text: string; t: number; }
 export interface PenState  { x: number; y: number; down: boolean; }
@@ -47,6 +49,8 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'circle':   return `circle?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&cycles=${cmd.cycles}&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
     case 'bullseye': return `bullseye?cx=${cmd.cx}&cy=${cmd.cy}`;
     case 'grid':     return `grid?cx=${cmd.cx}&cy=${cmd.cy}`;
+    case 'wobbly':   return `wobbly?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&bound_r=${cmd.boundR}` +
+                            `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}`;
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
     case 'pen':      return `pen?pos=${cmd.pos}`;
@@ -137,6 +141,31 @@ export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[
         pts.push({ x: lx - half * Math.cos(theta), y: ly - half * Math.sin(theta), pen: true });
       }
     }
+  } else if (cmd.type === 'wobbly') {
+    // Reproduce the same Fourier algorithm as the firmware using a seeded LCG so
+    // the canvas preview matches what the plotter will actually draw.
+    const lcg = (() => {
+      let s = (cmd.seed >>> 0) || 1;
+      return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0x100000000; };
+    })();
+    const h = Math.min(8, Math.max(1, cmd.harmonics));
+    const n = Math.min(128, Math.max(24, h * 16));
+    const amp: number[] = [], ph: number[] = [];
+    for (let i = 0; i < h; i++) {
+      amp.push(cmd.wobble * cmd.r / (i + 1) * lcg());
+      ph.push(lcg() * Math.PI * 2);
+    }
+    const minR = cmd.r * 0.05;
+    const bound = cmd.boundR > 0 ? cmd.boundR : cmd.r * 1.5;
+    const pts2d: {x:number;y:number}[] = [];
+    for (let i = 0; i <= n; i++) {
+      const theta = (Math.PI * 2 * (i % n)) / n;
+      let ri = cmd.r;
+      for (let j = 0; j < h; j++) ri += amp[j] * Math.sin((j + 1) * theta + ph[j]);
+      ri = Math.min(bound, Math.max(minR, ri));
+      pts2d.push({ x: cmd.cx + ri * Math.cos(theta), y: cmd.cy + ri * Math.sin(theta) });
+    }
+    pts2d.forEach((p, i) => pts.push({ x: p.x, y: p.y, pen: i !== 0 }));
   } else if (cmd.type === 'bullseye') {
     for (let ri = 0; ri < 4; ri++) {
       const rad = 20 + ri * 20;
