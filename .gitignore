@@ -24,6 +24,9 @@ tools/weave/tmp/
 # macOS
 .DS_Store
 
+# MCP server dependencies
+plotter-mcp/node_modules/
+
 # Playwright MCP debug logs / snapshots
 .playwright-mcp/
 

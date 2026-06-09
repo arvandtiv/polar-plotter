@@ -1,5 +1,14 @@
 {
   "mcpServers": {
+    "polar-plotter": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["plotter-mcp/index.js"],
+      "env": {
+        "PLOTTER_IP": "192.168.1.53",
+        "PLOTTER_PORT": "80"
+      }
+    },
     "context7": {
       "type": "stdio",
       "command": "npx",
