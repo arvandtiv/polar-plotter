@@ -19,10 +19,11 @@ function Card({ title, icon, accent = '#38bdf8', right, children, className = ''
   title?: string; icon?: string; accent?: string; right?: React.ReactNode;
   children: React.ReactNode; className?: string;
 }) {
+  const isFlexCol = className.includes('flex-col');
   return (
     <section className={`rounded-xl border border-ink-750 bg-ink-900/70 ${className}`}>
       {title && (
-        <header className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800">
+        <header className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800 shrink-0">
           <div className="flex items-center gap-2">
             {icon && <span style={{ color: accent }} className="text-[13px]">{icon}</span>}
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
@@ -30,7 +31,7 @@ function Card({ title, icon, accent = '#38bdf8', right, children, className = ''
           {right}
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className={`p-4 ${isFlexCol ? 'flex flex-col flex-1 min-h-0' : ''}`}>{children}</div>
     </section>
   );
 }
@@ -115,17 +116,34 @@ function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, de
   );
 }
 
+// FieldInline is intentionally UNCONTROLLED (defaultValue + useRef, not value + useState).
+// A controlled numeric input would re-render on every parent state change, which erases
+// partial values like "-" or "1." mid-type and makes the field feel broken.
+// Instead the DOM owns the string; we only read and validate it on blur/Enter.
 function FieldInline({ label, value, onChange, unit, step = 1, min = -100000, max = 100000 }: {
   label: string; value: number; onChange: (v: number) => void;
   unit?: string; step?: number; min?: number; max?: number;
 }) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  const commit = () => {
+    const raw = ref.current?.value ?? '';
+    let n = parseFloat(raw);
+    if (isNaN(n)) n = value;
+    onChange(Math.min(max, Math.max(min, n)));
+  };
+
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
       <div className="flex items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50 transition-colors">
-        <input type="number" value={value} step={step}
-          onChange={(e) => onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))}
-          onBlur={(e) => { let n = parseFloat(e.target.value); if (isNaN(n)) n = 0; onChange(Math.min(max, Math.max(min, n))); }}
+        <input ref={ref} type="text" inputMode="numeric" defaultValue={String(value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'ArrowUp')   { onChange(Math.min(max, value + step)); if (ref.current) ref.current.value = String(value + step); }
+            if (e.key === 'ArrowDown') { onChange(Math.max(min, value - step)); if (ref.current) ref.current.value = String(value - step); }
+          }}
           className="min-w-0 w-full bg-transparent px-2 py-1.5 font-mono text-[13px] text-ink-200 outline-none"
         />
         {unit && <span className="pr-2 text-[10px] text-ink-500 font-mono">{unit}</span>}
@@ -144,6 +162,22 @@ function FillPicker({ value, onChange }: { value: FillMode; onChange: (v: FillMo
           <button key={v} onClick={() => onChange(v)}
             className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${value === v ? 'bg-ink-700 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>
             {lbl}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OutlineToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div>
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 mb-1 block">Outline</span>
+      <div className="flex rounded-lg border border-ink-700 bg-ink-900 p-0.5 gap-0.5">
+        {([true, false] as const).map((v) => (
+          <button key={String(v)} onClick={() => onChange(v)}
+            className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${value === v ? 'bg-ink-700 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>
+            {v ? 'On' : 'Off'}
           </button>
         ))}
       </div>
@@ -221,43 +255,60 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
 //  Bounds control
 // ================================================================
 
+// BoundsControl uses the same uncontrolled-input pattern as FieldInline, plus
+// an explicit "Apply bounds" button instead of updating on every keystroke.
+// The previous keystroke-driven approach caused the canvas to repaint and the
+// firmware to receive a new /api/bounds on every character typed ("too noisy").
 function BoundsControl({ bounds, setBounds, commitBounds }: {
   bounds: PlotterBounds;
   setBounds: (b: PlotterBounds | ((p: PlotterBounds) => PlotterBounds)) => void;
   commitBounds: (b: PlotterBounds) => void;
 }) {
-  const set = (k: keyof PlotterBounds, v: number) => setBounds((b) => ({ ...b, [k]: Math.max(0, v) }));
-  const Box = ({ k, label }: { k: keyof PlotterBounds; label: string }) => (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
-      <div className="flex items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50">
-        <input type="number" value={bounds[k]} min={0}
-          onChange={(e) => set(k, e.target.value === '' ? 0 : parseFloat(e.target.value))}
-          onBlur={(e) => {
-            const n = Math.max(0, parseFloat(e.target.value) || 0);
-            const nb = { ...bounds, [k]: n };
-            setBounds(nb); commitBounds(nb);
-          }}
-          className="min-w-0 w-full bg-transparent px-2 py-1.5 font-mono text-[13px] text-ink-200 outline-none text-center"
+  const refs = {
+    up:    useRef<HTMLInputElement>(null),
+    down:  useRef<HTMLInputElement>(null),
+    left:  useRef<HTMLInputElement>(null),
+    right: useRef<HTMLInputElement>(null),
+  };
+
+  const parse = (s: string | undefined) => Math.max(0, parseFloat(s ?? '0') || 0);
+
+  const apply = () => {
+    const nb = {
+      up:    parse(refs.up.current?.value),
+      down:  parse(refs.down.current?.value),
+      left:  parse(refs.left.current?.value),
+      right: parse(refs.right.current?.value),
+    };
+    setBounds(nb);
+    commitBounds(nb);
+  };
+
+  const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') apply(); };
+
+  const row = (ref: React.RefObject<HTMLInputElement>, label: string, init: number) => (
+    <div className="flex items-center gap-2">
+      <span className="w-24 shrink-0 text-[12px] text-ink-400">{label}</span>
+      <div className="flex flex-1 items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50">
+        <input ref={ref} type="text" inputMode="numeric" defaultValue={String(init)}
+          onKeyDown={onKey}
+          className="min-w-0 w-full bg-transparent px-3 py-2 font-mono text-[13px] text-ink-200 outline-none"
         />
-        <span className="pr-2 text-[10px] text-ink-500 font-mono">mm</span>
+        <span className="pr-3 text-[11px] text-ink-500 font-mono">mm</span>
       </div>
     </div>
   );
+
   return (
-    <div className="grid grid-cols-3 grid-rows-3 gap-2 items-center">
-      <div className="col-start-2 row-start-1"><Box k="up" label="Up (+Y)" /></div>
-      <div className="col-start-1 row-start-2"><Box k="left" label="Left (−X)" /></div>
-      <div className="col-start-2 row-start-2 flex items-center justify-center">
-        <div className="h-full w-full flex items-center justify-center rounded-lg border border-dashed border-ink-700 bg-ink-950 px-2 py-3">
-          <div className="text-center">
-            <div className="font-mono text-[11px] text-ink-200">{bounds.left + bounds.right}×{bounds.up + bounds.down}</div>
-            <div className="text-[9px] uppercase tracking-wider text-ink-600">work area</div>
-          </div>
-        </div>
-      </div>
-      <div className="col-start-3 row-start-2"><Box k="right" label="Right (+X)" /></div>
-      <div className="col-start-2 row-start-3"><Box k="down" label="Down (−Y)" /></div>
+    <div className="space-y-3">
+      {row(refs.up,    'Up  (+Y)',   bounds.up)}
+      {row(refs.down,  'Down (−Y)',  bounds.down)}
+      {row(refs.left,  'Left  (−X)', bounds.left)}
+      {row(refs.right, 'Right (+X)', bounds.right)}
+      <button onClick={apply}
+        className="w-full rounded-lg bg-cyanx/10 border border-cyanx/30 px-4 py-2 text-[13px] font-semibold text-cyanx hover:bg-cyanx/20 transition-colors">
+        Apply bounds
+      </button>
     </div>
   );
 }
@@ -353,8 +404,8 @@ export default function App() {
   const { pen, moving, connected, motion, bounds, paths, activePath, queue, log } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
-  const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3 });
-  const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3 });
+  const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
+  const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [lineF, setLine]    = useState({ x0: 0, y0: 0, x1: 100, y1: 0, cycles: 1 });
   const [calib, setCalib]   = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('draw');
@@ -366,7 +417,7 @@ export default function App() {
   const fca = f(calib, setCalib);
 
   return (
-    <div className="min-h-screen bg-ink-950 text-ink-300">
+    <div className="h-screen flex flex-col bg-ink-950 text-ink-300 overflow-hidden">
       {/* top bar */}
       <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6 flex-wrap">
@@ -390,11 +441,12 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      <main className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
+        <div className="h-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
 
           {/* ====== LEFT: machine state ====== */}
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto">
             <Card title="Position" icon="◎" accent="#38bdf8" right={
               <div className="flex items-center gap-3 font-mono text-[12px]">
                 <span className={moving ? 'text-warn' : 'text-ink-500'}>{moving ? '● MOVING' : '○ idle'}</span>
@@ -433,9 +485,14 @@ export default function App() {
             </Card>
           </div>
 
-          {/* ====== RIGHT: controls ====== */}
-          <div className="space-y-4">
-            {/* Tab bar */}
+          {/* ====== RIGHT: controls ======
+               Uses CSS Grid with explicit row tracks instead of flexbox.
+               Flexbox children don't shrink below their content height, so
+               the log card would overflow the viewport. With grid + minmax(0,1fr)
+               both inner rows get equal height and DO shrink — the log always
+               fills exactly the bottom half of the available space. */}
+          <div className="grid gap-4 h-full min-h-0" style={{ gridTemplateRows: 'auto minmax(0,1fr) minmax(0,1fr)' }}>
+            {/* Tab bar — row 1 */}
             <div className="flex gap-1 rounded-xl border border-ink-750 bg-ink-900/70 p-1">
               {([['draw','Draw'],['jog','Move'],['area','Work Area'],['calib','Calibrate']] as [Tab,string][]).map(([id, lbl]) => (
                 <button key={id} onClick={() => setTab(id)}
@@ -443,6 +500,8 @@ export default function App() {
               ))}
             </div>
 
+            {/* Tab panels — row 2, scrolls internally */}
+            <div className="overflow-y-auto space-y-4 min-h-0">
             {/* ---- Move tab ---- */}
             {tab === 'jog' && (
               <Card title="Move to point" icon="↗" accent="#38bdf8">
@@ -476,8 +535,9 @@ export default function App() {
                     <FieldInline label="Angle" unit="°" value={circle.angle} onChange={fc('angle') as (v: number) => void} />
                     <FieldInline label="Spacing" unit="mm" value={circle.spacing} min={0.5} step={0.5} onChange={fc('spacing') as (v: number) => void} />
                   </div>
-                  <div className="mt-3">
-                    <FillPicker value={circle.fillMode} onChange={(v) => setCircle({ ...circle, fillMode: v })} />
+                  <div className="mt-3 flex gap-3">
+                    <div className="flex-1"><FillPicker value={circle.fillMode} onChange={(v) => setCircle({ ...circle, fillMode: v })} /></div>
+                    <div className="w-28"><OutlineToggle value={circle.outline} onChange={(v) => setCircle({ ...circle, outline: v })} /></div>
                   </div>
                 </Card>
 
@@ -491,8 +551,9 @@ export default function App() {
                     <FieldInline label="Angle" unit="°" value={square.angle} onChange={fs('angle') as (v: number) => void} />
                     <FieldInline label="Spacing" unit="mm" value={square.spacing} min={0.5} step={0.5} onChange={fs('spacing') as (v: number) => void} />
                   </div>
-                  <div className="mt-3">
-                    <FillPicker value={square.fillMode} onChange={(v) => setSquare({ ...square, fillMode: v })} />
+                  <div className="mt-3 flex gap-3">
+                    <div className="flex-1"><FillPicker value={square.fillMode} onChange={(v) => setSquare({ ...square, fillMode: v })} /></div>
+                    <div className="w-28"><OutlineToggle value={square.outline} onChange={(v) => setSquare({ ...square, outline: v })} /></div>
                   </div>
                 </Card>
 
@@ -543,15 +604,18 @@ export default function App() {
               </Card>
             )}
 
-            {/* Log */}
-            <Card title="Log" icon="❯" accent="#34d399" className="min-h-[280px]"
+            </div>{/* end tab panels — row 2 */}
+
+            {/* Log — row 3, fills to bottom */}
+            <Card title="Log" icon="❯" accent="#34d399" className="flex flex-col min-h-0"
               right={
                 <button onClick={() => P.pushLog('sys', '— cleared —')}
                   className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
               }>
-              <div className="h-[260px]"><LogView log={log} /></div>
+              <div className="flex-1 min-h-0"><LogView log={log} /></div>
             </Card>
           </div>
+        </div>
         </div>
       </main>
     </div>

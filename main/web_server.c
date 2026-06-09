@@ -23,13 +23,59 @@ static const char *TAG = "web";
 QueueHandle_t g_draw_queue = NULL;
 
 #define LOG_STREAM_BYTES 2048
-static StreamBufferHandle_t s_log_stream = NULL;
-static SemaphoreHandle_t    s_log_mutex  = NULL;
+static StreamBufferHandle_t s_log_stream  = NULL;
+static SemaphoreHandle_t    s_log_mutex   = NULL;
+static QueueHandle_t        s_sse_req_q   = NULL;  /* passes async req to sse_task */
+
+/* SSE task: owns the long-lived EventSource connection so the httpd worker is free.
+ *
+ * Architecture: esp_http_server has ONE worker task. If handle_events() kept the
+ * connection open in a loop, no other HTTP request could be served (the worker would
+ * be stuck). Instead, handle_events() calls httpd_req_async_handler_begin() to hand
+ * off the request to this dedicated task and returns immediately — freeing the worker
+ * for circle/goto/stop calls while SSE streams in parallel.
+ *
+ * Only one SSE client at a time: xQueueOverwrite() drops the previous async_req when
+ * a new browser tab connects, which also kills the old connection cleanly. */
+static void sse_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        httpd_req_t *req = NULL;
+        /* Block here (no CPU usage) until handle_events() gives us an async request. */
+        xQueueReceive(s_sse_req_q, &req, portMAX_DELAY);
+        if (!req) continue;
+
+        char buf[300];
+        for (;;) {
+            /* Block up to 2 s for data from the log stream. */
+            size_t n = xStreamBufferReceive(s_log_stream, buf, sizeof(buf) - 1,
+                                            pdMS_TO_TICKS(2000));
+            esp_err_t err;
+            if (n > 0) {
+                /* Forward whatever the producers wrote (already SSE-framed). */
+                err = httpd_resp_send_chunk(req, buf, (ssize_t)n);
+            } else {
+                /* No data for 2 s: send an SSE comment as a heartbeat so the
+                 * browser doesn't time out and close the EventSource. */
+                err = httpd_resp_send_chunk(req, ": hb\n\n", 6);
+            }
+            /* Any send error means the browser closed the tab — exit and wait
+             * for the next connection. */
+            if (err != ESP_OK) break;
+        }
+        /* Zero-length chunk signals end-of-response, then release the async slot. */
+        httpd_resp_send_chunk(req, NULL, 0);
+        httpd_req_async_handler_complete(req);
+    }
+}
 
 /* ---- Log/event sink (producer side) ---- */
 
 /* Write a fully-framed SSE event into the stream buffer. The SSE handler
- * passes bytes through verbatim, so producers own the framing. */
+ * passes bytes through verbatim, so producers own the framing.
+ * The mutex serialises writes from web_log() and web_pos_event() which may be
+ * called from different tasks (the draw task and any future sensor task). */
 static void stream_write(const char *data, size_t len)
 {
     if (!s_log_stream || !len) return;
@@ -39,6 +85,9 @@ static void stream_write(const char *data, size_t len)
     }
 }
 
+/* web_log(): SSE-wrap a printf-style message as an unnamed event.
+ * The browser's es.onmessage handler picks these up as plain log lines.
+ * Format: "data: <text>\n\n" per the SSE spec. */
 void web_log(const char *fmt, ...)
 {
     if (!s_log_stream) return;
@@ -53,6 +102,11 @@ void web_log(const char *fmt, ...)
     if (total > 0) stream_write(event, (size_t)total);
 }
 
+/* web_pos_event(): SSE-wrap an (x,y) position as a NAMED "pos" event.
+ * Named events bypass es.onmessage and are caught by es.addEventListener('pos',…)
+ * in usePlotter.ts — so position updates update the canvas dot without
+ * polluting the log window with coordinate spam.
+ * Format: "event: pos\ndata: {…}\n\n" per the SSE spec. */
 void web_pos_event(float x, float y)
 {
     if (!s_log_stream) return;
@@ -90,6 +144,8 @@ static void resp_json(httpd_req_t *req, const char *status, const char *msg)
     httpd_resp_sendstr(req, buf);
 }
 
+/* Push a draw command onto the queue for web_draw_task (in main.c) to execute.
+ * HTTP handlers return immediately after this — no motor waits happen in httpd. */
 static void enqueue(wcmd_t *cmd)
 {
     if (g_draw_queue)
@@ -109,6 +165,7 @@ static esp_err_t handle_circle(httpd_req_t *req)
     c.p[4] = qf(qs, "fill",     0.0f);
     c.p[5] = qf(qs, "angle",    0.0f);   /* hatch angle, degrees */
     c.p[6] = qf(qs, "spacing",  3.0f);   /* hatch line spacing, mm */
+    c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
     if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
     enqueue(&c);
     resp_json(req, "ok", "circle queued");
@@ -126,6 +183,7 @@ static esp_err_t handle_square(httpd_req_t *req)
     c.p[4] = qf(qs, "fill",     0.0f);
     c.p[5] = qf(qs, "angle",    0.0f);   /* hatch angle, degrees */
     c.p[6] = qf(qs, "spacing",  3.0f);   /* hatch line spacing, mm */
+    c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
     if (c.p[2] <= 0) { resp_json(req, "error", "size must be > 0"); return ESP_OK; }
     enqueue(&c);
     resp_json(req, "ok", "square queued");
@@ -168,6 +226,7 @@ static esp_err_t handle_home(httpd_req_t *req)
 static esp_err_t handle_stop(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_STOP };
+    /* SendToFront so STOP jumps ahead of any queued circle/square/etc. */
     if (g_draw_queue)
         xQueueSendToFront(g_draw_queue, &c, pdMS_TO_TICKS(200));
     resp_json(req, "ok", "stop sent");
@@ -263,8 +322,8 @@ static esp_err_t handle_cur(httpd_req_t *req)
 }
 
 /* SSE handler: keeps the connection open and streams bytes from s_log_stream.
- * Producers (web_log, web_pos_event) write fully-framed SSE events; this handler
- * just passes bytes through. Sends a heartbeat comment every 2 s on idle. */
+ * Producers (web_log, web_pos_event) write fully-framed SSE events.
+ * Uses async handler so the httpd worker task is freed immediately. */
 static esp_err_t handle_events(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/event-stream");
@@ -272,17 +331,12 @@ static esp_err_t handle_events(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Connection",    "keep-alive");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
 
-    char buf[300];
-    for (;;) {
-        size_t n = xStreamBufferReceive(s_log_stream, buf, sizeof(buf) - 1,
-                                        pdMS_TO_TICKS(2000));
-        if (n > 0) {
-            if (httpd_resp_send_chunk(req, buf, (ssize_t)n) != ESP_OK) break;
-        } else {
-            if (httpd_resp_send_chunk(req, ": hb\n\n", 6) != ESP_OK) break;
-        }
+    httpd_req_t *async_req;
+    if (httpd_req_async_handler_begin(req, &async_req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
     }
-    httpd_resp_send_chunk(req, NULL, 0);
+    xQueueOverwrite(s_sse_req_q, &async_req);  /* drops previous client if any */
     return ESP_OK;
 }
 
@@ -415,15 +469,18 @@ esp_err_t web_server_start(void)
     s_log_stream = xStreamBufferCreate(LOG_STREAM_BYTES, 1);
     s_log_mutex  = xSemaphoreCreateMutex();
     g_draw_queue = xQueueCreate(16, sizeof(wcmd_t));
-    if (!s_log_stream || !s_log_mutex || !g_draw_queue) {
+    s_sse_req_q  = xQueueCreate(1, sizeof(httpd_req_t *));
+    if (!s_log_stream || !s_log_mutex || !g_draw_queue || !s_sse_req_q) {
         ESP_LOGE(TAG, "OOM allocating web server resources");
         return ESP_ERR_NO_MEM;
     }
+    xTaskCreate(sse_task, "sse", 4096, NULL, 5, NULL);
 
     httpd_config_t cfg  = HTTPD_DEFAULT_CONFIG();
-    cfg.max_open_sockets = 7;    /* SSE connection + several API calls in flight */
-    cfg.stack_size       = 8192;
-    cfg.lru_purge_enable = true;
+    cfg.max_open_sockets  = 7;    /* SSE connection + several API calls in flight */
+    cfg.max_uri_handlers  = 20;   /* default 8 — silently drops routes beyond #8, so bump it */
+    cfg.stack_size        = 8192;
+    cfg.lru_purge_enable  = true;
 
     httpd_handle_t srv = NULL;
     esp_err_t err = httpd_start(&srv, &cfg);

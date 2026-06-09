@@ -8,8 +8,8 @@ export type FillMode = 0 | 1 | 2;   // 0=none  1=hatch  2=concentric
 export interface PlotterBounds { left: number; right: number; up: number; down: number; }
 export interface MotionParams  { vmax: number; amax: number; run: number; hold: number; }
 
-export interface CircleCmd   { type: 'circle';   cx: number; cy: number; r: number;    cycles: number; fillMode: FillMode; angle: number; spacing: number; }
-export interface SquareCmd   { type: 'square';   cx: number; cy: number; size: number; cycles: number; fillMode: FillMode; angle: number; spacing: number; }
+export interface CircleCmd   { type: 'circle';   cx: number; cy: number; r: number;    cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
+export interface SquareCmd   { type: 'square';   cx: number; cy: number; size: number; cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
 export interface LineCmd     { type: 'line';     x0: number; y0: number; x1: number; y1: number; cycles: number; }
 export interface GotoCmd     { type: 'goto';     x: number;  y: number; }
 export interface HomeCmd     { type: 'home'; }
@@ -43,8 +43,8 @@ export function cmdToQuery(cmd: PlotCmd): string {
   switch (cmd.type) {
     case 'goto':     return `goto?x=${cmd.x}&y=${cmd.y}`;
     case 'line':     return `line?x0=${cmd.x0}&y0=${cmd.y0}&x1=${cmd.x1}&y1=${cmd.y1}&cycles=${cmd.cycles}`;
-    case 'square':   return `square?cx=${cmd.cx}&cy=${cmd.cy}&size=${cmd.size}&cycles=${cmd.cycles}&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}`;
-    case 'circle':   return `circle?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&cycles=${cmd.cycles}&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}`;
+    case 'square':   return `square?cx=${cmd.cx}&cy=${cmd.cy}&size=${cmd.size}&cycles=${cmd.cycles}&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
+    case 'circle':   return `circle?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&cycles=${cmd.cycles}&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
     case 'bullseye': return `bullseye?cx=${cmd.cx}&cy=${cmd.cy}`;
     case 'grid':     return `grid?cx=${cmd.cx}&cy=${cmd.cy}`;
     case 'home':     return 'home';
@@ -82,15 +82,19 @@ export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[
       x: cmd.cx + (px * Math.cos(a) - py * Math.sin(a)),
       y: cmd.cy + (px * Math.sin(a) + py * Math.cos(a)),
     });
-    const ringCount = cmd.fillMode === 2
-      ? Math.max(1, Math.floor(h / Math.max(0.5, cmd.spacing)))
-      : 1;
-    for (let ri = 0; ri < ringCount; ri++) {
-      const inset = cmd.fillMode === 2 ? ri * cmd.spacing : 0;
-      const hh = h - inset;
-      if (hh <= 0) break;
-      const corners = [rot(-hh, -hh), rot(hh, -hh), rot(hh, hh), rot(-hh, hh), rot(-hh, -hh)];
-      corners.forEach((p, i) => pts.push({ x: p.x, y: p.y, pen: !(ri === 0 && i === 0) }));
+    if (cmd.fillMode === 2) {
+      const start = cmd.outline ? cmd.spacing : 0;
+      const ringCount = Math.max(1, Math.floor((h - start) / Math.max(0.5, cmd.spacing)));
+      for (let ri = 0; ri < ringCount; ri++) {
+        const inset = start + ri * cmd.spacing;
+        const hh = h - inset;
+        if (hh <= 0) break;
+        const corners = [rot(-hh, -hh), rot(hh, -hh), rot(hh, hh), rot(-hh, hh), rot(-hh, -hh)];
+        corners.forEach((p, i) => pts.push({ x: p.x, y: p.y, pen: !(ri === 0 && i === 0) }));
+      }
+    } else if (cmd.outline) {
+      const corners = [rot(-h, -h), rot(h, -h), rot(h, h), rot(-h, h), rot(-h, -h)];
+      corners.forEach((p, i) => pts.push({ x: p.x, y: p.y, pen: i !== 0 }));
     }
     if (cmd.fillMode === 1) {
       const theta = (cmd.angle || 0) * Math.PI / 180;
@@ -102,16 +106,26 @@ export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[
       }
     }
   } else if (cmd.type === 'circle') {
-    const ringCount = cmd.fillMode === 2
-      ? Math.max(1, Math.floor(cmd.r / Math.max(0.5, cmd.spacing)))
-      : (cmd.cycles || 1);
-    for (let ri = 0; ri < ringCount; ri++) {
-      const rad = cmd.fillMode === 2 ? cmd.r - ri * cmd.spacing : cmd.r;
-      if (rad <= 0) break;
-      const seg = Math.max(24, Math.floor(rad * 1.4));
-      for (let k = 0; k <= seg; k++) {
-        const th = (k / seg) * Math.PI * 2 + (cmd.angle || 0) * Math.PI / 180;
-        pts.push({ x: cmd.cx + rad * Math.cos(th), y: cmd.cy + rad * Math.sin(th), pen: !(ri === 0 && k === 0) });
+    if (cmd.fillMode === 2) {
+      const startR = cmd.outline ? cmd.r - cmd.spacing : cmd.r;
+      const ringCount = Math.max(1, Math.floor(startR / Math.max(0.5, cmd.spacing)));
+      for (let ri = 0; ri < ringCount; ri++) {
+        const rad = startR - ri * cmd.spacing;
+        if (rad <= 0) break;
+        const seg = Math.max(24, Math.floor(rad * 1.4));
+        for (let k = 0; k <= seg; k++) {
+          const th = (k / seg) * Math.PI * 2;
+          pts.push({ x: cmd.cx + rad * Math.cos(th), y: cmd.cy + rad * Math.sin(th), pen: !(ri === 0 && k === 0) });
+        }
+      }
+    } else if (cmd.outline) {
+      const cycles = cmd.cycles || 1;
+      const seg = Math.max(24, Math.floor(cmd.r * 1.4));
+      for (let cyc = 0; cyc < cycles; cyc++) {
+        for (let k = 0; k <= seg; k++) {
+          const th = (k / seg) * Math.PI * 2;
+          pts.push({ x: cmd.cx + cmd.r * Math.cos(th), y: cmd.cy + cmd.r * Math.sin(th), pen: !(cyc === 0 && k === 0) });
+        }
       }
     }
     if (cmd.fillMode === 1) {
@@ -160,11 +174,14 @@ export function usePlotter() {
   const [queue, setQueue]          = useState<string[]>([]);
   const [log, setLog]              = useState<LogEntry[]>([mkLog('sys', 'console ready')]);
 
+  // Refs that mirror state — needed for callbacks that close over the initial
+  // value and would otherwise see stale data (EventSource handlers, setInterval).
+  // The ref is updated every render so the callback always reads the current value.
   const penRef    = useRef(pen);       penRef.current    = pen;
   const motionRef = useRef(motion);    motionRef.current = motion;
   const ipRef     = useRef(ip);        ipRef.current     = ip;
-  const cancelRef = useRef(false);
-  const colorRef  = useRef(0);
+  const cancelRef = useRef(false);     // set true by stop() to abort an in-flight animation
+  const colorRef  = useRef(0);         // cycles through PALETTE for each new command
 
   const pushLog = useCallback((kind: LogEntry['kind'], text: string) => {
     setLog((l) => [...l.slice(-199), mkLog(kind, text)]);
@@ -176,6 +193,12 @@ export function usePlotter() {
   }, []);
 
   // ---- SSE connection ------------------------------------------
+  // Opens GET /events on the plotter. The firmware streams two event types:
+  //   • Unnamed ("data: …\n\n")  — log lines from web_log(); caught by es.onmessage
+  //   • Named   ("event: pos\n…") — position updates from web_pos_event(); caught by
+  //     es.addEventListener('pos', …) so they update the canvas dot without
+  //     appearing in the log window.
+  // Effect re-runs whenever IP changes (e.g. user edits the IP field in the header).
   useEffect(() => {
     if (!ip) return;
     const url = sseUrl(ip);
@@ -187,13 +210,13 @@ export function usePlotter() {
     };
 
     es.onmessage = (e) => {
-      // unnamed events = log messages from web_log()
+      // Unnamed events = log messages from web_log()
       const text = e.data as string;
       const kind: LogEntry['kind'] = text.startsWith('!! ') ? 'warn' : 'fw';
       pushLog(kind, text);
     };
 
-    // named position events from web_pos_event()
+    // Named position events from web_pos_event() — move the canvas pen dot
     es.addEventListener('pos', (e) => {
       try {
         const { x, y } = JSON.parse((e as MessageEvent).data) as { x: number; y: number };
@@ -210,6 +233,15 @@ export function usePlotter() {
   }, [ip, pushLog]);
 
   // ---- animation -----------------------------------------------
+  // Runs a client-side visual simulation of the gondola path at ~60 fps.
+  // It does NOT wait for real motor feedback — it's purely cosmetic so the
+  // canvas shows something while the firmware is executing the move.
+  // Speed is scaled from the current vmax so faster settings look faster.
+  //
+  // Each entry in pts is { x, y, pen:bool }:
+  //   pen=false → travel move (no ink); pen=true → drawing stroke
+  // The loop linearly interpolates between consecutive points over a duration
+  // proportional to the distance, then advances to the next point.
   const animatePath = useCallback((pts: ReturnType<typeof buildPath>, penColor: string) =>
     new Promise<void>((resolve) => {
       if (!pts.length) return resolve();
@@ -221,6 +253,7 @@ export function usePlotter() {
       let segStart = performance.now();
       let segDur = 0;
 
+      // Rough mm/s estimate from the current VMAX setting (used only for animation timing).
       const mmPerSec = () => 30 + (motionRef.current.vmax / 200000) * 220;
 
       const beginSeg = () => {
@@ -280,6 +313,11 @@ export function usePlotter() {
   }, [pushLog]);
 
   // ---- enqueue (animate + send) --------------------------------
+  // Fires BOTH the HTTP request to the firmware AND the canvas animation in
+  // parallel (Promise.all). They are independent: the animation is cosmetic
+  // and doesn't wait for the motor to finish; the HTTP call doesn't wait for
+  // the animation either. setMoving(true/false) wraps the whole thing so
+  // the UI shows "● MOVING" while either is still in flight.
   const enqueue = useCallback(async (cmd: PlotCmd) => {
     cancelRef.current = false;
     const ep = cmdToQuery(cmd);

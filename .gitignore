@@ -23,3 +23,12 @@ tools/weave/tmp/
 
 # macOS
 .DS_Store
+
+# Playwright MCP debug logs / snapshots
+.playwright-mcp/
+
+# Debug screenshots from layout sessions
+console-ui.png
+console-ui-clean.png
+layout-check.png
+log-layout.png
