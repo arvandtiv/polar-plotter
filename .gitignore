@@ -30,6 +30,9 @@ plotter-mcp/node_modules/
 # Klee agent reference images (~25MB of Paul Klee artwork — not code)
 klee/
 
+# Local Claude settings (machine-specific permissions, not for sharing)
+.claude/settings.local.json
+
 # Playwright MCP debug logs / snapshots
 .playwright-mcp/
 
