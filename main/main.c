@@ -94,12 +94,11 @@ static uint32_t g_accel        = 500;          /* AMAX/DMAX */
 static float    g_home_belt_mm  = HOME_BELT_MM;  /* tunable at runtime via `setbelt` */
 static float    g_motor_span_mm  = MOTOR_SPAN_MM;  /* tunable at runtime via `setspan` */
 static float    g_steps_per_mm = 1265.0f;   /* tunable via `setsteps` */
-static float    g_x_scale      = 1.0300f;   /* tunable via `setxscale` */
-static float    g_y_scale      = 1.0f;      /* tunable via `setyscale` */
 static float    g_x_min        = X_MIN_MM;  /* tunable via `setbounds` or /api/bounds */
 static float    g_x_max        = X_MAX_MM;
 static float    g_y_min        = Y_MIN_MM;
 static float    g_y_max        = Y_MAX_MM;
+static bool     g_aimode       = false;     /* `aimode on` -> web_draw_task prints live job progress to console */
 
 /* Machine geometry for the firmware-side kinematics (see kinematics.h). Built
  * from board_config.h so calibration is a matter of editing constants there.
@@ -109,8 +108,6 @@ static plotter_geom_t g_geom = {
     .span_mm      = MOTOR_SPAN_MM,
     .drop_mm      = 0.0f,   /* set in init_geometry() from HOME_BELT_MM */
     .steps_per_mm = 1265.0f,
-    .x_scale      = 1.0300f,
-    .y_scale      = 1.0f,
     .left_sign    = LEFT_DIR_SIGN,
     .right_sign   = RIGHT_DIR_SIGN,
 };
@@ -134,11 +131,9 @@ static void init_geometry(void)
     g_geom.span_mm      = g_motor_span_mm;
     g_geom.drop_mm      = plt_drop_from_home_belt(g_motor_span_mm, g_home_belt_mm);
     g_geom.steps_per_mm = g_steps_per_mm;
-    g_geom.x_scale      = g_x_scale;
-    g_geom.y_scale      = g_y_scale;
-    ESP_LOGI(TAG, "geometry: span=%.1f mm  home_belt=%.1f mm  -> drop=%.2f mm  (%.1f steps/mm  xs=%.4f ys=%.4f)",
+    ESP_LOGI(TAG, "geometry: span=%.1f mm  home_belt=%.1f mm  -> drop=%.2f mm  (%.1f steps/mm)",
              (double)g_motor_span_mm, (double)g_home_belt_mm, (double)g_geom.drop_mm,
-             (double)g_geom.steps_per_mm, (double)g_geom.x_scale, (double)g_geom.y_scale);
+             (double)g_geom.steps_per_mm);
 }
 
 static uint16_t mres_to_microsteps(uint8_t mres)
@@ -305,6 +300,7 @@ static bool wait_reached(int m, int timeout_ms)
 {
     int waited = 0;
     while (!tmc5072_position_reached(&tmc, m)) {
+        if (g_job_abort) return false;   /* escape: bail out of the wait immediately */
         vTaskDelay(pdMS_TO_TICKS(20));
         waited += 20;
         if (waited >= timeout_ms) {
@@ -499,8 +495,6 @@ static void print_geom_vars(void)
     printf("  home_belt  = %.1f mm  (default %.1f)\n",  (double)g_home_belt_mm,  (double)HOME_BELT_MM);
     printf("  motor_span = %.1f mm  (default %.1f)\n",  (double)g_motor_span_mm, (double)MOTOR_SPAN_MM);
     printf("  steps/mm   = %.3f\n",   (double)g_steps_per_mm);
-    printf("  x_scale    = %.4f\n",   (double)g_x_scale);
-    printf("  y_scale    = %.4f\n",   (double)g_y_scale);
     printf("  -> drop    = %.2f mm\n", (double)g_geom.drop_mm);
 }
 
@@ -512,32 +506,6 @@ static int cmd_setsteps(int argc, char **argv)
         return 0;
     }
     g_steps_per_mm = atof(argv[1]);
-    init_geometry();
-    print_geom_vars();
-    return 0;
-}
-
-static int cmd_setxscale(int argc, char **argv)
-{
-    if (argc < 2) {
-        print_geom_vars();
-        printf("usage: setxscale <scale>   (1.0 = no correction)\n");
-        return 0;
-    }
-    g_x_scale = atof(argv[1]);
-    init_geometry();
-    print_geom_vars();
-    return 0;
-}
-
-static int cmd_setyscale(int argc, char **argv)
-{
-    if (argc < 2) {
-        print_geom_vars();
-        printf("usage: setyscale <scale>   (1.0 = no correction)\n");
-        return 0;
-    }
-    g_y_scale = atof(argv[1]);
     init_geometry();
     print_geom_vars();
     return 0;
@@ -621,9 +589,9 @@ static int cmd_belt(int argc, char **argv)
     plt_steps_to_xy(&g_geom, sl, sr, &rx, &ry);
 
     printf("\n-- belt dry run for (x=%.1f, y=%.1f) mm --\n", (double)x, (double)y);
-    printf("  geom: span=%.1f drop=%.1f steps/mm=%.3f xs=%.4f ys=%.4f  home_belt=%.2f mm\n",
+    printf("  geom: span=%.1f drop=%.1f steps/mm=%.3f  home_belt=%.2f mm\n",
            (double)g_geom.span_mm, (double)g_geom.drop_mm, (double)g_geom.steps_per_mm,
-           (double)g_geom.x_scale, (double)g_geom.y_scale, (double)l0);
+           (double)l0);
     printf("  belt length : left=%.2f mm (%+.2f from home)  right=%.2f mm (%+.2f from home)\n",
            (double)bl, (double)(bl - l0), (double)br, (double)(br - l0));
     printf("  motor target: LEFT(M1)=%ld steps  RIGHT(M2)=%ld steps  [signs L=%+d R=%+d]\n",
@@ -672,6 +640,7 @@ static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_T
 /* Coordinated move to an (x,y) mm point (does not touch the pen). */
 static void move_to_xy(float x, float y)
 {
+    if (g_job_abort) return;   /* escape: skip travel moves once an abort is in flight */
     clamp_xy(&x, &y);
     int32_t sl, sr;
     plt_xy_to_steps(&g_geom, x, y, &sl, &sr);
@@ -687,6 +656,7 @@ static void wait_both_near(int32_t tl, int32_t tr, int32_t lookahead, int timeou
 {
     int waited = 0;
     while (waited < timeout_ms) {
+        if (g_job_abort) return;   /* escape: stop streaming sub-segments */
         int32_t al = tmc5072_position(&tmc, MOTOR_RHO);    /* RHO is physically left */
         int32_t ar = tmc5072_position(&tmc, MOTOR_THETA);  /* THETA is physically right */
         if (labs(tl - al) <= lookahead && labs(tr - ar) <= lookahead) return;
@@ -711,6 +681,7 @@ static void draw_line_mm(float x0, float y0, float x1, float y1)
     int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * g_geom.steps_per_mm);
     int32_t sl, sr;
     for (int i = 1; i <= n; i++) {
+        if (g_job_abort) return;   /* escape: drop the rest of this line's sub-segments */
         float t = (float)i / (float)n;
         float px = x0 + dx * t, py = y0 + dy * t;
         clamp_xy(&px, &py);
@@ -839,12 +810,17 @@ static void emit_pos_event(void)
 static void do_draw_goto(float x, float y)
 {
     clamp_xy(&x, &y);
-    int32_t sl, sr;
-    plt_xy_to_steps(&g_geom, x, y, &sl, &sr);
     tmc5072_enable(&tmc, true);
-    tmc5072_move_coordinated(&tmc, sr, sl);
-    wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
-    wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+    /* A single coordinated move is straight in STEP space, which bows several mm
+     * in Cartesian space on a polargraph (independent of calibration). Instead,
+     * read the chip's ground-truth current position (exact after `sethome`) and
+     * interpolate to the target through draw_line_mm, the same Cartesian
+     * sub-segmenter used by `line`. That keeps the travel/path straight. */
+    int32_t cl = tmc5072_position(&tmc, MOTOR_RHO);    /* RHO is physically left  */
+    int32_t cr = tmc5072_position(&tmc, MOTOR_THETA);  /* THETA is physically right */
+    float cx, cy;
+    plt_steps_to_xy(&g_geom, cl, cr, &cx, &cy);
+    draw_line_mm(cx, cy, x, y);
     emit_pos_event();
 }
 
@@ -1104,6 +1080,65 @@ static int cmd_circle(int argc, char **argv)
     return 0;
 }
 
+/* ---- Exported to the web layer (web_server.h): bounds, position, escape ---- */
+
+/* True if (x,y) mm is inside the console-/web-set work area. Used by the HTTP
+ * handlers to REJECT out-of-area targets instead of silently clamping them. */
+bool plotter_in_bounds(float x, float y)
+{
+    return x >= g_x_min && x <= g_x_max && y >= g_y_min && y <= g_y_max;
+}
+
+void plotter_get_bounds(float *xn, float *xp, float *yn, float *yp)
+{
+    *xn = g_x_min; *xp = g_x_max; *yn = g_y_min; *yp = g_y_max;
+}
+
+/* Current gondola position in mm (inverse kinematics on the live XACTUAL). */
+void plotter_get_xy(float *x, float *y)
+{
+    int32_t sl = tmc5072_position(&tmc, MOTOR_RHO);    /* physically left  */
+    int32_t sr = tmc5072_position(&tmc, MOTOR_THETA);  /* physically right */
+    plt_steps_to_xy(&g_geom, sl, sr, x, y);
+}
+
+/* Escape / emergency stop. Sets g_job_abort (every motion wait + draw loop checks
+ * it and bails), decelerates both motors now, flushes any pending jobs, and lifts
+ * the pen. web_draw_task clears g_job_abort when it starts the next job. */
+void plotter_abort_now(void)
+{
+    g_job_abort = true;
+    tmc5072_stop(&tmc, MOTOR_THETA);
+    tmc5072_stop(&tmc, MOTOR_RHO);
+    if (g_draw_queue) xQueueReset(g_draw_queue);
+    pen_lift();
+}
+
+/* Short human label for a queued command, for the AI-mode console + /api/status. */
+static const char *wcmd_name(wcmd_type_t t)
+{
+    switch (t) {
+        case WCMD_CIRCLE:   return "circle";
+        case WCMD_SQUARE:   return "square";
+        case WCMD_LINE:     return "line";
+        case WCMD_GOTO:     return "goto";
+        case WCMD_HOME:     return "home";
+        case WCMD_PEN_UP:   return "pen up";
+        case WCMD_PEN_DOWN: return "pen down";
+        case WCMD_PEN_DEG:  return "pen deg";
+        case WCMD_STOP:     return "stop";
+        case WCMD_BULLSEYE: return "bullseye";
+        case WCMD_GRID:     return "grid";
+        case WCMD_SETHOME:  return "sethome";
+        case WCMD_BOUNDS:   return "bounds";
+        case WCMD_SPEED:    return "speed";
+        case WCMD_ACCEL:    return "accel";
+        case WCMD_CURRENT:  return "current";
+        case WCMD_WOBBLY:   return "wobbly";
+        default:            return "?";
+    }
+}
+
 /* web_draw_task: dequeues web commands and executes them sequentially.
  *
  * This is the only task that drives the motors from the web UI. All the HTTP
@@ -1126,6 +1161,17 @@ static void web_draw_task(void *arg)
     wcmd_t cmd;
     for (;;) {
         if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
+        /* A fresh job starts clean: clear any stale escape flag left by a prior abort. */
+        g_job_abort = false;
+        if (cmd.id) {
+            g_job_current = cmd.id;
+            snprintf(g_job_desc, sizeof(g_job_desc), "%s", wcmd_name(cmd.type));
+            if (g_aimode) {
+                int pend = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
+                printf("[AI] job %lu start: %-8s (pending %d)\n",
+                       (unsigned long)cmd.id, g_job_desc, pend);
+            }
+        }
         static const char *fill_label[] = { "", " [hatch]", " [concentric]" };
         switch (cmd.type) {
             case WCMD_CIRCLE: {
@@ -1235,6 +1281,12 @@ static void web_draw_task(void *arg)
             default:
                 break;
         }
+        if (cmd.id) {
+            g_job_done = cmd.id;
+            if (g_aimode)
+                printf("[AI] job %lu %s: %s\n", (unsigned long)cmd.id,
+                       g_job_abort ? "ABORTED" : "done", g_job_desc);
+        }
     }
 }
 
@@ -1266,6 +1318,46 @@ static int cmd_stop(int argc, char **argv)
     if (m < 0) { printf("motor must be 1 or 2\n"); return 0; }
     tmc5072_stop(&tmc, m);
     printf("M%d decelerating to stop\n", m + 1);
+    return 0;
+}
+
+/* Toggle AI mode: when on, web_draw_task prints live job progress to the console
+ * ("[AI] job N start/done") as the agent (MCP) feeds the queue, so you can watch
+ * what's executing without the web UI. `aimode`, `aimode on`, `aimode off`. */
+static int cmd_aimode(int argc, char **argv)
+{
+    if (argc >= 2) g_aimode = (!strcmp(argv[1], "on") || atoi(argv[1]) != 0);
+    else           g_aimode = !g_aimode;
+    printf("AI mode %s — live job progress %s. Use 'jobs' for a snapshot.\n",
+           g_aimode ? "ON" : "OFF", g_aimode ? "will print here" : "silent");
+    return 0;
+}
+
+/* Snapshot of the job queue: how many enqueued, which id is running, what's done,
+ * and how many are still pending. The MCP fills this queue; this is the console-side
+ * view of "where in the process we are / what's done / what's to be done". */
+static int cmd_jobs(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    int pending = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
+    bool idle = (g_job_done >= g_job_enqueued) && pending == 0;
+    printf("jobs: enqueued=%lu current=%lu done=%lu pending=%d  -> %s\n",
+           (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
+           (unsigned long)g_job_done, pending, idle ? "IDLE" : "BUSY");
+    if (!idle && g_job_current > g_job_done)
+        printf("  running job %lu: %s%s\n", (unsigned long)g_job_current, g_job_desc,
+               g_job_abort ? " (aborting)" : "");
+    return 0;
+}
+
+/* Escape / emergency stop: preempt the running job, flush the queue, lift the pen.
+ * The network equivalent is GET /api/abort (and the web UI STOP button). */
+static int cmd_estop(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    plotter_abort_now();
+    printf("ESTOP: motion stopped, %lu job(s) flushed, pen up.\n",
+           (unsigned long)(g_job_enqueued - g_job_done));
     return 0;
 }
 
@@ -1376,8 +1468,6 @@ static void register_commands(void)
         { .command = "setbelt", .help = "Set home belt length (mm): setbelt <mm> (recalcs geometry)", .func = cmd_setbelt },
         { .command = "setspan",  .help = "Set motor span (mm): setspan <mm> (recalcs geometry)",          .func = cmd_setspan },
         { .command = "setsteps",   .help = "Set steps/mm: setsteps <val> (recalcs geometry)",   .func = cmd_setsteps  },
-        { .command = "setxscale",  .help = "Set X axis scale: setxscale <val> (default 1.0)",  .func = cmd_setxscale },
-        { .command = "setyscale",  .help = "Set Y axis scale: setyscale <val> (default 1.0)",  .func = cmd_setyscale },
         { .command = "setbounds",  .help = "Set drawable bounds (mm): setbounds <xmin> <xmax> <ymin> <ymax>", .func = cmd_setbounds },
         { .command = "exit",    .help = "Close the REPL console (press Ctrl+] to exit monitor)",      .func = cmd_exit },
         { .command = "belt",   .help = "DRY RUN: print belt lengths + targets for goto <x> <y> (no motion)", .func = cmd_belt },
@@ -1397,6 +1487,9 @@ static void register_commands(void)
         { .command = "sethome", .help = "Set origin: sethome (manual, both) | sethome sg <1|2> <vel> [sgt]", .func = cmd_sethome },
         { .command = "stat",   .help = "Brief DRV_STATUS + positions",              .func = cmd_stat },
         { .command = "status", .help = "Full register readback (both motors)",      .func = cmd_status },
+        { .command = "aimode", .help = "Toggle live job-progress printing: aimode [on|off]", .func = cmd_aimode },
+        { .command = "jobs",   .help = "Show job queue snapshot (enqueued/current/done/pending)", .func = cmd_jobs },
+        { .command = "estop",  .help = "ESCAPE: stop motion now, flush the queue, lift the pen", .func = cmd_estop },
     };
     for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) {
         ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));

@@ -22,6 +22,13 @@ static const char *TAG = "web";
 
 QueueHandle_t g_draw_queue = NULL;
 
+/* Job tracking & escape state (declared extern in web_server.h). */
+volatile uint32_t g_job_enqueued = 0;
+volatile uint32_t g_job_current  = 0;
+volatile uint32_t g_job_done     = 0;
+volatile bool     g_job_abort    = false;
+char              g_job_desc[48]  = "idle";
+
 #define LOG_STREAM_BYTES 2048
 static StreamBufferHandle_t s_log_stream  = NULL;
 static SemaphoreHandle_t    s_log_mutex   = NULL;
@@ -144,12 +151,48 @@ static void resp_json(httpd_req_t *req, const char *status, const char *msg)
     httpd_resp_sendstr(req, buf);
 }
 
-/* Push a draw command onto the queue for web_draw_task (in main.c) to execute.
- * HTTP handlers return immediately after this — no motor waits happen in httpd. */
-static void enqueue(wcmd_t *cmd)
+/* Push a draw command onto the queue for web_draw_task (in main.c) to execute and
+ * return its job id. HTTP handlers return immediately after this — the motor waits
+ * happen in web_draw_task. The caller hands the id back to the client so it can poll
+ * /api/status until g_job_done >= id ("wait till the job is actually done"). */
+static uint32_t enqueue(wcmd_t *cmd)
 {
+    uint32_t id = ++g_job_enqueued;
+    cmd->id = id;
     if (g_draw_queue)
         xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200));
+    return id;
+}
+
+/* Same shape as resp_json but also carries the job id so the client can wait on it. */
+static void resp_json_id(httpd_req_t *req, const char *status, const char *msg, uint32_t id)
+{
+    char buf[200];
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"msg\":\"%s\",\"id\":%lu}\n",
+             status, msg, (unsigned long)id);
+    httpd_resp_sendstr(req, buf);
+}
+
+/* Out-of-bounds gate: reject (no enqueue) anything that would leave the work area
+ * set in the console / via /api/bounds. pt_ok checks a single point; box_ok checks
+ * the full bounding box of a shape (centre +/- half-extents). Returns false AND
+ * sends the error response when the target is outside — caller just returns. */
+static bool pt_ok(httpd_req_t *req, float x, float y)
+{
+    if (plotter_in_bounds(x, y)) return true;
+    resp_json(req, "error", "target outside work area (see /api/status bounds)");
+    return false;
+}
+
+static bool box_ok(httpd_req_t *req, float cx, float cy, float hx, float hy)
+{
+    if (plotter_in_bounds(cx - hx, cy - hy) && plotter_in_bounds(cx + hx, cy + hy) &&
+        plotter_in_bounds(cx - hx, cy + hy) && plotter_in_bounds(cx + hx, cy - hy))
+        return true;
+    resp_json(req, "error", "shape extent outside work area (see /api/status bounds)");
+    return false;
 }
 
 /* ---- API handlers ---- */
@@ -167,8 +210,8 @@ static esp_err_t handle_circle(httpd_req_t *req)
     c.p[6] = qf(qs, "spacing",  3.0f);   /* hatch line spacing, mm */
     c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
     if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
-    enqueue(&c);
-    resp_json(req, "ok", "circle queued");
+    if (!box_ok(req, c.p[0], c.p[1], c.p[2], c.p[2])) return ESP_OK;
+    resp_json_id(req, "ok", "circle queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -185,8 +228,8 @@ static esp_err_t handle_square(httpd_req_t *req)
     c.p[6] = qf(qs, "spacing",  3.0f);   /* hatch line spacing, mm */
     c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
     if (c.p[2] <= 0) { resp_json(req, "error", "size must be > 0"); return ESP_OK; }
-    enqueue(&c);
-    resp_json(req, "ok", "square queued");
+    if (!box_ok(req, c.p[0], c.p[1], c.p[2] * 0.5f, c.p[2] * 0.5f)) return ESP_OK;
+    resp_json_id(req, "ok", "square queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -199,8 +242,8 @@ static esp_err_t handle_line(httpd_req_t *req)
     c.p[2] = qf(qs, "x1",  100.0f);
     c.p[3] = qf(qs, "y1",    0.0f);
     c.p[4] = qf(qs, "cycles", 1.0f);
-    enqueue(&c);
-    resp_json(req, "ok", "line queued");
+    if (!pt_ok(req, c.p[0], c.p[1]) || !pt_ok(req, c.p[2], c.p[3])) return ESP_OK;
+    resp_json_id(req, "ok", "line queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -210,16 +253,15 @@ static esp_err_t handle_goto(httpd_req_t *req)
     wcmd_t c = { .type = WCMD_GOTO };
     c.p[0] = qf(qs, "x", 0.0f);
     c.p[1] = qf(qs, "y", 0.0f);
-    enqueue(&c);
-    resp_json(req, "ok", "goto queued");
+    if (!pt_ok(req, c.p[0], c.p[1])) return ESP_OK;
+    resp_json_id(req, "ok", "goto queued", enqueue(&c));
     return ESP_OK;
 }
 
 static esp_err_t handle_home(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_HOME };
-    enqueue(&c);
-    resp_json(req, "ok", "home queued");
+    resp_json_id(req, "ok", "home queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -242,8 +284,7 @@ static esp_err_t handle_pen(httpd_req_t *req)
     if (strcmp(pos, "up") == 0)        c.type = WCMD_PEN_UP;
     else if (strcmp(pos, "down") == 0) c.type = WCMD_PEN_DOWN;
     else { c.type = WCMD_PEN_DEG; c.p[0] = qf(qs, "deg", 90.0f); }
-    enqueue(&c);
-    resp_json(req, "ok", "pen queued");
+    resp_json_id(req, "ok", "pen queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -253,8 +294,8 @@ static esp_err_t handle_bullseye(httpd_req_t *req)
     wcmd_t c = { .type = WCMD_BULLSEYE };
     c.p[0] = qf(qs, "cx", 0.0f);
     c.p[1] = qf(qs, "cy", 0.0f);
-    enqueue(&c);
-    resp_json(req, "ok", "bullseye queued");
+    if (!box_ok(req, c.p[0], c.p[1], 10.0f, 10.0f)) return ESP_OK;   /* 10mm arms */
+    resp_json_id(req, "ok", "bullseye queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -264,8 +305,8 @@ static esp_err_t handle_grid(httpd_req_t *req)
     wcmd_t c = { .type = WCMD_GRID };
     c.p[0] = qf(qs, "cx", 0.0f);
     c.p[1] = qf(qs, "cy", 0.0f);
-    enqueue(&c);
-    resp_json(req, "ok", "grid queued");
+    if (!box_ok(req, c.p[0], c.p[1], 50.0f, 50.0f)) return ESP_OK;   /* 100mm lines */
+    resp_json_id(req, "ok", "grid queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -284,16 +325,15 @@ static esp_err_t handle_wobbly(httpd_req_t *req)
     if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
     /* default bound_r = r * 1.5 when caller passes 0 */
     if (c.p[3] <= 0.0f) c.p[3] = c.p[2] * 1.5f;
-    enqueue(&c);
-    resp_json(req, "ok", "wobbly queued");
+    if (!box_ok(req, c.p[0], c.p[1], c.p[3], c.p[3])) return ESP_OK;   /* bound_r extent */
+    resp_json_id(req, "ok", "wobbly queued", enqueue(&c));
     return ESP_OK;
 }
 
 static esp_err_t handle_sethome(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_SETHOME };
-    enqueue(&c);
-    resp_json(req, "ok", "sethome queued");
+    resp_json_id(req, "ok", "sethome queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -305,8 +345,7 @@ static esp_err_t handle_bounds(httpd_req_t *req)
     c.p[1] = qf(qs, "xp",  300.0f);   /* X+ (right / positive-X limit) */
     c.p[2] = qf(qs, "yn", -600.0f);   /* Y− (bottom / negative-Y limit) */
     c.p[3] = qf(qs, "yp",  400.0f);   /* Y+ (top / positive-Y limit)   */
-    enqueue(&c);
-    resp_json(req, "ok", "bounds queued");
+    resp_json_id(req, "ok", "bounds queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -315,8 +354,7 @@ static esp_err_t handle_speed(httpd_req_t *req)
     char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_SPEED };
     c.p[0] = qf(qs, "vmax", 200000.0f);
-    enqueue(&c);
-    resp_json(req, "ok", "speed queued");
+    resp_json_id(req, "ok", "speed queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -325,8 +363,7 @@ static esp_err_t handle_accel(httpd_req_t *req)
     char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_ACCEL };
     c.p[0] = qf(qs, "amax", 500.0f);
-    enqueue(&c);
-    resp_json(req, "ok", "accel queued");
+    resp_json_id(req, "ok", "accel queued", enqueue(&c));
     return ESP_OK;
 }
 
@@ -336,8 +373,45 @@ static esp_err_t handle_cur(httpd_req_t *req)
     wcmd_t c = { .type = WCMD_CURRENT };
     c.p[0] = qf(qs, "run",   300.0f);
     c.p[1] = qf(qs, "hold",  -1.0f);   /* -1 = leave hold current unchanged */
-    enqueue(&c);
-    resp_json(req, "ok", "current queued");
+    resp_json_id(req, "ok", "current queued", enqueue(&c));
+    return ESP_OK;
+}
+
+/* Status report: the work area (bounds), live position, and the job queue cursor
+ * (enqueued / current / done / pending). This is the MCP's source of truth — it
+ * polls here to (a) learn the dimension limits set in the console and (b) wait
+ * until g_done >= the id it was handed, i.e. its job actually finished. */
+static esp_err_t handle_status(httpd_req_t *req)
+{
+    float xn, xp, yn, yp, x = 0.0f, y = 0.0f;
+    plotter_get_bounds(&xn, &xp, &yn, &yp);
+    plotter_get_xy(&x, &y);
+    int pending = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
+    bool idle = (g_job_done >= g_job_enqueued) && pending == 0;
+
+    char buf[400];
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    snprintf(buf, sizeof(buf),
+        "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
+        "\"pending\":%d,\"idle\":%s,\"aborting\":%s,\"job\":\"%s\","
+        "\"x\":%.2f,\"y\":%.2f,"
+        "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f}}\n",
+        (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
+        (unsigned long)g_job_done, pending, idle ? "true" : "false",
+        g_job_abort ? "true" : "false", g_job_desc,
+        (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp);
+    httpd_resp_sendstr(req, buf);
+    return ESP_OK;
+}
+
+/* Escape / emergency stop: preempts the running job (not just queued ones), flushes
+ * the pending queue, and lifts the pen. Unlike /api/stop (which only queues a STOP
+ * behind the in-flight move), this interrupts immediately via the g_job_abort flag. */
+static esp_err_t handle_abort(httpd_req_t *req)
+{
+    plotter_abort_now();
+    resp_json(req, "ok", "ABORT: motion stopped, queue flushed, pen up");
     return ESP_OK;
 }
 
@@ -380,7 +454,7 @@ static const char s_html[] =
     "</style></head><body>"
     "<h1>&#9997; Polar Plotter</h1><div id=st>Connecting to log stream...</div>"
     "<h2>Control</h2><div class=row>"
-    "<button class=stop onclick=\"c('stop')\">&#9632; STOP</button>"
+    "<button class=stop onclick=\"c('abort')\">&#9632; STOP</button>"
     "<button onclick=\"c('home')\">Home</button>"
     "<button onclick=\"c('sethome')\">Set Home</button>"
     "<button onclick=\"c('pen?pos=up')\">Pen Up</button>"
@@ -526,6 +600,8 @@ esp_err_t web_server_start(void)
         { .uri = "/api/speed",    .method = HTTP_GET, .handler = handle_speed    },
         { .uri = "/api/accel",    .method = HTTP_GET, .handler = handle_accel    },
         { .uri = "/api/cur",      .method = HTTP_GET, .handler = handle_cur      },
+        { .uri = "/api/status",   .method = HTTP_GET, .handler = handle_status   },
+        { .uri = "/api/abort",    .method = HTTP_GET, .handler = handle_abort    },
         { .uri = "/events",       .method = HTTP_GET, .handler = handle_events   },
     };
     for (size_t k = 0; k < sizeof(routes) / sizeof(routes[0]); k++)
