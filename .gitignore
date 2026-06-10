@@ -27,6 +27,9 @@ tools/weave/tmp/
 # MCP server dependencies
 plotter-mcp/node_modules/
 
+# Klee agent reference images (~25MB of Paul Klee artwork — not code)
+klee/
+
 # Playwright MCP debug logs / snapshots
 .playwright-mcp/
 
