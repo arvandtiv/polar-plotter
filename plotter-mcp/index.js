@@ -43,6 +43,38 @@ function ok(json) {
   return `${status}: ${msg}`;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Enqueue a command and BLOCK until the plotter has actually finished drawing it.
+ *
+ * The firmware returns a monotonic job `id` from every queued command and exposes
+ * the queue cursor at /api/status. We poll `done` until it reaches our id, so the
+ * tool only resolves once the physical move is complete — "jobs always wait till
+ * the job is accomplished". If an escape (/api/abort) fires mid-job, status reports
+ * `aborting` and we return promptly. Out-of-bounds / validation errors come back
+ * from the initial call with status !== 'ok' and are surfaced unchanged (no wait).
+ */
+async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {}) {
+  const r = await api(endpoint);
+  if ((r?.status ?? 'ok') !== 'ok') return r;   // rejected (e.g. outside work area)
+  const id = r.id;
+  if (id == null) return r;                      // endpoint isn't a tracked job
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    let s = null;
+    try { s = await api('status'); } catch { /* transient — retry until deadline */ }
+    if (s) {
+      if (s.aborting) return { status: 'aborted', msg: `job ${id} aborted (escape)` };
+      if ((s.done ?? 0) >= id)
+        return { status: 'ok', msg: `job ${id} done (at x=${s.x}, y=${s.y})` };
+    }
+    if (Date.now() > deadline)
+      return { status: 'error', msg: `job ${id} timed out after ${Math.round(timeoutMs / 1000)}s` };
+    await sleep(pollMs);
+  }
+}
+
 // ── Server setup ─────────────────────────────────────────────────────────────
 
 const server = new McpServer({
@@ -62,7 +94,7 @@ server.tool(
     y: z.number().describe('Y position in mm'),
   },
   async ({ x, y }) => ({
-    content: [{ type: 'text', text: ok(await api(`goto?x=${x}&y=${y}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`goto?x=${x}&y=${y}`)) }],
   }),
 );
 
@@ -79,7 +111,7 @@ server.tool(
     cycles: z.number().int().min(1).default(1).describe('Number of passes (default 1)'),
   },
   async ({ x0, y0, x1, y1, cycles }) => ({
-    content: [{ type: 'text', text: ok(await api(`line?x0=${x0}&y0=${y0}&x1=${x1}&y1=${y1}&cycles=${cycles}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`line?x0=${x0}&y0=${y0}&x1=${x1}&y1=${y1}&cycles=${cycles}`)) }],
   }),
 );
 
@@ -100,7 +132,7 @@ server.tool(
     outline:     z.boolean().default(true).describe('Draw the outer perimeter (default true)'),
   },
   async ({ cx, cy, r, cycles, fill_mode, hatch_angle, spacing, outline }) => ({
-    content: [{ type: 'text', text: ok(await api(
+    content: [{ type: 'text', text: ok(await drawAndWait(
       `circle?cx=${cx}&cy=${cy}&r=${r}&cycles=${cycles}` +
       `&fill=${fill_mode}&angle=${hatch_angle}&spacing=${spacing}&outline=${outline ? 1 : 0}`,
     )) }],
@@ -123,7 +155,7 @@ server.tool(
     outline:     z.boolean().default(true).describe('Draw the outer perimeter (default true)'),
   },
   async ({ cx, cy, size, cycles, fill_mode, hatch_angle, spacing, outline }) => ({
-    content: [{ type: 'text', text: ok(await api(
+    content: [{ type: 'text', text: ok(await drawAndWait(
       `square?cx=${cx}&cy=${cy}&size=${size}&cycles=${cycles}` +
       `&fill=${fill_mode}&angle=${hatch_angle}&spacing=${spacing}&outline=${outline ? 1 : 0}`,
     )) }],
@@ -138,7 +170,7 @@ server.tool(
     position: z.enum(['up', 'down']).describe('"up" lifts the pen, "down" lowers it'),
   },
   async ({ position }) => ({
-    content: [{ type: 'text', text: ok(await api(`pen?pos=${position}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`pen?pos=${position}`)) }],
   }),
 );
 
@@ -149,7 +181,7 @@ server.tool(
   'Only meaningful after sethome has been run in this session.',
   {},
   async () => ({
-    content: [{ type: 'text', text: ok(await api('home')) }],
+    content: [{ type: 'text', text: ok(await drawAndWait('home')) }],
   }),
 );
 
@@ -161,18 +193,19 @@ server.tool(
   'gondola at the geometric midpoint (both belts = HOME_BELT_MM).',
   {},
   async () => ({
-    content: [{ type: 'text', text: ok(await api('sethome')) }],
+    content: [{ type: 'text', text: ok(await drawAndWait('sethome')) }],
   }),
 );
 
 // plot_stop ──────────────────────────────────────────────────────────────────
 server.tool(
   'plot_stop',
-  'Emergency stop — decelerate both motors to standstill immediately and ' +
-  'flush the firmware command queue. Call this if something goes wrong.',
+  'Emergency stop / escape — immediately preempt the job in progress (even ' +
+  'mid-stroke), flush the pending queue, decelerate both motors, and lift the ' +
+  'pen. Call this the moment anything looks wrong. Alias of plot_abort.',
   {},
   async () => ({
-    content: [{ type: 'text', text: ok(await api('stop')) }],
+    content: [{ type: 'text', text: ok(await api('abort')) }],
   }),
 );
 
@@ -185,7 +218,7 @@ server.tool(
     vmax: z.number().int().min(10000).max(400000).describe('VMAX in microsteps/s (10000–400000, default 200000)'),
   },
   async ({ vmax }) => ({
-    content: [{ type: 'text', text: ok(await api(`speed?vmax=${vmax}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`speed?vmax=${vmax}`)) }],
   }),
 );
 
@@ -198,7 +231,7 @@ server.tool(
     amax: z.number().int().min(50).max(2000).describe('AMAX in microsteps/s² (50–2000, default 500)'),
   },
   async ({ amax }) => ({
-    content: [{ type: 'text', text: ok(await api(`accel?amax=${amax}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`accel?amax=${amax}`)) }],
   }),
 );
 
@@ -212,7 +245,7 @@ server.tool(
     hold_ma: z.number().min(0).max(400).describe('Hold current in mA (0–400, default 200)'),
   },
   async ({ run_ma, hold_ma }) => ({
-    content: [{ type: 'text', text: ok(await api(`cur?run=${run_ma}&hold=${hold_ma}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`cur?run=${run_ma}&hold=${hold_ma}`)) }],
   }),
 );
 
@@ -245,7 +278,7 @@ Examples:
     cycles:    z.number().int().min(1).default(1).describe('Number of passes (default 1)'),
   },
   async ({ cx, cy, r, bound_r, wobble, harmonics, seed, cycles }) => ({
-    content: [{ type: 'text', text: ok(await api(
+    content: [{ type: 'text', text: ok(await drawAndWait(
       `wobbly?cx=${cx}&cy=${cy}&r=${r}&bound_r=${bound_r}` +
       `&wobble=${wobble}&harmonics=${harmonics}&seed=${seed}&cycles=${cycles}`,
     )) }],
@@ -262,19 +295,68 @@ server.tool(
     cy: z.number().default(0).describe('Center Y in mm (default 0)'),
   },
   async ({ cx, cy }) => ({
-    content: [{ type: 'text', text: ok(await api(`bullseye?cx=${cx}&cy=${cy}`)) }],
+    content: [{ type: 'text', text: ok(await drawAndWait(`bullseye?cx=${cx}&cy=${cy}`)) }],
   }),
+);
+
+// plot_grid ──────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_grid',
+  'Draw a calibration grid centered at (cx, cy): a 10x10 set of lines, 8 mm ' +
+  'apart, 100 mm long (spans cx±50, cy±50). Use to check straightness, spacing, ' +
+  'and squareness across the work area.',
+  {
+    cx: z.number().default(0).describe('Center X in mm (default 0)'),
+    cy: z.number().default(0).describe('Center Y in mm (default 0)'),
+  },
+  async ({ cx, cy }) => ({
+    content: [{ type: 'text', text: ok(await drawAndWait(`grid?cx=${cx}&cy=${cy}`)) }],
+  }),
+);
+
+// plot_abort ─────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_abort',
+  'Hard escape: immediately preempt the running job (even mid-stroke), flush ' +
+  'the pending queue, stop both motors, and lift the pen. Same as plot_stop.',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: ok(await api('abort')) }],
+  }),
+);
+
+// plot_status ─────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_status',
+  'Report the plotter state: the work-area bounds (the dimension limits set on ' +
+  'the device — check these before planning coordinates), the live pen position, ' +
+  'and the job queue cursor (enqueued / current / done / pending, idle flag). ' +
+  'Poll this to confirm limits or to see how far a batch has progressed.',
+  {},
+  async () => {
+    const s = await api('status');
+    const b = s.bounds ?? {};
+    const lines = [
+      `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}`,
+      `position: x=${s.x} y=${s.y} mm`,
+      `work area: x [${b.xn} .. ${b.xp}]  y [${b.yn} .. ${b.yp}] mm`,
+      `jobs: enqueued=${s.enqueued} current=${s.current} done=${s.done} pending=${s.pending}`,
+      s.job ? `current job: ${s.job}` : null,
+    ].filter(Boolean);
+    return { content: [{ type: 'text', text: lines.join('\n') }] };
+  },
 );
 
 // plot_script ────────────────────────────────────────────────────────────────
 // The main tool for autonomous painting: send an ordered list of commands and
-// they execute sequentially. Each step waits for the firmware to acknowledge
-// before the next is sent, so the queue never overflows.
+// they execute sequentially. Each step waits for the plotter to FINISH drawing it
+// (via job-id status polling) before the next is sent, so the queue never
+// overflows and the result is deterministic.
 server.tool(
   'plot_script',
-  `Execute an ordered list of drawing commands sequentially. Each command is sent
-only after the previous one is acknowledged, so this is safe to use for full
-paintings. Returns a summary of each step's result.
+  `Execute an ordered list of drawing commands sequentially. Each command waits
+until the plotter has physically finished it before the next begins, so this is
+safe for full paintings. Returns a summary of each step's result.
 
 Each command object must have a "type" field plus the parameters for that type:
 
@@ -290,11 +372,14 @@ Each command object must have a "type" field plus the parameters for that type:
   { "type": "speed",   "vmax": 150000 }
   { "type": "accel",   "amax": 300 }
   { "type": "current", "run_ma": 500, "hold_ma": 150 }
-  { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }`,
+  { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }
+  { "type": "bullseye","cx": 0, "cy": 0 }
+  { "type": "grid",    "cx": 0, "cy": 0 }`,
   {
     commands: z.array(z.object({
       type: z.enum([
         'goto', 'line', 'circle', 'square', 'wobbly',
+        'bullseye', 'grid',
         'pen', 'home', 'sethome', 'stop',
         'speed', 'accel', 'current',
       ]).describe('Command type'),
@@ -325,7 +410,7 @@ Each command object must have a "type" field plus the parameters for that type:
 
       let json;
       try {
-        json = await api(endpoint);
+        json = await drawAndWait(endpoint);   // wait until this step physically finishes
       } catch (err) {
         const msg = `[${i + 1}/${commands.length}] ${cmd.type} → network error: ${err.message}`;
         results.push(msg);
@@ -339,8 +424,11 @@ Each command object must have a "type" field plus the parameters for that type:
       const status = json?.status ?? 'unknown';
       results.push(`[${i + 1}/${commands.length}] ${cmd.type} → ${status}: ${json?.msg ?? ''}`);
 
+      // Stop on a firmware error (e.g. out of bounds) or an escape/abort.
       if (stop_on_error && status !== 'ok') {
-        results.push('Script aborted (firmware returned error).');
+        results.push(status === 'aborted'
+          ? 'Script halted (escape/abort triggered).'
+          : 'Script aborted (firmware returned error).');
         break;
       }
     }
@@ -382,6 +470,12 @@ function buildEndpoint(cmd) {
         `&bound_r=${p.bound_r ?? 0}&wobble=${p.wobble ?? 0.4}` +
         `&harmonics=${p.harmonics ?? 3}&seed=${p.seed ?? 42}&cycles=${p.cycles ?? 1}`
       );
+
+    case 'bullseye':
+      return `bullseye?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}`;
+
+    case 'grid':
+      return `grid?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}`;
 
     case 'pen':
       if (p.position !== 'up' && p.position !== 'down')

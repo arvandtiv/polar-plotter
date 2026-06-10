@@ -22,7 +22,8 @@ draw deliberately, and stay inside the work area.**
 
 ## 2. Work area & limits — stay inside
 
-The drawable rectangle is set on the device (console `setbounds` / web UI) and defaults to:
+The drawable rectangle is set on the device (console `setbounds` / web UI). Call
+`plot_status` to read the **current** limits live (don't assume the defaults). They default to:
 
 | Axis | Min | Max | Span |
 |------|-----|-----|------|
@@ -59,7 +60,7 @@ Rules:
 | `plot_pen` | Lift or lower the pen. | `position: "up" \| "down"` |
 | `plot_home` | Return to origin (lifts pen first). | — |
 | `plot_sethome` | Define the current spot as `(0,0)`. Operator/setup only. | — |
-| `plot_stop` | **Emergency stop**: halt motors now and flush the queue. Use the moment anything looks wrong. | — |
+| `plot_stop` / `plot_abort` | **Emergency stop / escape**: preempt the running job *mid-stroke*, flush the queue, stop motors, lift the pen. Use the instant anything looks wrong. | — |
 
 ### Drawing primitives (these manage the pen for you)
 | Tool | Draws | Key params |
@@ -69,15 +70,27 @@ Rules:
 | `plot_square` | Axis‑aligned square, same fill options as circle. | `cx,cy,size, cycles, fill_mode, hatch_angle, spacing, outline` |
 | `plot_wobbly` | Closed organic "blob" via a radial Fourier series — great for clouds, foliage, abstract forms. | `cx,cy,r, bound_r, wobble(0–1), harmonics(1–8), seed, cycles` |
 | `plot_bullseye` | Calibration crosshair + rings at a point. | `cx, cy` |
+| `plot_grid` | Calibration grid: 10×10 lines, 8 mm apart, 100 mm long (spans `cx±50, cy±50`). Checks straightness/squareness. | `cx, cy` |
 
-### Calibration / motion settings
-`plot_set_speed(vmax)`, `plot_set_accel(amax)`, `plot_set_current(run_ma, hold_ma)`.
+### Status & settings
+- `plot_status` — reports the **work-area bounds**, live pen position, and the job
+  queue (enqueued / current / done / pending, idle flag). Call it to confirm the
+  dimension limits before planning, or to see how far a batch has progressed.
+- `plot_set_speed(vmax)`, `plot_set_accel(amax)`, `plot_set_current(run_ma, hold_ma)`.
+
+> **Every tool waits for completion.** A drawing call does not return until the
+> plotter has *physically finished* that move (it polls the job status internally).
+> So you never need to add your own delays — when a tool returns `ok`, the ink is
+> down. An out-of-bounds target returns an error and draws nothing.
 
 ### Batch — your main tool
 `plot_script(commands[], stop_on_error=true)` runs an **ordered list** of command
 objects, one after another, waiting for each. This is how you paint. Each entry is
 `{ "type": "...", ...params }`. Supported `type`s:
-`goto, line, circle, square, wobbly, pen, home, sethome, stop, speed, accel, current`.
+`goto, line, circle, square, wobbly, bullseye, grid, pen, home, sethome, stop,
+speed, accel, current`. Each step waits until the plotter physically finishes it
+before the next begins, and the script halts if any step errors (e.g. out of
+bounds) or an escape fires.
 
 ```json
 { "type": "pen",    "position": "up" }
@@ -231,6 +244,15 @@ lands where you expect physically. Not an artistic tool.
 |-----|------|-------|---------|---------|
 | `cx,cy` | number | within bounds | 0, 0 | Center of the target. |
 
+### `plot_grid` — calibration grid
+A 10×10 lattice of lines, 8 mm apart and 100 mm long, centered on `(cx,cy)` (so it
+spans `cx±50, cy±50`). Use it to check that lines stay straight, spacing is even, and
+the axes are square across the work area. Not an artistic tool.
+
+| Var | Type | Range | Default | Meaning |
+|-----|------|-------|---------|---------|
+| `cx,cy` | number | `cx±50`, `cy±50` must fit | 0, 0 | Center of the grid. |
+
 ### Motion / hardware settings (not drawing, but they shape the result)
 
 | Tool | Var | Range | Default | Meaning |
@@ -253,10 +275,8 @@ lands where you expect physically. Not an artistic tool.
 
 ---
 
-> **Coming with the next firmware flash** (mention to the operator if these tools
-> aren't available yet): a `plot_grid` calibration tool; `grid`/`bullseye` usable
-> inside `plot_script`; a `plot_status` that reports the live work‑area bounds and the
-> job queue (done / current / pending) so you can confirm limits and that each job
-> truly finished; and a `plot_abort` hard‑escape that preempts a job mid‑stroke,
-> flushes the queue, and lifts the pen. Until then, `plot_stop` is your stop and the
-> bounds above are the limits.
+> **Requires the matching firmware** (flash the build that adds `/api/status`,
+> `/api/abort`, job IDs, and bounds rejection). With it, `plot_status` /
+> `plot_abort` / `plot_grid` work, every tool waits for true completion, and
+> out-of-bounds targets are rejected. On older firmware those three tools and the
+> wait-till-done behavior won't respond — reflash first.
