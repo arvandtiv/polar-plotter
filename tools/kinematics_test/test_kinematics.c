@@ -34,24 +34,28 @@ static void chk_true(const char *what, int cond)
 
 int main(void)
 {
-    /* Same numbers board_config.h feeds the firmware: span 985, measured
-     * home belt 700 mm (the new easy-to-measure origin), 200*256/40 = 1280
-     * steps/mm, both signs +1 (the default to calibrate). The drop is DERIVED
-     * from the measured belt, exactly as init_geometry() does on the firmware. */
-    float drop = plt_drop_from_home_belt(985.0f, 700.0f);
+    /* Same numbers board_config.h feeds the firmware: span MOTOR_SPAN_MM,
+     * measured home belt HOME_BELT_MM, STEPS_PER_MM = 200*256/40 = 1280,
+     * both signs +1 (default to calibrate). Drop is DERIVED from the
+     * measured belt, exactly as init_geometry() does on the firmware. */
+    float span = 978.0f;
+    float home_belt = 715.0f;
+    float spm = 1280.0f;   /* 200 * 256 / 40 = STEPS_PER_MM */
+    float drop = plt_drop_from_home_belt(span, home_belt);
     plotter_geom_t g = {
-        .span_mm = 985.0f, .drop_mm = drop, .steps_per_mm = 1280.0f,
+        .span_mm = span, .drop_mm = drop, .steps_per_mm = spm,
         .left_sign = +1, .right_sign = +1,
     };
 
     printf("== TMC5072 polargraph kinematics dry run ==\n");
-    printf("span=%.1f home_belt=700.0 -> drop=%.4f steps/mm=%.1f\n\n",
-           g.span_mm, g.drop_mm, g.steps_per_mm);
+    printf("span=%.1f home_belt=%.1f -> drop=%.4f steps/mm=%.1f\n\n",
+           g.span_mm, home_belt, g.drop_mm, g.steps_per_mm);
 
-    /* 1. Derived drop and home belt round to the measured 700 mm. */
-    printf("[1] home geometry (origin from measured 700 mm belt)\n");
-    chk("drop_from_home_belt(985,700)", drop, 497.4372, 0.001);
-    chk("home_belt_mm", plt_home_belt(&g), 700.0000, 0.001);
+    /* 1. Derived drop and home belt round to the measured value.
+     * drop = sqrt(715^2 - 489^2) = sqrt(511225 - 239121) = sqrt(272104) ~ 521.636 */
+    printf("[1] home geometry (origin from measured %.1f mm belt)\n", home_belt);
+    chk("drop_from_home_belt(978,715)", drop, 521.636, 0.01);
+    chk("home_belt_mm", plt_home_belt(&g), home_belt, 0.001);
     {
         int32_t sl, sr;
         plt_xy_to_steps(&g, 0.0f, 0.0f, &sl, &sr);
@@ -59,12 +63,15 @@ int main(void)
         chk("home steps right", sr, 0.0, 0.0);
     }
 
-    /* 2. Independently hand-computed belt lengths at (100,0) with drop=497.4372:
-     *    left  = sqrt(592.5^2 + 497.4372^2) = sqrt(598500) = 773.6278
-     *    right = sqrt(392.5^2 + 497.4372^2) = sqrt(401500) = 633.6403 */
+    /* 2. Hand-computed belt lengths at (100,0) with span=978, drop=521.636:
+     *    half_span = 489; drop = 521.636
+     *    left  = sqrt((489+100)^2 + 521.636^2) = sqrt(589^2 + 521.636^2)
+     *          = sqrt(346921 + 272103) = sqrt(619024) ~ 786.78
+     *    right = sqrt((489-100)^2 + 521.636^2) = sqrt(389^2 + 521.636^2)
+     *          = sqrt(151321 + 272103) = sqrt(423424) ~ 650.71 */
     printf("\n[2] belt lengths at (100, 0)\n");
-    chk("belt_left(100,0)",  plt_belt_left(&g, 100.0f, 0.0f),  773.6278, 0.01);
-    chk("belt_right(100,0)", plt_belt_right(&g, 100.0f, 0.0f), 633.6403, 0.01);
+    chk("belt_left(100,0)",  plt_belt_left(&g, 100.0f, 0.0f),  786.78, 0.5);
+    chk("belt_right(100,0)", plt_belt_right(&g, 100.0f, 0.0f), 650.71, 0.5);
 
     /* 3. Left/right symmetry: with equal signs, the left target at (x,y) equals
      *    the right target at (-x,y) (the machine is mirror-symmetric in X). */

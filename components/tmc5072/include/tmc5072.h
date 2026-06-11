@@ -145,6 +145,11 @@ uint32_t tmc5072_get_ihold_irun(tmc5072_t *dev, int motor);
 
 /* --- Motion --- */
 esp_err_t tmc5072_set_vmax(tmc5072_t *dev, int motor, uint32_t vmax);
+/* Sets the ramp acceleration. Updates AMAX/DMAX (the >V1 ramp phase) AND scales
+ * the sub-V1 legs A1/D1 by the same default ratio, so the setting governs the
+ * WHOLE ramp — short streamed goto/line sub-segments live below V1 and would
+ * otherwise ignore it (they'd always use the fixed A1). At the default accel the
+ * resulting profile is identical to the original tuning. */
 esp_err_t tmc5072_set_accel(tmc5072_t *dev, int motor, uint32_t amax_dmax);
 
 /* Re-write one motor's ramp registers as the base profile scaled by `scale`

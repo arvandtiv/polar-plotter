@@ -29,6 +29,12 @@ volatile uint32_t g_job_done     = 0;
 volatile bool     g_job_abort    = false;
 char              g_job_desc[48]  = "idle";
 
+/* Driver-fault latch (set by the motion task's driver_fault_scan(), cleared only
+ * by /api/clearfault). Sticky so a fault survives until explicitly acknowledged —
+ * this is what the MCP polls to halt/pause a script. 0 = driver healthy. */
+volatile uint32_t g_drv_fault     = 0;
+char              g_drv_flags[96]  = "ok";
+
 #define LOG_STREAM_BYTES 2048
 static StreamBufferHandle_t s_log_stream  = NULL;
 static SemaphoreHandle_t    s_log_mutex   = NULL;
@@ -337,6 +343,15 @@ static esp_err_t handle_sethome(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* Trace the work-area limit path once (rect edges or ellipse perimeter, per the
+ * current bounds shape). No params — the firmware uses its stored bounds. */
+static esp_err_t handle_border(httpd_req_t *req)
+{
+    wcmd_t c = { .type = WCMD_BORDER };
+    resp_json_id(req, "ok", "border queued", enqueue(&c));
+    return ESP_OK;
+}
+
 static esp_err_t handle_bounds(httpd_req_t *req)
 {
     char qs[256]; get_qs(req, qs, sizeof(qs));
@@ -345,6 +360,7 @@ static esp_err_t handle_bounds(httpd_req_t *req)
     c.p[1] = qf(qs, "xp",  300.0f);   /* X+ (right / positive-X limit) */
     c.p[2] = qf(qs, "yn", -600.0f);   /* Y− (bottom / negative-Y limit) */
     c.p[3] = qf(qs, "yp",  400.0f);   /* Y+ (top / positive-Y limit)   */
+    c.p[4] = qf(qs, "shape", 0.0f);   /* 0 = rectangle, 1 = inscribed ellipse */
     resp_json_id(req, "ok", "bounds queued", enqueue(&c));
     return ESP_OK;
 }
@@ -389,18 +405,21 @@ static esp_err_t handle_status(httpd_req_t *req)
     int pending = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
     bool idle = (g_job_done >= g_job_enqueued) && pending == 0;
 
-    char buf[400];
+    char buf[560];
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
         "\"pending\":%d,\"idle\":%s,\"aborting\":%s,\"job\":\"%s\","
+        "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
-        "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f}}\n",
+        "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s}}\n",
         (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
         (unsigned long)g_job_done, pending, idle ? "true" : "false",
         g_job_abort ? "true" : "false", g_job_desc,
-        (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp);
+        g_drv_fault ? "false" : "true", g_drv_flags,
+        (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
+        plotter_bounds_ellipse() ? "true" : "false");
     httpd_resp_sendstr(req, buf);
     return ESP_OK;
 }
@@ -412,6 +431,16 @@ static esp_err_t handle_abort(httpd_req_t *req)
 {
     plotter_abort_now();
     resp_json(req, "ok", "ABORT: motion stopped, queue flushed, pen up");
+    return ESP_OK;
+}
+
+/* Clear a latched driver fault: re-enables the drivers (the only way to clear a
+ * latched short-to-GND) and drops g_drv_fault. The MCP calls this after a driver
+ * fault is resolved, before resuming the paused script. */
+static esp_err_t handle_clearfault(httpd_req_t *req)
+{
+    plotter_clear_fault();
+    resp_json(req, "ok", "driver fault cleared, drivers re-enabled");
     return ESP_OK;
 }
 
@@ -572,7 +601,7 @@ esp_err_t web_server_start(void)
 
     httpd_config_t cfg  = HTTPD_DEFAULT_CONFIG();
     cfg.max_open_sockets  = 7;    /* SSE connection + several API calls in flight */
-    cfg.max_uri_handlers  = 20;   /* default 8 — silently drops routes beyond #8, so bump it */
+    cfg.max_uri_handlers  = 24;   /* default 8 — silently drops routes beyond the cap, so bump it */
     cfg.stack_size        = 8192;
     cfg.lru_purge_enable  = true;
 
@@ -594,6 +623,7 @@ esp_err_t web_server_start(void)
         { .uri = "/api/pen",      .method = HTTP_GET, .handler = handle_pen      },
         { .uri = "/api/bullseye", .method = HTTP_GET, .handler = handle_bullseye },
         { .uri = "/api/grid",     .method = HTTP_GET, .handler = handle_grid     },
+        { .uri = "/api/border",   .method = HTTP_GET, .handler = handle_border   },
         { .uri = "/api/wobbly",   .method = HTTP_GET, .handler = handle_wobbly   },
         { .uri = "/api/sethome",  .method = HTTP_GET, .handler = handle_sethome  },
         { .uri = "/api/bounds",   .method = HTTP_GET, .handler = handle_bounds   },
@@ -602,6 +632,7 @@ esp_err_t web_server_start(void)
         { .uri = "/api/cur",      .method = HTTP_GET, .handler = handle_cur      },
         { .uri = "/api/status",   .method = HTTP_GET, .handler = handle_status   },
         { .uri = "/api/abort",    .method = HTTP_GET, .handler = handle_abort    },
+        { .uri = "/api/clearfault", .method = HTTP_GET, .handler = handle_clearfault },
         { .uri = "/events",       .method = HTTP_GET, .handler = handle_events   },
     };
     for (size_t k = 0; k < sizeof(routes) / sizeof(routes[0]); k++)

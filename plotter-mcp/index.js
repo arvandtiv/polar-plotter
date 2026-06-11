@@ -65,6 +65,15 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
     let s = null;
     try { s = await api('status'); } catch { /* transient — retry until deadline */ }
     if (s) {
+      // Driver health gate: a TMC5072 fault (over-temp, coil short-to-GND, etc.)
+      // is checked BEFORE the done cursor so a job that the firmware aborted mid-
+      // stroke is never mistaken for a clean finish. The firmware self-aborts the
+      // move; we belt-and-suspenders the escape and surface the latched flags so
+      // the caller can pause and report. Recovery is plot_clear_fault.
+      if (s.drv_ok === false) {
+        try { await api('abort'); } catch { /* best-effort */ }
+        return { status: 'driver_fault', msg: `DRIVER FAULT during job ${id}: ${s.drv_flags || 'unknown'}` };
+      }
       if (s.aborting) return { status: 'aborted', msg: `job ${id} aborted (escape)` };
       if ((s.done ?? 0) >= id)
         return { status: 'ok', msg: `job ${id} done (at x=${s.x}, y=${s.y})` };
@@ -325,6 +334,40 @@ server.tool(
   }),
 );
 
+// plot_border ─────────────────────────────────────────────────────────────────
+// Calibration: walk the work-area limit path once (pen down). Follows the active
+// bounds shape — the four rectangle edges, or the inscribed-ellipse perimeter.
+// Draws exactly where the firmware believes the reachable edge is, for comparison
+// against the physical machine. Uses the firmware's stored bounds (set the area
+// first via the console Work Area tab).
+server.tool(
+  'plot_border',
+  'Walk the work-area limit path once with the pen down (rectangle edges or the ' +
+  'inscribed-ellipse perimeter, per the current bounds). A calibration aid: it ' +
+  'traces the firmware\'s reachable boundary so you can compare it to the real machine.',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: ok(await drawAndWait('border')) }],
+  }),
+);
+
+// plot_clear_fault ────────────────────────────────────────────────────────────
+// Recovery after a driver fault paused a script. Re-enables the TMC5072 drivers
+// (the only way to clear a latched coil short-to-GND) and drops the firmware's
+// sticky fault latch so jobs can run again. Call this ONLY after the physical
+// cause (overheating, short, loose wiring) has actually been addressed — if the
+// fault persists, the next move will simply trip it again.
+server.tool(
+  'plot_clear_fault',
+  'Clear a latched TMC5072 driver fault and re-enable the drivers so a paused ' +
+  'script can resume. Use after a driver fault (see plot_status) once the ' +
+  'hardware cause is resolved. Then re-run the remaining commands.',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: ok(await api('clearfault')) }],
+  }),
+);
+
 // plot_status ─────────────────────────────────────────────────────────────────
 server.tool(
   'plot_status',
@@ -338,6 +381,9 @@ server.tool(
     const b = s.bounds ?? {};
     const lines = [
       `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}`,
+      s.drv_ok === false
+        ? `driver: ⛔ FAULT — ${s.drv_flags} (call plot_clear_fault after resolving)`
+        : `driver: ok`,
       `position: x=${s.x} y=${s.y} mm`,
       `work area: x [${b.xn} .. ${b.xp}]  y [${b.yn} .. ${b.yp}] mm`,
       `jobs: enqueued=${s.enqueued} current=${s.current} done=${s.done} pending=${s.pending}`,
@@ -379,7 +425,7 @@ Each command object must have a "type" field plus the parameters for that type:
     commands: z.array(z.object({
       type: z.enum([
         'goto', 'line', 'circle', 'square', 'wobbly',
-        'bullseye', 'grid',
+        'bullseye', 'grid', 'border',
         'pen', 'home', 'sethome', 'stop',
         'speed', 'accel', 'current',
       ]).describe('Command type'),
@@ -423,6 +469,17 @@ Each command object must have a "type" field plus the parameters for that type:
 
       const status = json?.status ?? 'unknown';
       results.push(`[${i + 1}/${commands.length}] ${cmd.type} → ${status}: ${json?.msg ?? ''}`);
+
+      // A driver fault ALWAYS pauses the script, regardless of stop_on_error: the
+      // hardware is unhappy, so it is never safe to push the next job. Report the
+      // fault and how to resume.
+      if (status === 'driver_fault') {
+        results.push(`⛔ PAUSED on a driver fault at step ${i + 1}/${commands.length} (${cmd.type}).`);
+        results.push(`   ${json?.msg ?? ''}`);
+        results.push(`   ${commands.length - (i + 1)} command(s) NOT sent. Resolve the hardware issue, ` +
+                     `then call plot_clear_fault and re-run the remaining steps.`);
+        break;
+      }
 
       // Stop on a firmware error (e.g. out of bounds) or an escape/abort.
       if (stop_on_error && status !== 'ok') {
@@ -476,6 +533,8 @@ function buildEndpoint(cmd) {
 
     case 'grid':
       return `grid?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}`;
+
+    case 'border':  return 'border';   // walk the work-area limit path (uses stored bounds)
 
     case 'pen':
       if (p.position !== 'up' && p.position !== 'down')

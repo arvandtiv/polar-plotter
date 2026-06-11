@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Firmware for a **polar plotter**: an **ESP32-S3 Nano** drives a **TMC5072** dual stepper controller/driver over a **direct 3.3 V SPI bus** (VCCIO = 3.3 V, shared ground), plus an **SG90 servo** for pen lift. Hardware wiring is documented in `polar_plotter_wiring.md`; vendor datasheets are in `docs/` (`3119171.pdf` = TMC5072, `product_808.pdf` = ESP32-S3 Nano / NanoS3).
 
-Built with **ESP-IDF** (target `esp32s3`). Control plan: USB-serial bring-up first, a WiFi web UI later.
+Built with **ESP-IDF** (target `esp32s3`). Three control surfaces, all driving the same draw queue: the **USB-serial console** (bring-up/calibration), a **WiFi HTTP API + web console** (`console/`, Astro/React), and an **MCP server** (`plotter-mcp/`) that lets Claude paint autonomously. USB is only needed for flashing — normal operation is over WiFi.
 
 ## Build / flash / monitor
 
@@ -35,18 +35,28 @@ idf.py menuconfig
   - Uses the **integrated sixPoint motion controller** (`RAMPMODE=0`): you write `XTARGET` and the chip ramps there. No STEP/DIR — consistent with the wiring (SPI + ENN only).
   - **Coordinated moves** (`tmc5072_move_coordinated`): writes both motors' targets so they finish at the **same time** by scaling the shorter-travel motor's ramp by its distance ratio (geometrically-similar ramps take equal time — no explicit T math). Every gondola move goes through this; single-motor positioning helpers were deliberately removed because they desync the belts / clobber the origin.
   - `position_reached` uses `RAMP_STAT` bit 9 (the chip's own flag). Velocity mode (`tmc5072_move_velocity`/`_stop`) + an experimental stallGuard2 sensorless-home (`tmc5072_home_stallguard`) also exist.
+  - **`tmc5072_set_accel`** scales the WHOLE ramp, not just `AMAX`/`DMAX`: it also sets `A1`/`D1` (the sub-`V1` ramp legs) at the proven default ratio (`A1=2×`, `D1=2.8×`). The chip's 6-point ramp uses `A1` below `V1` (50000) and only `AMAX` above it — and streamed `goto`/`line` sub-segments live below `V1`, so without this the accel setting had no effect on them.
 - **`components/servo/`** — SG90 via the LEDC peripheral (50 Hz, 14-bit). `servo_write_deg()` / `servo_write_us()`.
-- **`main/`** — `board_config.h` (all pin/tuning constants), `main.c` (`app_main` bring-up + console), and **`kinematics.h`** (pure, dependency-free polargraph (x,y)↔microstep math, also host-tested by `tools/kinematics_test/`).
+- **`main/`** — `board_config.h` (all pin/tuning constants), `main.c` (`app_main` bring-up + console + `web_draw_task`), **`web_server.c/.h`** (HTTP API + SSE), and **`kinematics.h`** (pure, dependency-free polargraph (x,y)↔microstep math, also host-tested by `tools/kinematics_test/`).
+- **`main/web_server.c`** — WiFi HTTP API + SSE log/position stream. All draw endpoints push a `wcmd_t` onto `g_draw_queue` (consumed by `web_draw_task` in main.c — the single task that owns the motors) and return a monotonic job id; clients poll `/api/status` until `done >= id`. SSE is handed to a dedicated `sse_task` so the one httpd worker is never blocked. **Console and web/MCP share the motors with no mutex — don't drive from the serial console and WiFi simultaneously.**
+- **`console/`** — Astro 4 + React 18 + Tailwind web UI (`npm run dev` → :4321). Talks only to the firmware over HTTP + SSE; IP is set in the header. Tabs: Draw / Move / Work Area / Calibrate / **Autonomous** (job progress + driver health + an errors panel).
+- **`plotter-mcp/`** — Node MCP server (`index.js`) exposing the HTTP API as tools for Claude. `plot_script` runs an ordered list, waiting for each job to physically finish (job-id polling) before the next. See `AGENT_GUIDE.md`.
 
 ### Drawing & calibration console
 The firmware does the (x,y) mm ↔ belt-length ↔ microstep geometry itself (no PC needed). Key commands: `belt <x> <y>` (DRY RUN — prints targets, no motion; use first), `goto <x> <y>`, `line`/`circle`/`square` (each takes an optional trailing `[cycles]` to retrace and darken a faint pen), `where` (XACTUAL→mm), `jog`/`stop` (velocity jog for sign-checking), `sethome` (the ONLY origin-setter: bare = manual zero-both-here; `sethome sg <m> <vel> [sgt]` = experimental stallGuard home). Straight edges are sub-segmented (`LINE_SEG_MM`) and **streamed with look-ahead** (`LINE_LOOKAHEAD_MM`) so motion flows instead of stopping at every sub-point, with a true stop only at corners.
+
+### Work-area shape & the limit path
+The drawable area is the rectangle `[x_min,x_max]×[y_min,y_max]` (set via `setbounds` or `/api/bounds`). It can instead be the **ellipse inscribed in that box** (`shape=1` / the console's Work Area "Ellipse" toggle) — for a machine whose reachable Y is tallest at the centre X and tapers toward the X extremes. `plotter_in_bounds()` rejects out-of-area targets; `clamp_xy()` projects strays back onto the boundary (radially, for the ellipse). The **`border` command** (`/api/border`, `plot_border`, console "Walk limits") traces the active boundary once pen-down — a calibration aid that draws exactly where the firmware thinks the edge is.
+
+### Driver-fault supervision (over WiFi)
+`/api/status` reports `drv_ok` + `drv_flags`. The motion task scans `DRV_STATUS`/`GSTAT` (`driver_fault_scan`, throttled, motion-task-only to avoid SPI contention) and on a **real** fault — `OT` (over-temp), `s2ga`/`s2gb` (coil short), `GSTAT drv_err`/`uv_cp` — latches `g_drv_fault`, logs once, and trips the escape path. The masked-out `stst`/`STALL`/`openload` bits are documented standstill false-positives. The MCP halts the current job and pauses a `plot_script` on a fault; `/api/clearfault` (`plot_clear_fault`) re-enables the drivers (clears latched shorts) and resets the latch so a script can resume after the cause is fixed.
 
 ## Things that will bite you (verify before powering motors)
 
 - **Pin map (verified):** the board is a **Waveshare ESP32-S3-Nano** (Arduino Nano ESP32 map) — silkscreen labels are NOT 1:1 with GPIOs. Verified from its schematic: `SCK`→GPIO48, `MOSI`→GPIO38, `MISO`→GPIO47, `D10`→GPIO21, `D5`→GPIO8, `D6`→GPIO9. The SPI header pins are labeled `SCK`/`MOSI`/`MISO` (= D13/D11/D12), so wire to those, not to pins labeled D11/D12/D13 (which don't exist). `board_config.h` uses the GPIO numbers.
 - **SPI is wired direct (no optocoupler).** An earlier build put a PC817 8-channel opto on the bus; PC817s cut off at ~80 kHz and invert, so SPI returned all `0x00`. The bus is now ESP32↔TMC direct with **VCCIO = 3.3 V** and **shared ground**. `TMC_SPI_HZ` defaults to 1 MHz and can go to several MHz. If isolation is ever needed, use a fast digital isolator (ADuM140x/Si86xx), never a PC817.
 - **ENN is direct, active-LOW.** The ESP32 drives D5 LOW to enable the drivers (`ENN_ON_LEVEL = 0`).
-- **`IHOLD_IRUN` current must be tuned** to the TMC5072-BOB's sense resistors — the default is a placeholder.
+- **`R_SENSE` is unverified (`0.15 Ω` in `board_config.h`) — the prime suspect for motors overheating.** The firmware computes coil current *assuming* this value; if the real resistor is smaller, it silently over-drives the coils (e.g. real 0.075 Ω → ~1 A for a commanded 600 mA). Fix: set a known current, read actual coil current with a meter, adjust `R_SENSE` until the console's "estimated mA" matches. Until verified, keep run current low (see Power/current). The old TMC2226 board used 0.11 Ω.
 - **Ramp registers `D1` and `VSTOP` must never be 0** in positioning mode (datasheet §6.2.1).
 
 ## Bring-up status & hard-won lessons (as of 2026-06-08)
@@ -59,7 +69,7 @@ The firmware does the (x,y) mm ↔ belt-length ↔ microstep geometry itself (no
 
 Note: `status` shows `openloadA`/`openloadB` set **at standstill** (`stst` also set) — this is a **known false positive** in Trinamic open-load detection (the comparator only works meaningfully while the chopper is actively switching during motion, not at hold). Not a wiring fault. Only worth investigating if the flag persists *while the motor is actively turning*.
 
-**Next phase:** geometry/calibration work (see "Mechanical setup & calibration" below) and the WiFi web UI.
+**Since bring-up:** the WiFi HTTP API, the Astro web console, the MCP server, driver-fault supervision, elliptical work-area + limit-path tracing, and the full-ramp accel fix are all in. The remaining open item is **geometry calibration** (the bowed-square issue below).
 
 **SPI comms to the TMC5072 are confirmed working**: `link` returns `VERSION=0x10`, status byte `0x19`, and `status` shows no driver fault flags. The debugging journey, so it isn't repeated:
 
@@ -106,7 +116,7 @@ With the TMC live: `status` (expect `CHOPCONF 0x000100C3`) → `cur 300` → `jo
 
 **Pen servo** — up = **180°**, down = **120°**, ~200 ms dwell (in `board_config.h`).
 
-**Power / current** — shared **12 V / 2 A** supply across both motors → keep **≤ 600 mA RMS per motor** (≈848 mA peak; ≈1.7 A total, leaving headroom). The old TMC2226 board used a 0.11 Ω sense resistor; the **TMC5072-BOB differs — verify `R_SENSE`** before trusting the mA figures.
+**Power / current** — shared **12 V / 2 A** supply across both motors. Defaults: **RUN = 400 mA, HOLD = 200 mA** (`board_config.h`). RUN was de-rated from 600 mA because a pen gondola needs little torque and run current is the heat source during a multi-hour plot — and because `R_SENSE` is unverified (see above), so the *true* current may exceed the setpoint. HOLD is kept at 200 mA on purpose: a hanging V-plotter needs holding torque or the gondola slips when idle. Don't crank RUN back up without verifying `R_SENSE` against measured coil current. Driver over-temp is now caught (see "Driver-fault supervision"), but a motor can overheat well before the driver's ~150 °C OT trips — current is the lever.
 
 ## Hardware reference
 
@@ -115,5 +125,6 @@ With the TMC live: `status` (expect `CHOPCONF 0x000100C3`) → `cur 300` → `jo
 
 ## MCP servers (`.mcp.json`)
 
+- **polar-plotter** (`plotter-mcp/index.js`) — the plotter's own HTTP API as tools: `plot_goto/line/circle/square/wobbly/bullseye/grid/border`, `plot_pen/home/sethome/stop/abort`, `plot_set_speed/accel/current`, `plot_clear_fault`, `plot_status`, and `plot_script` (ordered, wait-till-done batch). Talks over WiFi (`PLOTTER_IP`/`PLOTTER_PORT` env). See `plotter-mcp/AGENT_GUIDE.md`.
 - **context7** — pull current docs for ESP-IDF / Trinamic APIs (the 5072 has thin third-party library coverage).
-- **playwright** — for testing the WiFi UI once it exists.
+- **playwright** — for testing the WiFi web console.

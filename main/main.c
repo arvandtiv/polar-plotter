@@ -63,6 +63,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_console.h"
+#include "esp_timer.h"
 
 #include "nvs_flash.h"
 #include "esp_event.h"
@@ -93,11 +94,15 @@ static uint32_t g_vmax         = TEST_VMAX;
 static uint32_t g_accel        = 500;          /* AMAX/DMAX */
 static float    g_home_belt_mm  = HOME_BELT_MM;  /* tunable at runtime via `setbelt` */
 static float    g_motor_span_mm  = MOTOR_SPAN_MM;  /* tunable at runtime via `setspan` */
-static float    g_steps_per_mm = 1265.0f;   /* tunable via `setsteps` */
+static float    g_steps_per_mm = STEPS_PER_MM;  /* tunable via `setsteps` */
 static float    g_x_min        = X_MIN_MM;  /* tunable via `setbounds` or /api/bounds */
 static float    g_x_max        = X_MAX_MM;
 static float    g_y_min        = Y_MIN_MM;
 static float    g_y_max        = Y_MAX_MM;
+/* When true the drawable area is the ELLIPSE inscribed in [x_min,x_max]x[y_min,y_max]
+ * rather than the full rectangle. Models a polargraph whose reachable Y is tallest at
+ * the centre X and tapers to nothing at the X extremes (calibration/geometry limit). */
+static bool     g_bounds_ellipse = false;
 static bool     g_aimode       = false;     /* `aimode on` -> web_draw_task prints live job progress to console */
 
 /* Machine geometry for the firmware-side kinematics (see kinematics.h). Built
@@ -107,7 +112,7 @@ static bool     g_aimode       = false;     /* `aimode on` -> web_draw_task prin
 static plotter_geom_t g_geom = {
     .span_mm      = MOTOR_SPAN_MM,
     .drop_mm      = 0.0f,   /* set in init_geometry() from HOME_BELT_MM */
-    .steps_per_mm = 1265.0f,
+    .steps_per_mm = STEPS_PER_MM,
     .left_sign    = LEFT_DIR_SIGN,
     .right_sign   = RIGHT_DIR_SIGN,
 };
@@ -296,11 +301,77 @@ static void print_full_status(int m)
  * rather than blocking on a fixed delay -- the ramp duration depends on distance,
  * VMAX and acceleration, so a fixed wait would either be too short (truncating the
  * move) or too long (wasting time). 20 ms poll is coarse enough not to flood SPI. */
+/* Real, actionable driver faults only. Per the DRV_STATUS notes above, stst /
+ * STALL / openload are standstill false-positives and are deliberately NOT in the
+ * mask. OT (over-temp shutdown) and s2ga/s2gb (coil short-to-GND, latched until
+ * re-enable) are genuine. otpw (pre-warning) is reported but does not trip. */
+#define DRV_FAULT_MASK ((1u << 25) | (1u << 27) | (1u << 28))   /* OT | s2ga | s2gb */
+
+/* Reads both motors' DRV_STATUS + GSTAT, fills g_drv_flags, and returns the real-
+ * fault bitmask (0 = healthy). MUST be called only from the motion task — it does
+ * SPI reads that would otherwise interleave with an in-flight move's transfers. */
+static uint32_t driver_fault_scan(void)
+{
+    uint32_t s0 = tmc5072_drv_status(&tmc, 0) & DRV_FAULT_MASK;
+    uint32_t s1 = tmc5072_drv_status(&tmc, 1) & DRV_FAULT_MASK;
+    uint32_t g  = tmc5072_read(&tmc, TMC5072_GSTAT, NULL) & 0x0E;  /* drv_err1|drv_err2|uv_cp */
+    uint32_t fault = s0 | s1 | g;
+    if (fault) {
+        snprintf(g_drv_flags, sizeof(g_drv_flags), "%s%s%s%s%s%s%s%s",
+                 (s0 & (1u << 25)) ? "M1:OT "   : "",
+                 (s0 & (1u << 27)) ? "M1:s2ga " : "",
+                 (s0 & (1u << 28)) ? "M1:s2gb " : "",
+                 (s1 & (1u << 25)) ? "M2:OT "   : "",
+                 (s1 & (1u << 27)) ? "M2:s2ga " : "",
+                 (s1 & (1u << 28)) ? "M2:s2gb " : "",
+                 (g  & 0x06)       ? "GSTAT:drv_err " : "",
+                 (g  & 0x08)       ? "GSTAT:uv_cp "   : "");
+    }
+    return fault;
+}
+
+/* Single chokepoint every motion wait/loop consults to decide whether to bail.
+ * Returns true if a manual escape (g_job_abort) is in flight OR a real driver
+ * fault is detected. The driver scan is throttled to ~12 Hz so the extra SPI
+ * traffic is negligible even inside the tight streaming loops. On the rising edge
+ * of a fault it latches g_drv_fault (sticky until /api/clearfault), logs once, and
+ * trips g_job_abort so the rest of the existing escape machinery stops the move. */
+static bool motion_should_abort(void)
+{
+    if (g_job_abort) return true;
+    static int64_t last_us = 0;
+    int64_t now = esp_timer_get_time();
+    if (now - last_us < 80000) return false;   /* ~12 Hz scan cadence */
+    last_us = now;
+    uint32_t f = driver_fault_scan();
+    if (f) {
+        if (!g_drv_fault) web_log("!! DRIVER FAULT: %s — job aborted", g_drv_flags);
+        g_drv_fault  = f;       /* sticky latch */
+        g_job_abort  = true;    /* reuse the manual-escape path: stop motors, lift pen */
+        return true;
+    }
+    return false;
+}
+
+/* Re-enable the drivers to clear latched faults (short-to-GND is latched until a
+ * disable→enable per the datasheet), then drop the software fault latch. Called
+ * from the /api/clearfault handler — touches only GPIO (ENN) + globals, no SPI,
+ * so it is safe to run from the httpd task even while the motion task is idle. */
+void plotter_clear_fault(void)
+{
+    tmc5072_enable(&tmc, false);
+    vTaskDelay(pdMS_TO_TICKS(5));
+    tmc5072_enable(&tmc, true);
+    g_drv_fault = 0;
+    snprintf(g_drv_flags, sizeof(g_drv_flags), "ok");
+    web_log("driver fault cleared — drivers re-enabled");
+}
+
 static bool wait_reached(int m, int timeout_ms)
 {
     int waited = 0;
     while (!tmc5072_position_reached(&tmc, m)) {
-        if (g_job_abort) return false;   /* escape: bail out of the wait immediately */
+        if (motion_should_abort()) return false;   /* escape or driver fault: bail */
         vTaskDelay(pdMS_TO_TICKS(20));
         waited += 20;
         if (waited >= timeout_ms) {
@@ -529,15 +600,17 @@ static int cmd_setbounds(int argc, char **argv)
     if (argc < 5) {
         printf("  bounds: x=[%.1f, %.1f]  y=[%.1f, %.1f] mm\n",
                (double)g_x_min, (double)g_x_max, (double)g_y_min, (double)g_y_max);
-        printf("usage: setbounds <xmin> <xmax> <ymin> <ymax>\n");
+        printf("usage: setbounds <xmin> <xmax> <ymin> <ymax> [shape: 0=rect 1=ellipse]\n");
         return 0;
     }
     g_x_min = atof(argv[1]);
     g_x_max = atof(argv[2]);
     g_y_min = atof(argv[3]);
     g_y_max = atof(argv[4]);
-    printf("bounds set: x=[%.1f, %.1f]  y=[%.1f, %.1f] mm\n",
-           (double)g_x_min, (double)g_x_max, (double)g_y_min, (double)g_y_max);
+    if (argc >= 6) g_bounds_ellipse = (atoi(argv[5]) != 0);
+    printf("bounds set: x=[%.1f, %.1f]  y=[%.1f, %.1f] mm (%s)\n",
+           (double)g_x_min, (double)g_x_max, (double)g_y_min, (double)g_y_max,
+           g_bounds_ellipse ? "ellipse" : "rect");
     return 0;
 }
 
@@ -554,6 +627,21 @@ static int cmd_setbelt(int argc, char **argv)
     return 0;
 }
 
+/* Normalised radius of (x,y) within the inscribed ellipse: <=1 is inside. Hands back
+ * the ellipse centre + semi-axes (derived from the bounding box) for clamping. */
+static float ellipse_norm(float x, float y, float *cx, float *cy, float *rx, float *ry)
+{
+    float ccx = 0.5f * (g_x_min + g_x_max), ccy = 0.5f * (g_y_min + g_y_max);
+    float arx = 0.5f * (g_x_max - g_x_min), ary = 0.5f * (g_y_max - g_y_min);
+    if (cx) { *cx = ccx; }
+    if (cy) { *cy = ccy; }
+    if (rx) { *rx = arx; }
+    if (ry) { *ry = ary; }
+    if (arx <= 0.0f || ary <= 0.0f) return 0.0f;
+    float nx = (x - ccx) / arx, ny = (y - ccy) / ary;
+    return sqrtf(nx * nx + ny * ny);
+}
+
 /* Clamp (x,y) to the drawable area. Returns true and logs a warning if clamped. */
 static bool clamp_xy(float *x, float *y)
 {
@@ -562,6 +650,14 @@ static bool clamp_xy(float *x, float *y)
     if (*x < g_x_min) { *x = g_x_min; clamped = true; }
     if (*y > g_y_max) { *y = g_y_max; clamped = true; }
     if (*y < g_y_min) { *y = g_y_min; clamped = true; }
+    /* In ellipse mode, project a point outside the inscribed ellipse radially back
+     * onto its boundary (norm scales linearly along a ray, so dividing the offset
+     * by the norm lands exactly on the edge). */
+    if (g_bounds_ellipse) {
+        float cx, cy, rx, ry;
+        float r = ellipse_norm(*x, *y, &cx, &cy, &rx, &ry);
+        if (r > 1.0f) { *x = cx + (*x - cx) / r; *y = cy + (*y - cy) / r; clamped = true; }
+    }
     if (clamped)
         ESP_LOGW(TAG, "point clamped to drawable area (x=%.1f y=%.1f)",
                  (double)*x, (double)*y);
@@ -656,7 +752,7 @@ static void wait_both_near(int32_t tl, int32_t tr, int32_t lookahead, int timeou
 {
     int waited = 0;
     while (waited < timeout_ms) {
-        if (g_job_abort) return;   /* escape: stop streaming sub-segments */
+        if (motion_should_abort()) return;   /* escape or driver fault: stop streaming */
         int32_t al = tmc5072_position(&tmc, MOTOR_RHO);    /* RHO is physically left */
         int32_t ar = tmc5072_position(&tmc, MOTOR_THETA);  /* THETA is physically right */
         if (labs(tl - al) <= lookahead && labs(tr - ar) <= lookahead) return;
@@ -681,7 +777,7 @@ static void draw_line_mm(float x0, float y0, float x1, float y1)
     int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * g_geom.steps_per_mm);
     int32_t sl, sr;
     for (int i = 1; i <= n; i++) {
-        if (g_job_abort) return;   /* escape: drop the rest of this line's sub-segments */
+        if (motion_should_abort()) return;   /* escape or driver fault: drop remaining segments */
         float t = (float)i / (float)n;
         float px = x0 + dx * t, py = y0 + dy * t;
         clamp_xy(&px, &py);
@@ -809,18 +905,13 @@ static void emit_pos_event(void)
 
 static void do_draw_goto(float x, float y)
 {
-    clamp_xy(&x, &y);
     tmc5072_enable(&tmc, true);
-    /* A single coordinated move is straight in STEP space, which bows several mm
-     * in Cartesian space on a polargraph (independent of calibration). Instead,
-     * read the chip's ground-truth current position (exact after `sethome`) and
-     * interpolate to the target through draw_line_mm, the same Cartesian
-     * sub-segmenter used by `line`. That keeps the travel/path straight. */
-    int32_t cl = tmc5072_position(&tmc, MOTOR_RHO);    /* RHO is physically left  */
-    int32_t cr = tmc5072_position(&tmc, MOTOR_THETA);  /* THETA is physically right */
-    float cx, cy;
-    plt_steps_to_xy(&g_geom, cl, cr, &cx, &cy);
-    draw_line_mm(cx, cy, x, y);
+    /* Pen-up travel: a single coordinated move is all we need. The path bows
+     * slightly in Cartesian space (step-space interpolation) but nothing is
+     * drawn, so only the endpoint matters. This lets the chip ramp to VMAX for
+     * the full distance — same fast behaviour as `home`. Sub-segmentation
+     * (draw_line_mm) is reserved for pen-DOWN moves (line/circle/square). */
+    move_to_xy(x, y);
     emit_pos_event();
 }
 
@@ -952,6 +1043,42 @@ static void do_draw_grid(float cx, float cy)
         pen_drop();  draw_line_mm(x, cy - hlen, x, cy + hlen);
     }
     pen_lift();
+}
+
+/* Walk the work-area LIMIT PATH once, pen down: the four rectangle edges, or — in
+ * ellipse mode — the inscribed-ellipse perimeter. This is a calibration aid: it
+ * draws exactly where the firmware believes the reachable boundary is, so it can be
+ * compared against the physical machine and the geometry constants refined. The path
+ * is the boundary itself, so every point is in-bounds by construction. */
+static void do_draw_border(void)
+{
+    tmc5072_enable(&tmc, true);
+    float cx, cy, rx, ry;
+    ellipse_norm(0.0f, 0.0f, &cx, &cy, &rx, &ry);   /* center + semi-axes of the box */
+
+    pen_lift();
+    if (g_bounds_ellipse) {
+        const int N = 96;                            /* perimeter sub-sampling */
+        float px = cx + rx, py = cy;                 /* start at the rightmost point */
+        move_to_xy(px, py);
+        pen_drop();
+        for (int i = 1; i <= N; i++) {
+            float th = (float)i / (float)N * 6.28318530718f;
+            float nx = cx + rx * cosf(th);
+            float ny = cy + ry * sinf(th);
+            draw_line_mm(px, py, nx, ny);
+            px = nx; py = ny;
+        }
+    } else {
+        move_to_xy(g_x_min, g_y_min);
+        pen_drop();
+        draw_line_mm(g_x_min, g_y_min, g_x_max, g_y_min);   /* bottom */
+        draw_line_mm(g_x_max, g_y_min, g_x_max, g_y_max);   /* right  */
+        draw_line_mm(g_x_max, g_y_max, g_x_min, g_y_max);   /* top    */
+        draw_line_mm(g_x_min, g_y_max, g_x_min, g_y_min);   /* left   */
+    }
+    pen_lift();
+    emit_pos_event();
 }
 
 /* Closed random curve using a radial Fourier series.
@@ -1086,13 +1213,17 @@ static int cmd_circle(int argc, char **argv)
  * handlers to REJECT out-of-area targets instead of silently clamping them. */
 bool plotter_in_bounds(float x, float y)
 {
-    return x >= g_x_min && x <= g_x_max && y >= g_y_min && y <= g_y_max;
+    if (!(x >= g_x_min && x <= g_x_max && y >= g_y_min && y <= g_y_max)) return false;
+    if (g_bounds_ellipse && ellipse_norm(x, y, NULL, NULL, NULL, NULL) > 1.0f) return false;
+    return true;
 }
 
 void plotter_get_bounds(float *xn, float *xp, float *yn, float *yp)
 {
     *xn = g_x_min; *xp = g_x_max; *yn = g_y_min; *yp = g_y_max;
 }
+
+bool plotter_bounds_ellipse(void) { return g_bounds_ellipse; }
 
 /* Current gondola position in mm (inverse kinematics on the live XACTUAL). */
 void plotter_get_xy(float *x, float *y)
@@ -1129,6 +1260,7 @@ static const char *wcmd_name(wcmd_type_t t)
         case WCMD_STOP:     return "stop";
         case WCMD_BULLSEYE: return "bullseye";
         case WCMD_GRID:     return "grid";
+        case WCMD_BORDER:   return "border";
         case WCMD_SETHOME:  return "sethome";
         case WCMD_BOUNDS:   return "bounds";
         case WCMD_SPEED:    return "speed";
@@ -1240,6 +1372,11 @@ static void web_draw_task(void *arg)
                 do_draw_grid(cmd.p[0], cmd.p[1]);
                 web_log("grid done");
                 break;
+            case WCMD_BORDER:
+                web_log("border (%s limit path)", g_bounds_ellipse ? "ellipse" : "rect");
+                do_draw_border();
+                web_log("border done");
+                break;
             case WCMD_WOBBLY:
                 web_log("wobbly (%.1f,%.1f) r=%.1f bound=%.1f wobble=%.2f h=%d seed=%d x%d",
                         (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2], (double)cmd.p[3],
@@ -1257,9 +1394,11 @@ static void web_draw_task(void *arg)
             case WCMD_BOUNDS:
                 g_x_min = cmd.p[0]; g_x_max = cmd.p[1];
                 g_y_min = cmd.p[2]; g_y_max = cmd.p[3];
-                web_log("bounds: x=[%.1f,%.1f] y=[%.1f,%.1f] mm",
+                g_bounds_ellipse = (cmd.p[4] != 0.0f);
+                web_log("bounds: x=[%.1f,%.1f] y=[%.1f,%.1f] mm (%s)",
                         (double)g_x_min, (double)g_x_max,
-                        (double)g_y_min, (double)g_y_max);
+                        (double)g_y_min, (double)g_y_max,
+                        g_bounds_ellipse ? "ellipse" : "rect");
                 break;
             case WCMD_SPEED:
                 g_vmax = (uint32_t)cmd.p[0];

@@ -171,6 +171,15 @@ esp_err_t tmc5072_set_accel(tmc5072_t *dev, int m, uint32_t amax_dmax)
 {
     dev->base_ramp.amax = amax_dmax;
     dev->base_ramp.dmax = amax_dmax;
+    /* Also scale the sub-V1 ramp legs. The TMC5072 6-point ramp uses A1 to
+     * accelerate up to V1 and only then AMAX up to VMAX (and D1 for the final
+     * V1->VSTOP decel). Short streamed goto/line sub-segments never exceed V1, so
+     * touching only AMAX/DMAX left the accel knob with no effect on them. Keep the
+     * original default ratios (A1 = 2*AMAX, D1 = 2.8*AMAX) so at the default accel
+     * the profile is byte-identical to the previous tuning, but now the whole ramp
+     * stiffens/softens with the setting. */
+    dev->base_ramp.a1 = amax_dmax * 2;          /* 1000 at the 500 default */
+    dev->base_ramp.d1 = amax_dmax * 14 / 5;     /* 1400 at the 500 default */
     tmc5072_set_ramp_scale(dev, m, 1.0f);
     return ESP_OK;
 }

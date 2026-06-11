@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { apiGet, getStoredIp, storeIp, sseUrl } from '../lib/api';
+import { apiGet, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
 
 // ---- types -------------------------------------------------------
 
 export type FillMode = 0 | 1 | 2;   // 0=none  1=hatch  2=concentric
 
-export interface PlotterBounds { left: number; right: number; up: number; down: number; }
+export type BoundsShape = 'rect' | 'ellipse';
+export interface PlotterBounds { left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface MotionParams  { vmax: number; amax: number; run: number; hold: number; }
 
 export interface CircleCmd   { type: 'circle';   cx: number; cy: number; r: number;    cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
@@ -17,22 +18,39 @@ export interface SetHomeCmd  { type: 'sethome'; }
 export interface PenCmd      { type: 'pen';      pos: 'up' | 'down'; }
 export interface BullseyeCmd { type: 'bullseye'; cx: number; cy: number; }
 export interface GridCmd     { type: 'grid';     cx: number; cy: number; }
+// Border = trace the work-area limit path once. Carries the current bounds so the
+// canvas can preview the exact perimeter (the firmware uses its own stored bounds).
+export interface BorderCmd   { type: 'border';   left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface WobblyCmd   { type: 'wobbly';   cx: number; cy: number; r: number; boundR: number;
                                wobble: number; harmonics: number; seed: number; cycles: number; }
-export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | WobblyCmd;
+export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | BorderCmd | WobblyCmd;
 
 export interface LogEntry { id: number; kind: 'cmd' | 'ok' | 'err' | 'warn' | 'sys' | 'fw'; text: string; t: number; }
 export interface PenState  { x: number; y: number; down: boolean; }
 export interface Stroke    { color: string; points: { x: number; y: number }[]; }
 
+// Live firmware job/driver state, polled from /api/status for the Autonomous tab.
+export interface PlotterStatus {
+  enqueued: number; current: number; done: number; pending: number;
+  idle: boolean; aborting: boolean; job: string;
+  drvOk: boolean; drvFlags: string;
+}
+// One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
+// MCP's full plan), so labels are captured as `current` advances; not-yet-run jobs
+// are known only by count and shown as unlabeled "pending".
+export interface JobEntry { id: number; label: string; state: 'done' | 'doing' | 'pending'; }
+
 // ---- constants ---------------------------------------------------
 
 export const DEFAULTS = {
-  motion: { vmax: 200000, amax: 500, run: 600, hold: 200 },
-  bounds: { left: 300, right: 300, up: 200, down: 200 },
+  // run de-rated 600→400 mA to match the firmware default (board_config.h) — a pen
+  // gondola needs little torque and run current is the multi-hour-plot heat source.
+  motion: { vmax: 200000, amax: 500, run: 400, hold: 200 },
+  bounds: { left: 240, right: 240, up: 200, down: 200, shape: 'rect' as BoundsShape },
 };
 
-const PALETTE = ['#38bdf8', '#34d399', '#fbbf24', '#f472b6', '#a78bfa', '#fb923c'];
+// Light-theme stroke palette (deepened for contrast on white) — Claude Design tokens.
+const PALETTE = ['#0284c7', '#059669', '#d97706', '#db2777', '#7c3aed', '#ea580c'];
 
 let LOG_ID = 0;
 const mkLog = (kind: LogEntry['kind'], text: string): LogEntry => ({
@@ -49,6 +67,7 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'circle':   return `circle?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&cycles=${cmd.cycles}&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
     case 'bullseye': return `bullseye?cx=${cmd.cx}&cy=${cmd.cy}`;
     case 'grid':     return `grid?cx=${cmd.cx}&cy=${cmd.cy}`;
+    case 'border':   return 'border';   // firmware traces its own stored bounds
     case 'wobbly':   return `wobbly?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&bound_r=${cmd.boundR}` +
                             `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}`;
     case 'home':     return 'home';
@@ -58,8 +77,8 @@ export function cmdToQuery(cmd: PlotCmd): string {
 }
 
 export function boundsToQuery(b: PlotterBounds): string {
-  // Firmware params: xn = X−, xp = X+, yn = Y−, yp = Y+
-  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.down}&yp=${b.up}`;
+  // Firmware params: xn = X−, xp = X+, yn = Y−, yp = Y+, shape 0=rect 1=ellipse
+  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.down}&yp=${b.up}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
 }
 
 export function motionToQuery(key: keyof MotionParams, val: number, m: MotionParams): string {
@@ -185,6 +204,21 @@ export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[
       pts.push({ x: cmd.cx - n * step, y: cmd.cy + j * step, pen: false });
       pts.push({ x: cmd.cx + n * step, y: cmd.cy + j * step, pen: true });
     }
+  } else if (cmd.type === 'border') {
+    // Trace the work-area limit path: rect edges, or the inscribed ellipse perimeter.
+    const xmin = -cmd.left, xmax = cmd.right, ymin = -cmd.down, ymax = cmd.up;
+    if (cmd.shape === 'ellipse') {
+      const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
+      const rx = (xmax - xmin) / 2, ry = (ymax - ymin) / 2;
+      const seg = 96;
+      for (let k = 0; k <= seg; k++) {
+        const th = (k / seg) * Math.PI * 2;
+        pts.push({ x: cx + rx * Math.cos(th), y: cy + ry * Math.sin(th), pen: k !== 0 });
+      }
+    } else {
+      const loop = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax], [xmin, ymin]];
+      loop.forEach(([x, y], i) => pts.push({ x, y, pen: i !== 0 }));
+    }
   }
   return pts;
 }
@@ -202,6 +236,12 @@ export function usePlotter() {
   const [activePath, setActivePath] = useState<Stroke | null>(null);
   const [queue, setQueue]          = useState<string[]>([]);
   const [log, setLog]              = useState<LogEntry[]>([mkLog('sys', 'console ready')]);
+  const [status, setStatus]        = useState<PlotterStatus | null>(null);
+  const [jobs, setJobs]            = useState<JobEntry[]>([]);
+
+  // Labels captured per job id as `current` advances (firmware only reports the
+  // CURRENT job's label, so we remember each one to render the done-job history).
+  const jobLabels = useRef<Map<number, string>>(new Map());
 
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
@@ -260,6 +300,49 @@ export function usePlotter() {
 
     return () => { es.close(); setConnected(false); };
   }, [ip, pushLog]);
+
+  // ---- status poll (Autonomous tab) ----------------------------
+  // Polls /api/status ~1 Hz to drive the job-progress + driver-health views.
+  // The firmware tracks job CURSORS (enqueued/current/done/pending) plus the
+  // current job's label and the TMC5072 driver-health latch (drv_ok/drv_flags).
+  // We reconstruct a job list from the cursors: ids ≤ done are finished, id ==
+  // current is running, ids > current (up to enqueued) are pending. Labels are
+  // remembered as `current` advances since the firmware only ever reports the
+  // label of the job running right now.
+  useEffect(() => {
+    if (!ip) { setStatus(null); setJobs([]); return; }
+    let alive = true;
+
+    const poll = async () => {
+      let s: RawStatus;
+      try { s = await getStatus(ip); } catch { return; }   // SSE onerror handles the link badge
+      if (!alive) return;
+
+      if (s.job && s.current > 0) jobLabels.current.set(s.current, s.job);
+
+      setStatus({
+        enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
+        idle: s.idle, aborting: s.aborting, job: s.job,
+        drvOk: s.drv_ok, drvFlags: s.drv_flags,
+      });
+
+      // Build the job rows. Cap to a trailing window so a long session doesn't
+      // render hundreds of rows; always include everything from the current job
+      // onward plus the most recent finished ones.
+      const total = s.enqueued;
+      const first = Math.max(1, Math.min(s.current, total) - 7);
+      const rows: JobEntry[] = [];
+      for (let id = first; id <= total; id++) {
+        const state: JobEntry['state'] = id <= s.done ? 'done' : id === s.current && !s.idle ? 'doing' : 'pending';
+        rows.push({ id, label: jobLabels.current.get(id) ?? (id === s.current ? s.job : ''), state });
+      }
+      setJobs(rows);
+    };
+
+    poll();
+    const timer = setInterval(poll, 1000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [ip]);
 
   // ---- animation -----------------------------------------------
   // Runs a client-side visual simulation of the gondola path at ~60 fps.
@@ -366,7 +449,7 @@ export function usePlotter() {
     if (cmd.type === 'home' || cmd.type === 'sethome') {
       setMoving(true);
       const pts = cmd.type === 'home' ? [{ x: 0, y: 0, pen: false }] : [];
-      await Promise.all([send(ep), animatePath(pts, '#38bdf8')]);
+      await Promise.all([send(ep), animatePath(pts, '#0284c7')]);
       setMoving(false);
       return;
     }
@@ -414,15 +497,22 @@ export function usePlotter() {
 
   const clearPaths = useCallback(() => { setPaths([]); setActivePath(null); }, []);
 
+  // Clear a latched TMC5072 driver fault (re-enables the drivers firmware-side).
+  const clearFault = useCallback(() => {
+    pushLog('cmd', '> clearfault');
+    if (ipRef.current) send('clearfault');
+  }, [send, pushLog]);
+
   return {
     ip, setIp,
     pen, moving, connected,
     motion, bounds,
     paths, activePath,
     queue, log,
+    status, jobs,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, stop, clearPaths, pushLog,
+    enqueue, stop, clearPaths, clearFault, pushLog,
     DEFAULTS,
   };
 }

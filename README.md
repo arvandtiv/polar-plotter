@@ -5,8 +5,6 @@ gondola from belts, an SG90 servo lifts/drops the pen. The firmware handles all
 geometry — belt-length ↔ (x,y) mm math, coordinated moves, and fill patterns —
 so no PC processing is needed at draw time.
 
-![Console UI](docs/design/design_handoff_plotter_console/reference/Plotter%20Console.html)
-
 ---
 
 ## Hardware
@@ -38,6 +36,7 @@ components/
   servo/          — SG90 via LEDC (50 Hz, 14-bit)
 
 console/          — Astro 4 + React 18 + Tailwind web UI (npm run dev → :4321)
+plotter-mcp/      — MCP server: exposes the HTTP API as tools for Claude (index.js)
 
 tools/
   kinematics_test/ — host-runnable geometry unit test
@@ -84,6 +83,21 @@ npm run dev          # → http://localhost:4321
 Enter the plotter's IP in the header (`192.168.1.53` by default).
 The console connects to `GET /events` (SSE) for live log output and pen position,
 and sends draw commands to `GET /api/<cmd>?<params>`.
+
+Tabs: **Draw** (circle/square/line/wobbly), **Move** (goto + jog pad), **Work Area**
+(bounds + rectangle/ellipse shape toggle), **Calibrate** (walk-limits + bullseye/grid),
+and **Autonomous** (live job progress, driver health, and an errors panel).
+
+---
+
+## Autonomous (MCP)
+
+`plotter-mcp/` exposes the HTTP API as MCP tools so Claude can paint on its own.
+Configure the plotter address with `PLOTTER_IP` / `PLOTTER_PORT`; register it in
+`.mcp.json`. The main tool is `plot_script` (an ordered command list that waits for
+each job to physically finish before sending the next). It **pauses on a TMC5072
+driver fault** (over-temp, coil short) and reports it; resume with `plot_clear_fault`
+once the cause is fixed. See [`plotter-mcp/AGENT_GUIDE.md`](plotter-mcp/AGENT_GUIDE.md).
 
 ---
 
@@ -162,5 +176,11 @@ V-plotter (polargraph) with motors at the top two corners:
 
 `steps/mm = (200 steps/rev × 256 µsteps) / (20 teeth × 2 mm/tooth) = 1280`
 
-Motor span, home belt length, steps/mm and scale factors are all tunable at
-runtime via `setspan`, `setbelt`, `setsteps`, `setxscale`, `setyscale`.
+Motor span, home belt length and steps/mm are all tunable at runtime via
+`setspan`, `setbelt`, and `setsteps` — re-measure and tune these (not code) to
+fix calibration drift.
+
+**Work area** can be a rectangle or the inscribed **ellipse** (for a machine whose
+reachable Y is tallest at center X and tapers toward the edges) — set via `setbounds`
+/ `/api/bounds?shape=` or the console Work Area tab. The `border` command / "Walk
+limits" button traces the active boundary once so you can compare it to the real machine.

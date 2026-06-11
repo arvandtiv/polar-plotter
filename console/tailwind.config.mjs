@@ -8,22 +8,29 @@ export default {
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
       },
       colors: {
+        // Light theme (Claude Design "Plotter Console Light"). Inverted neutral scale:
+        // low index = darkest (text), high index = lightest (surfaces).
         ink: {
-          950: '#0a0d11',
-          900: '#0e1318',
-          850: '#131a21',
-          800: '#19222b',
-          750: '#202b36',
-          700: '#2a3845',
-          600: '#3a4c5c',
-          500: '#5b7186',
-          400: '#7e95aa',
-          300: '#a7bccd',
+          950: '#eceff4',  // page background
+          900: '#ffffff',  // card surface
+          850: '#f4f7fa',  // input / inset surface
+          800: '#e6ebf1',  // hover / divider / active
+          750: '#dce3ec',  // hairline borders
+          700: '#c4cedb',  // stronger borders
+          600: '#9aa7b8',  // faint icon / corner labels
+          500: '#6b7889',  // muted text
+          400: '#4a5666',  // labels / section titles
+          300: '#2f3a48',  // body text
+          200: '#1c2530',  // input values
+          100: '#0f1720',  // headings / strong values
         },
-        go:   { DEFAULT: '#34d399', dim: '#0f3a2c', soft: '#6ee7b7' },
-        warn: { DEFAULT: '#fbbf24', dim: '#3d2f0a' },
-        stop: { DEFAULT: '#f87171', dim: '#3a1414' },
-        cyanx: { DEFAULT: '#38bdf8', dim: '#0b2f44' },
+        go:    { DEFAULT: '#059669', dim: '#d1fae5', soft: '#10b981' },
+        warn:  { DEFAULT: '#d97706', dim: '#fef3c7' },
+        stop:  { DEFAULT: '#dc2626', dim: '#fee2e2' },
+        cyanx: { DEFAULT: '#0284c7', dim: '#e0f2fe' },
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06)',
       },
     },
   },

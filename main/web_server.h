@@ -18,6 +18,7 @@ typedef enum {
     WCMD_STOP,
     WCMD_BULLSEYE,
     WCMD_GRID,
+    WCMD_BORDER,   /* trace the work-area limit path (rect edges or ellipse perimeter) */
     WCMD_SETHOME,
     WCMD_BOUNDS,
     WCMD_SPEED,
@@ -44,12 +45,20 @@ extern volatile uint32_t g_job_done;      /* last id that finished              
 extern volatile bool     g_job_abort;     /* set to interrupt the running job + skip rest */
 extern char              g_job_desc[48];  /* human label of the current/last job          */
 
+/* Driver-fault latch, updated by the motion task and reported via /api/status.
+ * g_drv_fault is a sticky bitmask (0 = healthy); g_drv_flags is its human label
+ * (e.g. "M1:OT M2:s2ga"). Cleared only by plotter_clear_fault() / /api/clearfault. */
+extern volatile uint32_t g_drv_fault;
+extern char              g_drv_flags[96];
+
 /* Implemented in main.c (where the geometry / motor / pen state lives), used by the
  * web layer for out-of-bounds rejection, the /api/status report, and /api/abort. */
 bool plotter_in_bounds(float x, float y);
 void plotter_get_bounds(float *xn, float *xp, float *yn, float *yp);
+bool plotter_bounds_ellipse(void);  /* true if the drawable area is the inscribed ellipse */
 void plotter_get_xy(float *x, float *y);
 void plotter_abort_now(void);   /* stop motors, flush the queue, lift the pen, set g_job_abort */
+void plotter_clear_fault(void); /* re-enable drivers (clear latched faults) + reset g_drv_fault */
 
 esp_err_t web_server_start(void);
 

@@ -75,10 +75,10 @@
 
 /* Drawable area limits (mm, origin at centre). The gondola will be clamped to
  * this rectangle and a warning printed if any command targets outside it. */
-#define X_MAX_MM   300.0f
-#define X_MIN_MM  -300.0f
-#define Y_MAX_MM   400.0f
-#define Y_MIN_MM  -600.0f
+#define X_MAX_MM   240.0f
+#define X_MIN_MM  -240.0f
+#define Y_MAX_MM   200.0f
+#define Y_MIN_MM  -200.0f
 
 /* Max chord bulge (sagitta) when approximating arcs/circles with line segments.
  * Smaller = rounder but more (slower) segments. 0.3 mm is a good plotter default;
@@ -88,8 +88,12 @@
 
 /* Max length of a single straight-line sub-segment (mm). Straight Cartesian
  * lines (e.g. `square` edges) are split into pieces this long so the step-space
- * interpolation stays visually straight. Smaller = straighter but more segments. */
-#define LINE_SEG_MM          2.0f
+ * interpolation stays visually straight. Smaller = more accurate but slower:
+ * the motor's lookahead window = LOOKAHEAD + SEG, and equilibrium drawing speed
+ * scales with sqrt(window). On this machine (span ~978mm, drop ~521mm) the bow
+ * per segment scales as L²/span, so at 5mm the bow is ~0.025mm — well below pen
+ * tip width and invisible. 2mm was unnecessarily conservative. */
+#define LINE_SEG_MM          5.0f
 
 /* Look-ahead distance for smooth (non-stop) line drawing: while drawing an edge,
  * the next sub-segment target is issued as soon as the gondola comes within this
@@ -98,7 +102,7 @@
  * waypoints aren't skipped (which would let the bow back in). Larger = smoother
  * but cuts slightly inside the path; corners stay exact (each edge ends with a
  * real stop). */
-#define LINE_LOOKAHEAD_MM    1.0f
+#define LINE_LOOKAHEAD_MM    2.0f
 
 /* ---- WiFi + UDP boundary-hit listener ----
  * Joins the same network the camera-tracking Python script (gondola_boundary_keeper.py,
@@ -122,7 +126,12 @@
 #define PATTERN_LISTEN_PORT 8889
 
 /* ---- Self-test defaults (all changeable live over the serial console) ---- */
-#define TEST_RUN_MA      600.0f   /* run current */
+/* RUN de-rated 600 -> 400 mA: a pen gondola needs little torque, and this is the
+ * heat source during a multi-hour plot (motors hold RUN current the whole time).
+ * With R_SENSE unverified the true coil current may already exceed the requested
+ * figure, so the lower setpoint is the safe default. HOLD stays at 200 mA — a
+ * hanging V-plotter needs holding torque so the gondola doesn't slip when idle. */
+#define TEST_RUN_MA      400.0f   /* run current */
 #define TEST_HOLD_MA     200.0f   /* standstill current */
 #define TEST_VMAX        200000   /* speed (microsteps/t) */
 #define TEST_AMPLITUDE   51200    /* travel (microsteps; 200 full-steps * 256 ustep = 1 rev) */

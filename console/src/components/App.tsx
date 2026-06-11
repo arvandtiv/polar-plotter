@@ -8,6 +8,8 @@ import {
   type Stroke,
   type PenState,
   type LogEntry,
+  type PlotterStatus,
+  type JobEntry,
   DEFAULTS,
 } from '../hooks/usePlotter';
 
@@ -15,23 +17,41 @@ import {
 //  Primitives
 // ================================================================
 
-function Card({ title, icon, accent = '#38bdf8', right, children, className = '' }: {
+function Card({ title, icon, accent = '#0284c7', right, children, className = '',
+  collapsible = false, defaultCollapsed = false, collapsed: collapsedProp, onToggle }: {
   title?: string; icon?: string; accent?: string; right?: React.ReactNode;
   children: React.ReactNode; className?: string;
+  collapsible?: boolean; defaultCollapsed?: boolean;
+  collapsed?: boolean; onToggle?: () => void;
 }) {
   const isFlexCol = className.includes('flex-col');
+  const [collapsedState, setCollapsedState] = useState(defaultCollapsed);
+  const controlled = collapsedProp !== undefined;
+  const collapsed = controlled ? collapsedProp : collapsedState;
+  const toggle = controlled ? onToggle : () => setCollapsedState((c) => !c);
+  const isCollapsed = collapsible && collapsed;
   return (
-    <section className={`rounded-xl border border-ink-750 bg-ink-900/70 ${className}`}>
+    <section className={`rounded-xl border border-ink-750 bg-ink-900 shadow-card ${isCollapsed ? '!flex-none' : ''} ${className}`}>
       {title && (
         <header className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800 shrink-0">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={collapsible ? toggle : undefined}
+            disabled={!collapsible}
+            className={`flex items-center gap-2 -mx-1 px-1 rounded ${collapsible ? 'cursor-pointer hover:text-ink-200' : 'cursor-default'}`}
+          >
+            {collapsible && (
+              <span className={`text-ink-600 text-[10px] transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
+            )}
             {icon && <span style={{ color: accent }} className="text-[13px]">{icon}</span>}
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
-          </div>
+          </button>
           {right}
         </header>
       )}
-      <div className={`p-4 ${isFlexCol ? 'flex flex-col flex-1 min-h-0' : ''}`}>{children}</div>
+      {!isCollapsed && (
+        <div className={`p-4 ${isFlexCol ? 'flex flex-col flex-1 min-h-0' : ''}`}>{children}</div>
+      )}
     </section>
   );
 }
@@ -81,7 +101,7 @@ function StatusChip({ connected }: { connected: boolean }) {
   );
 }
 
-function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, def, accent = '#38bdf8' }: {
+function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, def, accent = '#0284c7' }: {
   label: string; value: number; onInput: (v: number) => void; onCommit: (v: number) => void;
   min: number; max: number; step: number; unit: string; def: number; accent?: string;
 }) {
@@ -106,7 +126,7 @@ function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, de
           onMouseUp={(e) => onCommit(parseFloat((e.target as HTMLInputElement).value))}
           onTouchEnd={(e) => onCommit(parseFloat((e.target as HTMLInputElement).value))}
           className="flex-1"
-          style={{ '--thumb': accent, '--track': `linear-gradient(90deg, ${accent} ${pct}%, #2a3845 ${pct}%)` } as React.CSSProperties}
+          style={{ '--thumb': accent, '--track': `linear-gradient(90deg, ${accent} ${pct}%, #cbd5e1 ${pct}%)` } as React.CSSProperties}
         />
         <button onClick={() => { onInput(def); onCommit(def); }}
           className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-mono transition-colors ${isDefault ? 'text-ink-600' : 'text-ink-400 hover:text-cyanx hover:bg-ink-800'}`}
@@ -219,12 +239,22 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
     <div className="relative w-full overflow-hidden rounded-lg border border-ink-800 bg-ink-950">
       <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full"
         style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block' }} preserveAspectRatio="xMidYMid meet">
-        <rect x={-left} y={py(up)} width={left + right} height={up + down}
-          fill="#0e1318" stroke="#2a3845" strokeWidth={sw * 1.5} rx={sw} />
-        {gx.map((x) => <line key={`gx${x}`} x1={x} y1={py(up)} x2={x} y2={py(-down)} stroke="#172029" strokeWidth={sw * 0.6} />)}
-        {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={py(y)} x2={right} y2={py(y)} stroke="#172029" strokeWidth={sw * 0.6} />)}
-        <line x1={-left} y1={0} x2={right} y2={0} stroke="#2f4150" strokeWidth={sw} />
-        <line x1={0} y1={py(up)} x2={0} y2={py(-down)} stroke="#2f4150" strokeWidth={sw} />
+        {bounds.shape === 'ellipse' ? (
+          <>
+            {/* faint bounding box (what the inputs edit) + the actual drawable ellipse */}
+            <rect x={-left} y={py(up)} width={left + right} height={up + down}
+              fill="none" stroke="#dce3ec" strokeWidth={sw} strokeDasharray={`${sw * 3} ${sw * 2}`} />
+            <ellipse cx={(right - left) / 2} cy={(down - up) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
+              fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} />
+          </>
+        ) : (
+          <rect x={-left} y={py(up)} width={left + right} height={up + down}
+            fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} rx={sw} />
+        )}
+        {gx.map((x) => <line key={`gx${x}`} x1={x} y1={py(up)} x2={x} y2={py(-down)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
+        {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={py(y)} x2={right} y2={py(y)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
+        <line x1={-left} y1={0} x2={right} y2={0} stroke="#cbd5e1" strokeWidth={sw} />
+        <line x1={0} y1={py(up)} x2={0} y2={py(-down)} stroke="#cbd5e1" strokeWidth={sw} />
         {paths.map((pa, i) => (
           <polyline key={i} points={toPoly(pa.points)} fill="none" stroke={pa.color}
             strokeWidth={sw * 1.4} strokeLinejoin="round" strokeLinecap="round" opacity="0.92" />
@@ -233,12 +263,12 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
           <polyline points={toPoly(activePath.points)} fill="none" stroke={activePath.color}
             strokeWidth={sw * 1.8} strokeLinejoin="round" strokeLinecap="round" />
         )}
-        <circle cx={0} cy={0} r={sw * 3} fill="none" stroke="#3a4c5c" strokeWidth={sw} />
+        <circle cx={0} cy={0} r={sw * 3} fill="none" stroke="#94a3b8" strokeWidth={sw} />
         <g>
-          {moving && <circle cx={pen.x} cy={py(pen.y)} r={sw * 9} fill={pen.down ? '#34d399' : '#38bdf8'} opacity="0.18" />}
-          <circle cx={pen.x} cy={py(pen.y)} r={sw * 4.5} fill={pen.down ? '#34d399' : 'none'}
-            stroke={pen.down ? '#34d399' : '#38bdf8'} strokeWidth={sw * 1.6} />
-          <circle cx={pen.x} cy={py(pen.y)} r={sw * 1.2} fill={pen.down ? '#0a0d11' : '#38bdf8'} />
+          {moving && <circle cx={pen.x} cy={py(pen.y)} r={sw * 9} fill={pen.down ? '#059669' : '#0284c7'} opacity="0.18" />}
+          <circle cx={pen.x} cy={py(pen.y)} r={sw * 4.5} fill={pen.down ? '#059669' : 'none'}
+            stroke={pen.down ? '#059669' : '#0284c7'} strokeWidth={sw * 1.6} />
+          <circle cx={pen.x} cy={py(pen.y)} r={sw * 1.2} fill={pen.down ? '#ffffff' : '#0284c7'} />
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 font-mono text-[10px] text-ink-600">
@@ -259,6 +289,15 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
 // an explicit "Apply bounds" button instead of updating on every keystroke.
 // The previous keystroke-driven approach caused the canvas to repaint and the
 // firmware to receive a new /api/bounds on every character typed ("too noisy").
+// Work-area presets: X is fixed at ±240mm; Y grows through 5 sizes.
+const BOUNDS_PRESETS = [
+  { label: '±100', up: 100, down: 100, left: 240, right: 240 },
+  { label: '±200', up: 200, down: 200, left: 240, right: 240 },
+  { label: '±300', up: 300, down: 300, left: 240, right: 240 },
+  { label: '±350', up: 350, down: 350, left: 240, right: 240 },
+  { label: '±400', up: 400, down: 400, left: 240, right: 240 },
+] as const;
+
 function BoundsControl({ bounds, setBounds, commitBounds }: {
   bounds: PlotterBounds;
   setBounds: (b: PlotterBounds | ((p: PlotterBounds) => PlotterBounds)) => void;
@@ -271,20 +310,36 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
     right: useRef<HTMLInputElement>(null),
   };
 
+  const [shape, setShape] = useState<'rect' | 'ellipse'>(bounds.shape);
   const parse = (s: string | undefined) => Math.max(0, parseFloat(s ?? '0') || 0);
 
-  const apply = () => {
-    const nb = {
+  const apply = (shapeOverride?: 'rect' | 'ellipse') => {
+    const nb: PlotterBounds = {
       up:    parse(refs.up.current?.value),
       down:  parse(refs.down.current?.value),
       left:  parse(refs.left.current?.value),
       right: parse(refs.right.current?.value),
+      shape: shapeOverride ?? shape,
     };
     setBounds(nb);
     commitBounds(nb);
   };
 
+  const applyPreset = (p: typeof BOUNDS_PRESETS[number]) => {
+    if (refs.up.current)    refs.up.current.value    = String(p.up);
+    if (refs.down.current)  refs.down.current.value  = String(p.down);
+    if (refs.left.current)  refs.left.current.value  = String(p.left);
+    if (refs.right.current) refs.right.current.value = String(p.right);
+    const nb: PlotterBounds = { up: p.up, down: p.down, left: p.left, right: p.right, shape };
+    setBounds(nb);
+    commitBounds(nb);
+  };
+
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') apply(); };
+
+  // Switching shape applies immediately (and re-sends bounds) so the canvas + firmware
+  // update without needing a second "Apply" click.
+  const pickShape = (s: 'rect' | 'ellipse') => { setShape(s); apply(s); };
 
   const row = (ref: React.RefObject<HTMLInputElement>, label: string, init: number) => (
     <div className="flex items-center gap-2">
@@ -301,11 +356,51 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
 
   return (
     <div className="space-y-3">
+      {/* ---- Presets: Y grows, X stays ±240 ---- */}
+      <div>
+        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+          Presets — X ±240 mm, Y grows
+        </span>
+        <div className="flex gap-1">
+          {BOUNDS_PRESETS.map((p) => {
+            const active = bounds.up === p.up && bounds.down === p.down
+                        && bounds.left === p.left && bounds.right === p.right;
+            return (
+              <button key={p.label} onClick={() => applyPreset(p)}
+                className={`flex-1 rounded-md py-1.5 text-[11px] font-mono font-semibold transition-colors
+                  ${active
+                    ? 'bg-cyanx text-white'
+                    : 'bg-ink-850 border border-ink-700 text-ink-400 hover:border-cyanx/40 hover:text-cyanx'}`}>
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {row(refs.up,    'Up  (+Y)',   bounds.up)}
       {row(refs.down,  'Down (−Y)',  bounds.down)}
       {row(refs.left,  'Left  (−X)', bounds.left)}
       {row(refs.right, 'Right (+X)', bounds.right)}
-      <button onClick={apply}
+
+      <div>
+        <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-ink-500">Shape</span>
+        <div className="flex gap-0.5 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+          {([['rect', '▭ Rectangle'], ['ellipse', '⬭ Ellipse']] as ['rect' | 'ellipse', string][]).map(([s, lbl]) => (
+            <button key={s} onClick={() => pickShape(s)}
+              className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${shape === s ? 'bg-ink-700 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        {shape === 'ellipse' && (
+          <p className="mt-1.5 text-[11px] leading-relaxed text-ink-500">
+            Drawable area = the ellipse inscribed in the box: full height at center X, tapering to nothing at the X edges.
+          </p>
+        )}
+      </div>
+
+      <button onClick={() => apply()}
         className="w-full rounded-lg bg-cyanx/10 border border-cyanx/30 px-4 py-2 text-[13px] font-semibold text-cyanx hover:bg-cyanx/20 transition-colors">
         Apply bounds
       </button>
@@ -392,16 +487,106 @@ function IpInput({ ip, onSave }: { ip: string; onSave: (v: string) => void }) {
 }
 
 // ================================================================
+//  Autonomous (AI) tab — driver health, job progress, errors
+// ================================================================
+
+function DriverBanner({ status, onClearFault }: { status: PlotterStatus | null; onClearFault: () => void }) {
+  const fault = status ? !status.drvOk : false;
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${fault ? 'border-stop/60 bg-stop/10' : 'border-go/40 bg-go/[0.06]'}`}>
+      <span className="relative flex h-3 w-3 shrink-0">
+        {fault && <span className="absolute inline-flex h-full w-full rounded-full bg-stop opacity-70 blink" />}
+        <span className={`relative inline-flex h-3 w-3 rounded-full ${status == null ? 'bg-ink-600' : fault ? 'bg-stop' : 'bg-go'}`} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className={`text-[12px] font-semibold uppercase tracking-wider ${status == null ? 'text-ink-500' : fault ? 'text-stop' : 'text-go'}`}>
+          {status == null ? 'Driver — no data' : fault ? 'Driver fault' : 'Driver healthy'}
+        </div>
+        {fault && <div className="font-mono text-[12.5px] text-ink-200 break-words">{status?.drvFlags}</div>}
+      </div>
+      {fault && (
+        <button onClick={onClearFault}
+          className="shrink-0 rounded-lg border border-stop/50 bg-stop/15 px-3 py-1.5 text-[12px] font-semibold text-stop hover:bg-stop/25 transition-colors active:scale-[.97]">
+          Clear fault
+        </button>
+      )}
+    </div>
+  );
+}
+
+function JobProgress({ status }: { status: PlotterStatus | null }) {
+  if (!status) return <p className="text-[12px] text-ink-500">Waiting for plotter status…</p>;
+  const { enqueued, done, pending, idle, aborting, job } = status;
+  const pct = enqueued > 0 ? Math.round((done / enqueued) * 100) : 0;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className={`font-mono text-[12px] ${aborting ? 'text-stop' : idle ? 'text-ink-500' : 'text-warn'}`}>
+          {aborting ? '■ aborting' : idle ? '○ idle' : '● running'}
+        </span>
+        <span className="font-mono text-[12px] text-ink-400">{done}/{enqueued} done · {pending} pending</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-ink-850">
+        <div className={`h-full transition-all ${aborting ? 'bg-stop' : 'bg-go'}`} style={{ width: `${pct}%` }} />
+      </div>
+      {!idle && job && <div className="font-mono text-[12px] text-ink-300">current: <span className="text-cyanx">{job}</span></div>}
+    </div>
+  );
+}
+
+function JobList({ jobs }: { jobs: JobEntry[] }) {
+  if (!jobs.length) return <p className="text-[12px] text-ink-500">No jobs yet. Queue work from the MCP or the Draw tab.</p>;
+  const dot = (s: JobEntry['state']) => (s === 'done' ? '✓' : s === 'doing' ? '▶' : '○');
+  const cls = (s: JobEntry['state']) => (s === 'done' ? 'text-go' : s === 'doing' ? 'text-warn' : 'text-ink-600');
+  return (
+    <div className="max-h-48 space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
+      {jobs.map((j) => (
+        <div key={j.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
+          <span className={`${cls(j.state)} ${j.state === 'doing' ? 'blink' : ''}`}>{dot(j.state)}</span>
+          <span className="w-9 shrink-0 tabular-nums text-ink-700">#{j.id}</span>
+          <span className={`flex-1 truncate ${j.state === 'pending' ? 'text-ink-500' : 'text-ink-200'}`}>
+            {j.label || (j.state === 'pending' ? 'pending…' : '—')}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Separate "errors window": the SSE log filtered to faults/errors only. Driver
+// faults arrive as warn lines ("!! DRIVER FAULT …"); command/network failures as err.
+function ErrorsPanel({ log }: { log: LogEntry[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const errs = log.filter((l) => l.kind === 'err' || l.kind === 'warn');
+  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [errs.length]);
+  const fmtTime = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
+  return (
+    <div ref={ref} className="h-48 overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
+      {errs.length === 0 ? (
+        <div className="text-ink-600">No errors. Driver faults and command errors will appear here.</div>
+      ) : (
+        errs.map((l) => (
+          <div key={l.id} className={`flex gap-2.5 ${l.kind === 'err' ? 'text-stop' : 'text-warn'}`}>
+            <span className="shrink-0 tabular-nums text-ink-700" suppressHydrationWarning>{fmtTime(l.t)}</span>
+            <span className="whitespace-pre-wrap break-all">{l.text}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ================================================================
 //  Main App
 // ================================================================
 
-type Tab = 'draw' | 'jog' | 'area' | 'calib';
+type Tab = 'draw' | 'jog' | 'area' | 'calib' | 'ai';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
 export default function App() {
   const P = usePlotter();
-  const { pen, moving, connected, motion, bounds, paths, activePath, queue, log } = P;
+  const { pen, moving, connected, motion, bounds, paths, activePath, queue, log, status, jobs } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
@@ -449,7 +634,7 @@ export default function App() {
 
           {/* ====== LEFT: machine state ====== */}
           <div className="space-y-4 overflow-y-auto">
-            <Card title="Position" icon="◎" accent="#38bdf8" right={
+            <Card title="Position" icon="◎" accent="#0284c7" right={
               <div className="flex items-center gap-3 font-mono text-[12px]">
                 <span className={moving ? 'text-warn' : 'text-ink-500'}>{moving ? '● MOVING' : '○ idle'}</span>
                 <span className={pen.down ? 'text-go' : 'text-ink-500'}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
@@ -472,41 +657,44 @@ export default function App() {
             </Card>
 
             {/* Motion */}
-            <Card title="Motion" icon="⚡" accent="#fbbf24">
+            <Card title="Motion" icon="⚡" accent="#d97706" collapsible>
               <div className="space-y-5">
-                <ParamSlider label="Speed" unit="µstep/t" value={motion.vmax} min={10000} max={400000} step={5000} def={DEFAULTS.motion.vmax} accent="#38bdf8"
+                <ParamSlider label="Speed" unit="µstep/t" value={motion.vmax} min={10000} max={400000} step={5000} def={DEFAULTS.motion.vmax} accent="#0284c7"
                   onInput={(v) => P.setMotion('vmax', v)} onCommit={(v) => { P.setMotion('vmax', v); P.commitMotion('vmax', v); }} />
-                <ParamSlider label="Acceleration" unit="AMAX=DMAX" value={motion.amax} min={50} max={2000} step={10} def={DEFAULTS.motion.amax} accent="#34d399"
+                <ParamSlider label="Acceleration" unit="AMAX=DMAX" value={motion.amax} min={50} max={2000} step={10} def={DEFAULTS.motion.amax} accent="#059669"
                   onInput={(v) => P.setMotion('amax', v)} onCommit={(v) => { P.setMotion('amax', v); P.commitMotion('amax', v); }} />
                 <div className="h-px bg-ink-800" />
-                <ParamSlider label="Run current" unit="mA" value={motion.run} min={100} max={1200} step={20} def={DEFAULTS.motion.run} accent="#fbbf24"
+                <ParamSlider label="Run current" unit="mA" value={motion.run} min={100} max={1200} step={20} def={DEFAULTS.motion.run} accent="#d97706"
                   onInput={(v) => P.setMotion('run', v)} onCommit={(v) => { P.setMotion('run', v); P.commitMotion('run', v); }} />
-                <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={0} max={800} step={20} def={DEFAULTS.motion.hold} accent="#fb923c"
+                <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={0} max={800} step={20} def={DEFAULTS.motion.hold} accent="#ea580c"
                   onInput={(v) => P.setMotion('hold', v)} onCommit={(v) => { P.setMotion('hold', v); P.commitMotion('hold', v); }} />
               </div>
             </Card>
           </div>
 
           {/* ====== RIGHT: controls ======
-               Uses CSS Grid with explicit row tracks instead of flexbox.
-               Flexbox children don't shrink below their content height, so
-               the log card would overflow the viewport. With grid + minmax(0,1fr)
-               both inner rows get equal height and DO shrink — the log always
-               fills exactly the bottom half of the available space. */}
-          <div className="grid gap-4 h-full min-h-0" style={{ gridTemplateRows: 'auto minmax(0,1fr) minmax(0,1fr)' }}>
-            {/* Tab bar — row 1 */}
-            <div className="flex gap-1 rounded-xl border border-ink-750 bg-ink-900/70 p-1">
-              {([['draw','Draw'],['jog','Move'],['area','Work Area'],['calib','Calibrate']] as [Tab,string][]).map(([id, lbl]) => (
+               Single top-aligned scroll column. The tab bar pins to the top;
+               below it the active tab's method cards flow and the Log card sits
+               directly after them (no bottom gap). The scroll region is flex-col
+               so the Log can flex-1 to absorb any leftover height when the method
+               cards are short, while keeping a usable min height and scrolling
+               the whole region when content overflows. */}
+          <div className="flex flex-col gap-4 h-full min-h-0">
+            {/* Tab bar */}
+            <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
+              {([['draw','Draw'],['jog','Move'],['area','Work Area'],['calib','Calibrate'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors ${tab === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
               ))}
             </div>
 
-            {/* Tab panels — row 2, scrolls internally */}
-            <div className="overflow-y-auto space-y-4 min-h-0">
+            {/* Methods + Log scroll region (flows top→bottom) */}
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+            {/* Tab panels */}
+            <div className="space-y-4">
             {/* ---- Move tab ---- */}
             {tab === 'jog' && (
-              <Card title="Move to point" icon="↗" accent="#38bdf8">
+              <Card title="Move to point" icon="↗" accent="#0284c7">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                   <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
                   <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
@@ -527,7 +715,7 @@ export default function App() {
             {/* ---- Draw tab ---- */}
             {tab === 'draw' && (
               <>
-                <Card title="Circle" icon="○" accent="#38bdf8"
+                <Card title="Circle" icon="○" accent="#0284c7" collapsible
                   right={<Btn variant="go" onClick={() => P.enqueue({ type: 'circle', ...circle })}>Draw ○</Btn>}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <FieldInline label="Center X" unit="mm" value={circle.cx} onChange={fc('cx') as (v: number) => void} />
@@ -543,7 +731,7 @@ export default function App() {
                   </div>
                 </Card>
 
-                <Card title="Square" icon="□" accent="#34d399"
+                <Card title="Square" icon="□" accent="#059669" collapsible
                   right={<Btn variant="go" onClick={() => P.enqueue({ type: 'square', ...square })}>Draw □</Btn>}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <FieldInline label="Center X" unit="mm" value={square.cx} onChange={fs('cx') as (v: number) => void} />
@@ -559,7 +747,7 @@ export default function App() {
                   </div>
                 </Card>
 
-                <Card title="Line" icon="／" accent="#fbbf24"
+                <Card title="Line" icon="／" accent="#d97706" collapsible
                   right={<Btn variant="go" onClick={() => P.enqueue({ type: 'line', ...lineF })}>Draw ／</Btn>}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <FieldInline label="X0" unit="mm" value={lineF.x0} onChange={fl('x0') as (v: number) => void} />
@@ -572,7 +760,7 @@ export default function App() {
                   </div>
                 </Card>
 
-                <Card title="Wobbly" icon="∿" accent="#a78bfa"
+                <Card title="Wobbly" icon="∿" accent="#7c3aed" collapsible
                   right={<Btn variant="go" onClick={() => P.enqueue({ type: 'wobbly', ...wobbly })}>Draw ∿</Btn>}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <FieldInline label="Center X" unit="mm" value={wobbly.cx} onChange={fw('cx') as (v: number) => void} />
@@ -602,7 +790,7 @@ export default function App() {
 
             {/* ---- Work Area tab ---- */}
             {tab === 'area' && (
-              <Card title="Work area boundaries" icon="⛶" accent="#a78bfa">
+              <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
                 <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
                   Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
                   Updates the canvas and sends to firmware.
@@ -616,32 +804,75 @@ export default function App() {
 
             {/* ---- Calibrate tab ---- */}
             {tab === 'calib' && (
-              <Card title="Calibration" icon="✛" accent="#f472b6">
+              <Card title="Calibration" icon="✛" accent="#db2777" collapsible>
+                {/* Limit path: walk the active work-area boundary once (pen down) so you
+                    can compare the firmware's reachable edge against the physical machine. */}
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Limit path</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Btn variant="go" onClick={() => P.enqueue({ type: 'border', ...bounds })}>
+                    ⬡ Walk limits ({bounds.shape === 'ellipse' ? 'ellipse' : 'rect'})
+                  </Btn>
+                  <span className="font-mono text-[11px] text-ink-500">
+                    {bounds.left + bounds.right}×{bounds.up + bounds.down} mm
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
+                  Traces the boundary set under <span className="text-ink-300">Work Area</span>. Walk it once,
+                  then hatch with Grid on top if you want to verify the whole area — both can run pen-down.
+                </p>
+
+                <div className="my-4 h-px bg-ink-800" />
+
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Center patterns</p>
                 <div className="grid grid-cols-2 gap-3">
                   <FieldInline label="Center X" unit="mm" value={calib.cx} onChange={fca('cx') as (v: number) => void} />
                   <FieldInline label="Center Y" unit="mm" value={calib.cy} onChange={fca('cy') as (v: number) => void} />
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Btn variant="primary" onClick={() => P.enqueue({ type: 'bullseye', ...calib })}>◎ Bullseye</Btn>
                   <Btn variant="primary" onClick={() => P.enqueue({ type: 'grid', ...calib })}>▦ Grid</Btn>
                 </div>
-                <p className="mt-3 text-[12px] leading-relaxed text-ink-500">
-                  Verify work area maps to physical space, then adjust boundaries under{' '}
-                  <span className="text-ink-300">Work Area</span>.
-                </p>
               </Card>
             )}
 
-            </div>{/* end tab panels — row 2 */}
+            {/* ---- Autonomous tab ---- */}
+            {tab === 'ai' && (
+              <>
+                <Card title="Driver health" icon="❤" accent="#059669">
+                  <DriverBanner status={status} onClearFault={P.clearFault} />
+                  <p className="mt-3 text-[12px] leading-relaxed text-ink-500">
+                    The MCP halts the running job and pauses the script on a real TMC5072 fault
+                    (over-temp, coil short). Fix the cause, then <span className="text-ink-300">Clear fault</span> to resume.
+                  </p>
+                </Card>
 
-            {/* Log — row 3, fills to bottom */}
-            <Card title="Log" icon="❯" accent="#34d399" className="flex flex-col min-h-0"
+                <Card title="Job queue" icon="▦" accent="#0284c7" collapsible>
+                  <div className="space-y-4">
+                    <JobProgress status={status} />
+                    <div className="h-px bg-ink-800" />
+                    <JobList jobs={jobs} />
+                  </div>
+                </Card>
+
+                <Card title="Errors" icon="⚠" accent="#dc2626" collapsible>
+                  <ErrorsPanel log={log} />
+                </Card>
+              </>
+            )}
+
+            </div>{/* end tab panels */}
+
+            {/* Log — sits directly after the method cards, flex-1 to fill any
+                leftover height. Collapses to just its header. */}
+            <Card title="Log" icon="❯" accent="#059669" className="flex flex-col flex-1"
+              collapsible
               right={
                 <button onClick={() => P.pushLog('sys', '— cleared —')}
                   className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
               }>
-              <div className="flex-1 min-h-0"><LogView log={log} /></div>
+              <div className="flex-1 min-h-[12rem]"><LogView log={log} /></div>
             </Card>
+            </div>{/* end methods + log scroll region */}
           </div>
         </div>
         </div>
