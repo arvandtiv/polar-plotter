@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   usePlotter,
+  parseJsonScript,
+  type ParsedLine,
   type PlotterBounds,
   type MotionParams,
   type FillMode,
@@ -579,8 +581,131 @@ function ErrorsPanel({ log }: { log: LogEntry[] }) {
 // ================================================================
 //  Main App
 // ================================================================
+// ScriptTab — bulk CSV command entry
+// ================================================================
 
-type Tab = 'draw' | 'jog' | 'area' | 'calib' | 'ai';
+const SCRIPT_HINT = `[
+  { "type": "pen", "position": "up" },
+  { "type": "goto", "x": 0, "y": 0 },
+  { "type": "circle", "cx": 0, "cy": 0, "r": 80 },
+  { "type": "square", "cx": 0, "cy": 0, "size": 160, "fill_mode": 1 },
+  { "type": "line", "x0": -80, "y0": 0, "x1": 80, "y1": 0, "cycles": 2 },
+  { "type": "wobbly", "cx": 0, "cy": 50, "r": 60, "wobble": 0.4, "harmonics": 3 },
+  { "type": "truchet", "cx": 0, "cy": 0, "tile_size": 60, "depth": 2, "seed": 42 },
+  { "type": "speed", "vmax": 200000 },
+  { "type": "home" }
+]`;
+
+function ScriptTab({ sendRaw, pushLog }: {
+  sendRaw: (ep: string) => Promise<boolean>;
+  pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
+}) {
+  const [text, setText] = useState('');
+  const abortRef = useRef(false);
+  const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; errors: number; total: number }>({
+    status: 'idle', sent: 0, errors: 0, total: 0,
+  });
+
+  const parsed = useMemo(() => parseJsonScript(text), [text]);
+  const good   = parsed.filter(l => l.query);
+  const bad    = parsed.filter(l => l.error);
+
+  const start = useCallback(async () => {
+    if (!good.length) return;
+    abortRef.current = false;
+    setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
+    pushLog('cmd', `> script: queuing ${good.length} commands`);
+    let errors = 0;
+    for (let i = 0; i < good.length; i++) {
+      if (abortRef.current) break;
+      const ok = await sendRaw(good[i].query!);
+      if (!ok) errors++;
+      setRun(r => ({ ...r, sent: i + 1, errors }));
+    }
+    pushLog(errors === 0 ? 'ok' : 'warn', `[script] queued ${good.length} commands, ${errors} errors`);
+    setRun(r => ({ ...r, status: 'done' }));
+  }, [good, sendRaw, pushLog]);
+
+  const abort = useCallback(() => { abortRef.current = true; }, []);
+
+  const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
+
+  return (
+    <Card title="Script" icon="≡" accent="#0891b2">
+      <textarea
+        className="w-full h-56 resize-y rounded bg-ink-900 border border-ink-700 p-2 font-mono text-[12px] text-ink-300 placeholder-ink-600 focus:outline-none focus:border-cyan-600"
+        placeholder={SCRIPT_HINT}
+        value={text}
+        onChange={e => { setText(e.target.value); setRun(r => ({ ...r, status: 'idle' })); }}
+        spellCheck={false}
+        disabled={run.status === 'running'}
+      />
+
+      {/* parse summary */}
+      <div className="mt-2 flex items-center gap-3 text-[12px]">
+        <span className="text-ink-400">
+          {parsed.length === 0
+            ? <span className="text-ink-600">paste commands above</span>
+            : <><span className="text-ink-300 font-semibold">{good.length}</span> commands</>}
+          {bad.length > 0 && <span className="ml-2 text-red-400 font-semibold">· {bad.length} error{bad.length > 1 ? 's' : ''}</span>}
+        </span>
+        {text && (
+          <button className="ml-auto text-[11px] text-ink-600 hover:text-ink-400" onClick={() => { setText(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* parse errors (up to 5) */}
+      {bad.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {bad.slice(0, 5).map(l => (
+            <div key={l.idx} className="font-mono text-[11px] text-red-400">
+              {l.idx === -1 ? l.error : `item ${l.idx + 1}: ${l.error}`}
+            </div>
+          ))}
+          {bad.length > 5 && <div className="text-[11px] text-ink-600">…and {bad.length - 5} more</div>}
+        </div>
+      )}
+
+      {/* action row */}
+      <div className="mt-3 flex items-center gap-3">
+        {run.status !== 'running' ? (
+          <Btn variant="go" onClick={start} disabled={good.length === 0}>
+            Queue {good.length} cmd{good.length !== 1 ? 's' : ''} →
+          </Btn>
+        ) : (
+          <Btn variant="danger" onClick={abort}>Abort</Btn>
+        )}
+        {run.status === 'done' && (
+          <span className="text-[12px] text-ink-400">
+            Done — {run.sent - run.errors} ok{run.errors > 0 ? `, ${run.errors} failed` : ''}
+          </span>
+        )}
+      </div>
+
+      {/* progress bar */}
+      {run.status !== 'idle' && run.total > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-[11px] text-ink-500 mb-1">
+            <span>{run.status === 'running' ? 'Sending…' : 'Done'}</span>
+            <span>{run.sent} / {run.total}</span>
+          </div>
+          <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
+            <div
+              className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ================================================================
+
+type Tab = 'draw' | 'jog' | 'area' | 'calib' | 'ai' | 'script';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
@@ -592,8 +717,9 @@ export default function App() {
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [lineF, setLine]    = useState({ x0: 0, y0: 0, x1: 100, y1: 0, cycles: 1 });
-  const [wobbly, setWobbly] = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1 });
-  const [calib, setCalib]   = useState({ cx: 0, cy: 0 });
+  const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1 });
+  const [truchet, setTruchet]   = useState({ cx: 0, cy: 0, tileSize: 60, depth: 2, seed: 42 });
+  const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('draw');
 
   const fg = f(gotoF, setGoto);
@@ -601,6 +727,7 @@ export default function App() {
   const fs = f(square, setSquare);
   const fl = f(lineF, setLine);
   const fw = f(wobbly, setWobbly);
+  const ft = f(truchet, setTruchet);
   const fca = f(calib, setCalib);
 
   return (
@@ -682,7 +809,7 @@ export default function App() {
           <div className="flex flex-col gap-4 h-full min-h-0">
             {/* Tab bar */}
             <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
-              {([['draw','Draw'],['jog','Move'],['area','Work Area'],['calib','Calibrate'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
+              {([['draw','Draw'],['jog','Move'],['script','Script'],['area','Work Area'],['calib','Calibrate'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors ${tab === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
               ))}
@@ -785,8 +912,45 @@ export default function App() {
                     </div>
                   </div>
                 </Card>
+
+                {/* Truchet */}
+                <Card title="Truchet" icon="◔" accent="#0891b2" collapsible
+                  right={<Btn variant="go" onClick={() => P.enqueue({ type: 'truchet', ...truchet })}>Draw ◔</Btn>}>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <FieldInline label="Center X" unit="mm" value={truchet.cx} onChange={ft('cx') as (v: number) => void} />
+                    <FieldInline label="Center Y" unit="mm" value={truchet.cy} onChange={ft('cy') as (v: number) => void} />
+                    <FieldInline label="Tile size" unit="mm" value={truchet.tileSize} min={20} max={200} step={5}
+                      onChange={ft('tileSize') as (v: number) => void} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="mb-1 text-[11px] text-ink-500">Depth (0–4)</p>
+                      <div className="flex gap-1">
+                        {[0, 1, 2, 3, 4].map(d => (
+                          <button key={d} onClick={() => setTruchet(t => ({ ...t, depth: d }))}
+                            className={`flex-1 rounded py-1 text-xs font-mono transition-colors ${
+                              truchet.depth === d
+                                ? 'bg-cyan-600 text-white'
+                                : 'bg-ink-800 text-ink-400 hover:bg-ink-700'}`}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <FieldInline label="Seed" value={truchet.seed} min={0} max={99999} step={1}
+                      onChange={ft('seed') as (v: number) => void} />
+                    <div className="flex items-end">
+                      <p className="text-[11px] leading-relaxed text-ink-500">
+                        depth 0 = uniform grid<br/>depth 2–3 = fractal look
+                      </p>
+                    </div>
+                  </div>
+                </Card>
               </>
             )}
+
+            {/* ---- Script tab ---- */}
+            {tab === 'script' && <ScriptTab sendRaw={P.sendRaw} pushLog={P.pushLog} />}
 
             {/* ---- Work Area tab ---- */}
             {tab === 'area' && (

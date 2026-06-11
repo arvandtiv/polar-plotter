@@ -336,6 +336,20 @@ static esp_err_t handle_wobbly(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t handle_truchet(httpd_req_t *req)
+{
+    char qs[256]; get_qs(req, qs, sizeof(qs));
+    wcmd_t c = { .type = WCMD_TRUCHET };
+    c.p[0] = qf(qs, "cx",        0.0f);
+    c.p[1] = qf(qs, "cy",        0.0f);
+    c.p[2] = qf(qs, "tile_size", 60.0f);
+    c.p[3] = qf(qs, "depth",      2.0f);
+    c.p[4] = qf(qs, "seed",      42.0f);
+    if (c.p[2] < 20.0f) { resp_json(req, "error", "tile_size must be >= 20 mm"); return ESP_OK; }
+    resp_json_id(req, "ok", "truchet queued", enqueue(&c));
+    return ESP_OK;
+}
+
 static esp_err_t handle_sethome(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_SETHOME };
@@ -601,7 +615,7 @@ esp_err_t web_server_start(void)
 
     httpd_config_t cfg  = HTTPD_DEFAULT_CONFIG();
     cfg.max_open_sockets  = 7;    /* SSE connection + several API calls in flight */
-    cfg.max_uri_handlers  = 24;   /* default 8 — silently drops routes beyond the cap, so bump it */
+    cfg.max_uri_handlers  = 25;   /* default 8 — silently drops routes beyond the cap, so bump it */
     cfg.stack_size        = 8192;
     cfg.lru_purge_enable  = true;
 
@@ -625,6 +639,7 @@ esp_err_t web_server_start(void)
         { .uri = "/api/grid",     .method = HTTP_GET, .handler = handle_grid     },
         { .uri = "/api/border",   .method = HTTP_GET, .handler = handle_border   },
         { .uri = "/api/wobbly",   .method = HTTP_GET, .handler = handle_wobbly   },
+        { .uri = "/api/truchet",  .method = HTTP_GET, .handler = handle_truchet  },
         { .uri = "/api/sethome",  .method = HTTP_GET, .handler = handle_sethome  },
         { .uri = "/api/bounds",   .method = HTTP_GET, .handler = handle_bounds   },
         { .uri = "/api/speed",    .method = HTTP_GET, .handler = handle_speed    },

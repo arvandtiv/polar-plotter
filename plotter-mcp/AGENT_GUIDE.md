@@ -27,13 +27,13 @@ The drawable rectangle is set on the device (console `setbounds` / web UI). Call
 
 | Axis | Min | Max | Span |
 |------|-----|-----|------|
-| X    | −300 mm | +300 mm | 600 mm wide |
-| Y    | −600 mm | +400 mm | 1000 mm tall |
+| X    | −240 mm | +240 mm | 480 mm wide |
+| Y    | −200 mm | +200 mm | 400 mm tall |
 
 Rules:
 - **Keep a margin.** Aim to stay ~20 mm inside every edge. Belt geometry is least
   accurate near the very top (small/negative `y`, close to the anchors) — prefer the
-  middle band, roughly `y` from `-150` to `+300`.
+  middle band, roughly `y` from `-120` to `+150`.
 - A target outside the work area is **rejected** (the firmware returns an error and
   draws nothing). If a command comes back as an error, your shape was too big or
   off‑canvas — shrink it or move its center, don't retry blindly.
@@ -69,8 +69,10 @@ Rules:
 | `plot_circle` | Circle. `fill_mode` 0=outline, 1=hatch, 2=concentric rings. | `cx,cy,r, cycles, fill_mode, hatch_angle, spacing, outline` |
 | `plot_square` | Axis‑aligned square, same fill options as circle. | `cx,cy,size, cycles, fill_mode, hatch_angle, spacing, outline` |
 | `plot_wobbly` | Closed organic "blob" via a radial Fourier series — great for clouds, foliage, abstract forms. | `cx,cy,r, bound_r, wobble(0–1), harmonics(1–8), seed, cycles` |
+| `plot_truchet` | Multi-scale Truchet tiling (Carlson 2018): quarter-circle arcs over a recursive grid — intricate, fills large areas in one call. | `cx,cy, tile_size(≥20), depth(0–4), seed` |
 | `plot_bullseye` | Calibration crosshair + rings at a point. | `cx, cy` |
 | `plot_grid` | Calibration grid: 10×10 lines, 8 mm apart, 100 mm long (spans `cx±50, cy±50`). Checks straightness/squareness. | `cx, cy` |
+| `plot_border` | Trace the work-area boundary once (pen down). Draws exactly what the firmware thinks is the edge — useful for confirming the canvas limits before a plot. | — |
 
 ### Status & settings
 - `plot_status` — reports the **work-area bounds**, live pen position, and the job
@@ -85,20 +87,28 @@ Rules:
 
 ### Batch — your main tool
 `plot_script(commands[], stop_on_error=true)` runs an **ordered list** of command
-objects, one after another, waiting for each. This is how you paint. Each entry is
-`{ "type": "...", ...params }`. Supported `type`s:
-`goto, line, circle, square, wobbly, bullseye, grid, pen, home, sethome, stop,
-speed, accel, current`. Each step waits until the plotter physically finishes it
-before the next begins, and the script halts if any step errors (e.g. out of
-bounds) or an escape fires.
+objects, one after another, waiting for each. This is how you paint. `commands` is a
+JSON array — each element is `{ "type": "...", ...params }`. Supported `type`s:
+`goto, line, circle, square, wobbly, truchet, bullseye, grid, border, pen, home,
+sethome, stop, speed, accel, current`. Each step waits until the plotter physically
+finishes it before the next begins, and the script halts if any step errors (e.g.
+out of bounds) or an escape fires.
 
 ```json
-{ "type": "pen",    "position": "up" }
-{ "type": "goto",   "x": -50, "y": 0 }
-{ "type": "line",   "x0": -50, "y0": 0, "x1": 50, "y1": 0, "cycles": 2 }
-{ "type": "circle", "cx": 0, "cy": 100, "r": 60, "fill_mode": 2, "spacing": 4 }
-{ "type": "wobbly", "cx": -120, "cy": -80, "r": 50, "wobble": 0.5, "harmonics": 4, "seed": 7 }
+[
+  { "type": "pen",     "position": "up" },
+  { "type": "goto",    "x": -50, "y": 0 },
+  { "type": "line",    "x0": -50, "y0": 0, "x1": 50, "y1": 0, "cycles": 2 },
+  { "type": "circle",  "cx": 0, "cy": 100, "r": 60, "fill_mode": 2, "spacing": 4 },
+  { "type": "wobbly",  "cx": -120, "cy": -80, "r": 50, "wobble": 0.5, "harmonics": 4, "seed": 7 },
+  { "type": "truchet", "cx": 0, "cy": 0, "tile_size": 60, "depth": 2, "seed": 42 },
+  { "type": "home" }
+]
 ```
+
+> **Console Script tab interop.** The web console has a Script tab that accepts the
+> same JSON array pasted directly into a textarea and queues all commands in one go.
+> You can generate a script here, copy the array, and paste it there — or vice versa.
 
 ## 5. Pen discipline (the #1 source of mistakes)
 
@@ -124,11 +134,16 @@ bounds) or an escape fires.
 - **Fills:** `fill_mode 1` (hatch, set `hatch_angle`/`spacing`) for shading;
   `fill_mode 2` (concentric) for solid‑ish disks/rings. Wider `spacing` = faster,
   lighter; tighter = darker, slower.
-- **Scale to the canvas.** With ~600×1000 mm usable, keep individual features
+- **Scale to the canvas.** With ~480×400 mm usable, keep individual features
   ≥ 20–30 mm so they read clearly, and the whole composition within the margins.
 - **Use `plot_wobbly`** for anything organic; vary `seed` for different shapes,
   `harmonics` for complexity (1≈soft blob, 8≈jagged), `wobble` for how far from a
   circle.
+- **Use `plot_truchet`** to fill large areas with an intricate, self-similar tiling in
+  a single call — great for backgrounds, texture fills, or abstract pages. `depth 0` =
+  uniform flat grid; `depth 2–3` = Carlson-style multi-scale fractal look. Always
+  check that the work area is fully set up before calling it (it covers the whole
+  canvas). Change `seed` for a completely different pattern of the same character.
 
 ## 7. Caveats & gotchas
 
@@ -145,21 +160,22 @@ bounds) or an escape fires.
 
 ## 8. Worked example — a simple house
 
+Pass this array as `commands` to `plot_script` (or paste it into the console Script tab):
+
 ```json
-{
-  "commands": [
-    { "type": "pen",    "position": "up" },
-    { "type": "square", "cx": 0,  "cy": 120, "size": 160, "cycles": 2 },
-    { "type": "line",   "x0": -80, "y0": 40,  "x1": 0,  "y1": -30, "cycles": 2 },
-    { "type": "line",   "x0": 0,   "y0": -30, "x1": 80, "y1": 40,  "cycles": 2 },
-    { "type": "square", "cx": 0,   "cy": 150, "size": 40 },
-    { "type": "home" }
-  ]
-}
+[
+  { "type": "pen",    "position": "up" },
+  { "type": "square", "cx": 0,   "cy": 120, "size": 160, "cycles": 2 },
+  { "type": "line",   "x0": -80, "y0": 40,  "x1": 0,   "y1": -30, "cycles": 2 },
+  { "type": "line",   "x0": 0,   "y0": -30, "x1": 80,  "y1": 40,  "cycles": 2 },
+  { "type": "square", "cx": 0,   "cy": 150, "size": 40 },
+  { "type": "home" }
+]
 ```
+
 Walls are a square centered at `(0,120)`; the roof is two lines meeting at the apex
-`(0,-30)` (remember: smaller `y` = higher); a door is a small square near the bottom.
-`home` parks the gondola when finished.
+`(0,-30)` (remember: smaller `y` = higher on the wall); the door is a small square
+near the bottom. `home` parks the gondola when finished.
 
 ---
 
@@ -235,6 +251,37 @@ bound_r]`. Great for clouds, foliage, rocks, abstract blobs.
 
 Quick recipes: `wobble 0.2, harmonics 2` = soft pebble · `0.5, 4` = leaf/cloud ·
 `0.9, 7` = spiky burst. Change only `seed` to get a different shape of the same character.
+
+### `plot_truchet` — multi-scale Truchet tiling
+Covers the work area with a grid of `tile_size × tile_size` mm cells. Each cell either
+draws two quarter-circle arcs connecting edge midpoints (a Truchet tile), or recursively
+splits into four half-size cells — controlled by `depth` and a random coin flip (seeded
+by `seed`). The two arcs per tile connect opposite edge midpoints: one orientation links
+top↔left and bottom↔right; the other links top↔right and bottom↔left. Adjacent tiles
+share edge-midpoint endpoints, so arcs from neighbouring cells chain into flowing curves
+across the canvas.
+
+`depth 0` = flat uniform grid (50% chance of each orientation, no subdivision). Higher
+depth = more recursion → finer detail nested inside coarser cells (Carlson 2018 style).
+Minimum drawable tile size is 20 mm (set by firmware; `tile_size` below this is clamped).
+
+| Var | Type | Range | Default | Meaning |
+|-----|------|-------|---------|---------|
+| `cx,cy` | number | any | 0, 0 | Origin of the tiling grid (grid aligns to multiples of `tile_size` from this point). |
+| `tile_size` | number | ≥ 20 | 60 | Base cell size in mm. |
+| `depth` | int | 0–4 | 2 | Maximum subdivision depth. 0 = flat; 2–3 = visually fractal. |
+| `seed` | int | ≥ 0 | 42 | Random seed. Same seed + same params = identical pattern. |
+
+Quick recipes: `tile_size 80, depth 0` = simple uniform Truchet · `tile_size 60, depth 2`
+= standard multi-scale · `tile_size 40, depth 3, seed 7` = very dense fractal page-fill.
+
+### `plot_border` — trace the work-area boundary
+Draws the work-area limit path exactly once, pen down. Follows whatever the firmware
+currently has set as the active shape (rectangle edges, or the inscribed-ellipse
+perimeter). Use it to confirm the firmware's idea of the canvas edges before committing
+to a full plot — if the border lands where you expect on the paper, the bounds are right.
+
+No parameters.
 
 ### `plot_bullseye` — calibration target
 Crosshair + concentric rings at a point. Use to check that a commanded coordinate

@@ -130,6 +130,8 @@ static void do_draw_grid(float cx, float cy);
 /* wobble: 0.0 = perfect circle … 1.0 = very distorted; harmonics controls shape complexity */
 static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
                             float wobble, int harmonics, int seed, int cycles);
+/* Multi-scale Truchet tiling: cx/cy=grid centre, tile_size=base cell mm, depth=subdivision levels */
+static void do_draw_truchet(float cx, float cy, float tile_size, int depth, int seed);
 
 static void init_geometry(void)
 {
@@ -1141,6 +1143,117 @@ static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
 #undef WOBBLY_MAX_PTS
 }
 
+/* ---- Truchet multi-scale tiling ------------------------------------------ */
+
+/* Draw a partial circular arc; pen must already be down.
+ * Center (cx,cy), radius r, sweeps from start_deg to end_deg (degrees CW in
+ * Y-down frame). Uses the same chord-rotation trick as do_draw_circle: the
+ * segment count from plt_arc_segments() keeps the sagitta within
+ * CIRCLE_CHORD_ERR_MM, and each chord is a single fast coordinated move. */
+static void draw_arc_steps(float cx, float cy, float r,
+                            float start_deg, float end_deg)
+{
+    float span = end_deg - start_deg;
+    int n_full = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    int n = (int)ceilf(fabsf(span) / 360.0f * (float)n_full);
+    if (n < 3) n = 3;
+
+    float dth = span / (float)n * PLT_PI / 180.0f;
+    float dc = cosf(dth), ds = sinf(dth);
+    float vx = r * cosf(start_deg * PLT_PI / 180.0f);
+    float vy = r * sinf(start_deg * PLT_PI / 180.0f);
+
+    for (int k = 0; k < n && !g_job_abort; k++) {
+        float nvx = vx * dc - vy * ds;
+        float nvy = vx * ds + vy * dc;
+        vx = nvx; vy = nvy;
+        move_to_xy(cx + vx, cy + vy);
+    }
+    /* Snap exactly to the declared endpoint to kill float accumulation. */
+    if (!g_job_abort)
+        move_to_xy(cx + r * cosf(end_deg * PLT_PI / 180.0f),
+                   cy + r * sinf(end_deg * PLT_PI / 180.0f));
+}
+
+/* Draw one Truchet tile at (x0,y0) side sz: two quarter-circle arcs whose
+ * chord endpoints sit at edge midpoints, so arcs join seamlessly at tile
+ * boundaries.
+ *
+ * In Y-down coordinates (0°=right, 90°=down):
+ *   type A: TL corner (0°→90°)  + BR corner (180°→270°)  top↔left, bottom↔right
+ *   type B: TR corner (90°→180°) + BL corner (270°→360°)  right↔top, left↔bottom  */
+static void draw_truchet_tile(float x0, float y0, float sz, bool type_b)
+{
+    if (g_job_abort) return;
+    float r = sz * 0.5f;
+    struct { float cx, cy, a0, a1; } arcs[2];
+
+    if (!type_b) {
+        arcs[0].cx = x0;      arcs[0].cy = y0;      arcs[0].a0 =   0.f; arcs[0].a1 =  90.f;
+        arcs[1].cx = x0 + sz; arcs[1].cy = y0 + sz; arcs[1].a0 = 180.f; arcs[1].a1 = 270.f;
+    } else {
+        arcs[0].cx = x0 + sz; arcs[0].cy = y0;      arcs[0].a0 =  90.f; arcs[0].a1 = 180.f;
+        arcs[1].cx = x0;      arcs[1].cy = y0 + sz; arcs[1].a0 = 270.f; arcs[1].a1 = 360.f;
+    }
+    for (int i = 0; i < 2 && !g_job_abort; i++) {
+        float sx = arcs[i].cx + r * cosf(arcs[i].a0 * PLT_PI / 180.0f);
+        float sy = arcs[i].cy + r * sinf(arcs[i].a0 * PLT_PI / 180.0f);
+        pen_lift();
+        move_to_xy(sx, sy);
+        pen_drop();
+        draw_arc_steps(arcs[i].cx, arcs[i].cy, r, arcs[i].a0, arcs[i].a1);
+    }
+}
+
+/* Minimum tile side below which we stop subdividing (pen can't draw cleanly
+ * below ~20mm arcs on this machine). */
+#define TRUCHET_MIN_TILE_MM  20.0f
+
+/* Recursively tile one cell: draw a tile OR split into four sub-cells.
+ * At depth=0 always draws; at depth>0 each cell independently flips a coin
+ * (50 % chance of subdivision, provided the half-size is still drawable). */
+static void truchet_cell(float x0, float y0, float sz, int depth)
+{
+    if (g_job_abort) return;
+    bool subdivide = (depth > 0) && (sz * 0.5f >= TRUCHET_MIN_TILE_MM) && (rand() & 1);
+    if (!subdivide) {
+        draw_truchet_tile(x0, y0, sz, (bool)(rand() & 1));
+    } else {
+        float h = sz * 0.5f;
+        truchet_cell(x0,     y0,     h, depth - 1);
+        truchet_cell(x0 + h, y0,     h, depth - 1);
+        truchet_cell(x0,     y0 + h, h, depth - 1);
+        truchet_cell(x0 + h, y0 + h, h, depth - 1);
+    }
+}
+
+/* Multi-scale Truchet: cover the work area with tile_size×tile_size cells;
+ * each cell may independently subdivide up to `depth` times (Carlson 2018).
+ * Grid is centred at (cx, cy). Same seed → same pattern. */
+static void do_draw_truchet(float cx, float cy, float tile_size, int depth, int seed)
+{
+    if (tile_size < TRUCHET_MIN_TILE_MM) tile_size = TRUCHET_MIN_TILE_MM;
+    if (depth < 0) depth = 0;
+    if (depth > 4) depth = 4;
+
+    tmc5072_enable(&tmc, true);
+    srand((unsigned)seed);
+
+    int cols = (int)((g_x_max - g_x_min) / tile_size);
+    int rows = (int)((g_y_max - g_y_min) / tile_size);
+    if (cols < 1) cols = 1;
+    if (rows < 1) rows = 1;
+    float gx = cx - (float)cols * tile_size * 0.5f;
+    float gy = cy - (float)rows * tile_size * 0.5f;
+
+    for (int ri = 0; ri < rows && !g_job_abort; ri++)
+        for (int ci = 0; ci < cols && !g_job_abort; ci++)
+            truchet_cell(gx + ci * tile_size, gy + ri * tile_size, tile_size, depth);
+
+    pen_lift();
+    emit_pos_event();
+}
+
 /* ---- console command wrappers (thin: parse + print, then call do_draw_*) ---- */
 
 static int cmd_square(int argc, char **argv)
@@ -1267,6 +1380,7 @@ static const char *wcmd_name(wcmd_type_t t)
         case WCMD_ACCEL:    return "accel";
         case WCMD_CURRENT:  return "current";
         case WCMD_WOBBLY:   return "wobbly";
+        case WCMD_TRUCHET:  return "truchet";
         default:            return "?";
     }
 }
@@ -1385,6 +1499,14 @@ static void web_draw_task(void *arg)
                                cmd.p[4], (int)cmd.p[5], (int)cmd.p[6], (int)cmd.p[7]);
                 emit_pos_event();
                 web_log("wobbly done");
+                break;
+            case WCMD_TRUCHET:
+                web_log("truchet (%.1f,%.1f) tile=%.0f depth=%d seed=%d",
+                        (double)cmd.p[0], (double)cmd.p[1],
+                        (double)cmd.p[2], (int)cmd.p[3], (int)cmd.p[4]);
+                do_draw_truchet(cmd.p[0], cmd.p[1], cmd.p[2],
+                                (int)cmd.p[3], (int)cmd.p[4]);
+                web_log("truchet done");
                 break;
             case WCMD_SETHOME:
                 web_log("sethome");
@@ -1559,6 +1681,25 @@ static int cmd_wobbly(int argc, char **argv)
     return 0;
 }
 
+static int cmd_truchet(int argc, char **argv)
+{
+    if (argc < 3) {
+        printf("usage: truchet <tile_size_mm> <depth 0-4> [seed] [cx] [cy]\n");
+        printf("  tile_size: base grid cell side (mm); depth: subdivision levels (0=single scale)\n");
+        return 0;
+    }
+    float tile  = atof(argv[1]);
+    int   depth = atoi(argv[2]);
+    int   seed  = (argc >= 4) ? atoi(argv[3]) : 42;
+    float cx    = (argc >= 5) ? atof(argv[4]) : 0.0f;
+    float cy    = (argc >= 6) ? atof(argv[5]) : 0.0f;
+    printf("truchet tile=%.0f depth=%d seed=%d centre=(%.0f,%.0f)\n",
+           (double)tile, depth, seed, (double)cx, (double)cy);
+    do_draw_truchet(cx, cy, tile, depth, seed);
+    printf("truchet done\n");
+    return 0;
+}
+
 static int cmd_pen(int argc, char **argv)
 {
     if (argc < 2) { printf("usage: pen <up|down|degrees>\n"); return 0; }
@@ -1615,6 +1756,7 @@ static void register_commands(void)
         { .command = "circle", .help = "Draw a circle: circle <cx> <cy> <r_mm> [cycles] [fill 0|1]", .func = cmd_circle },
         { .command = "square",   .help = "Draw a square: square <cx> <cy> <size_mm> [cycles] [fill 0|1]", .func = cmd_square },
         { .command = "wobbly",   .help = "Random closed curve: wobbly <cx> <cy> <r> [bound_r] [wobble 0-1] [harmonics 1-8] [seed] [cycles]", .func = cmd_wobbly },
+        { .command = "truchet",  .help = "Multi-scale Truchet tiling: truchet <tile_mm> <depth 0-4> [seed] [cx] [cy]", .func = cmd_truchet },
         { .command = "bullseye", .help = "Draw calibration crosshair: bullseye [cx cy] (10mm arms, 5 passes)",        .func = cmd_bullseye },
         { .command = "grid",     .help = "Draw calibration grid: grid [cx cy] (10x10 lines, 8mm spacing, 100mm long)", .func = cmd_grid },
         { .command = "where",  .help = "Read XACTUAL back as an (x,y) mm coordinate", .func = cmd_where },

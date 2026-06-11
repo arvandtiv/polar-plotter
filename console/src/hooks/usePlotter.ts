@@ -23,7 +23,8 @@ export interface GridCmd     { type: 'grid';     cx: number; cy: number; }
 export interface BorderCmd   { type: 'border';   left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface WobblyCmd   { type: 'wobbly';   cx: number; cy: number; r: number; boundR: number;
                                wobble: number; harmonics: number; seed: number; cycles: number; }
-export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | BorderCmd | WobblyCmd;
+export interface TruchetCmd  { type: 'truchet';  cx: number; cy: number; tileSize: number; depth: number; seed: number; }
+export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | BorderCmd | WobblyCmd | TruchetCmd;
 
 export interface LogEntry { id: number; kind: 'cmd' | 'ok' | 'err' | 'warn' | 'sys' | 'fw'; text: string; t: number; }
 export interface PenState  { x: number; y: number; down: boolean; }
@@ -70,10 +71,115 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'border':   return 'border';   // firmware traces its own stored bounds
     case 'wobbly':   return `wobbly?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&bound_r=${cmd.boundR}` +
                             `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}`;
+    case 'truchet':  return `truchet?cx=${cmd.cx}&cy=${cmd.cy}&tile_size=${cmd.tileSize}&depth=${cmd.depth}&seed=${cmd.seed}`;
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
     case 'pen':      return `pen?pos=${cmd.pos}`;
   }
+}
+
+// ---- JSON script parser ------------------------------------------
+// Accepts a JSON array of command objects and converts each to an API
+// query string. Same object shape as plot_script in the MCP, so scripts
+// are copy-pasteable between Claude Desktop and this console.
+export interface ParsedLine {
+  idx: number;      // 0-based index in the JSON array (-1 = top-level error)
+  raw: string;      // compact JSON of the item (for display)
+  query?: string;   // present when ok
+  error?: string;   // present when validation failed
+}
+
+export function parseJsonScript(text: string): ParsedLine[] {
+  const t = text.trim();
+  if (!t) return [];
+
+  let arr: unknown[];
+  try {
+    const parsed = JSON.parse(t);
+    if (!Array.isArray(parsed))
+      return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ]' }];
+    arr = parsed;
+  } catch (e) {
+    return [{ idx: -1, raw: '', error: `JSON syntax: ${(e as Error).message}` }];
+  }
+
+  return arr.map((item, idx) => {
+    const raw = JSON.stringify(item);
+    if (!item || typeof item !== 'object' || Array.isArray(item))
+      return { idx, raw, error: 'each item must be an object' };
+
+    const o = item as Record<string, unknown>;
+    const type = String(o.type ?? '').toLowerCase();
+    const num = (k: string, def: number): number => {
+      const v = Number(o[k]);
+      return isFinite(v) ? v : def;
+    };
+    const req = (...keys: string[]): string | null => {
+      for (const k of keys) if (!isFinite(Number(o[k]))) return `missing "${k}"`;
+      return null;
+    };
+
+    switch (type) {
+      case 'goto': {
+        const e = req('x', 'y'); if (e) return { idx, raw, error: `goto: ${e}` };
+        return { idx, raw, query: `goto?x=${num('x',0)}&y=${num('y',0)}` };
+      }
+      case 'pen': {
+        const pos = String(o.position ?? o.pos ?? '').toLowerCase();
+        if (pos !== 'up' && pos !== 'down')
+          return { idx, raw, error: 'pen: "position" must be "up" or "down"' };
+        return { idx, raw, query: `pen?pos=${pos}` };
+      }
+      case 'home':    return { idx, raw, query: 'home' };
+      case 'sethome': return { idx, raw, query: 'sethome' };
+      case 'stop':    return { idx, raw, query: 'stop' };
+      case 'border':  return { idx, raw, query: 'border' };
+      case 'line': {
+        const e = req('x0','y0','x1','y1'); if (e) return { idx, raw, error: `line: ${e}` };
+        return { idx, raw, query:
+          `line?x0=${num('x0',0)}&y0=${num('y0',0)}&x1=${num('x1',0)}&y1=${num('y1',0)}&cycles=${num('cycles',1)}` };
+      }
+      case 'circle': {
+        const e = req('cx','cy','r'); if (e) return { idx, raw, error: `circle: ${e}` };
+        const ol = o.outline === false || o.outline === 0 ? 0 : 1;
+        return { idx, raw, query:
+          `circle?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+      }
+      case 'square': {
+        const e = req('cx','cy','size'); if (e) return { idx, raw, error: `square: ${e}` };
+        const ol = o.outline === false || o.outline === 0 ? 0 : 1;
+        return { idx, raw, query:
+          `square?cx=${num('cx',0)}&cy=${num('cy',0)}&size=${num('size',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+      }
+      case 'wobbly': {
+        const e = req('cx','cy','r'); if (e) return { idx, raw, error: `wobbly: ${e}` };
+        return { idx, raw, query:
+          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}` };
+      }
+      case 'truchet': {
+        const e = req('cx','cy'); if (e) return { idx, raw, error: `truchet: ${e}` };
+        return { idx, raw, query:
+          `truchet?cx=${num('cx',0)}&cy=${num('cy',0)}&tile_size=${num('tile_size',60)}&depth=${num('depth',2)}&seed=${num('seed',42)}` };
+      }
+      case 'bullseye':
+        return { idx, raw, query: `bullseye?cx=${num('cx',0)}&cy=${num('cy',0)}` };
+      case 'speed': {
+        const e = req('vmax'); if (e) return { idx, raw, error: `speed: ${e}` };
+        return { idx, raw, query: `speed?vmax=${num('vmax',0)}` };
+      }
+      case 'accel': {
+        const e = req('amax'); if (e) return { idx, raw, error: `accel: ${e}` };
+        return { idx, raw, query: `accel?amax=${num('amax',0)}` };
+      }
+      case 'cur':
+      case 'current': {
+        const e = req('run'); if (e) return { idx, raw, error: `cur: ${e}` };
+        return { idx, raw, query: `cur?run=${num('run',0)}&hold=${num('hold',200)}` };
+      }
+      default:
+        return { idx, raw, error: `unknown type "${type}"` };
+    }
+  });
 }
 
 export function boundsToQuery(b: PlotterBounds): string {
@@ -185,6 +291,53 @@ export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[
       pts2d.push({ x: cmd.cx + ri * Math.cos(theta), y: cmd.cy + ri * Math.sin(theta) });
     }
     pts2d.forEach((p, i) => pts.push({ x: p.x, y: p.y, pen: i !== 0 }));
+  } else if (cmd.type === 'truchet') {
+    // Preview: reproduce the Truchet grid using the same LCG and subdivision logic
+    // as the firmware, drawing quarter-circle arcs for each leaf cell.
+    const lcg = (() => {
+      let s = (cmd.seed >>> 0) || 1;
+      return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0x100000000; };
+    })();
+    const rand = () => lcg();
+    const MIN_TILE = 20;
+    const arcPts = (cx: number, cy: number, r: number, startDeg: number, endDeg: number) => {
+      const segs = Math.max(4, Math.round(Math.abs(endDeg - startDeg) / 10));
+      for (let i = 0; i <= segs; i++) {
+        const a = (startDeg + (endDeg - startDeg) * i / segs) * Math.PI / 180;
+        pts.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), pen: i !== 0 });
+      }
+    };
+    const drawTile = (x0: number, y0: number, sz: number) => {
+      const r = sz / 2;
+      const mx = x0 + r, my = y0 + r; // cell centre
+      if (rand() < 0.5) {
+        // Type A: TL corner + BR corner
+        arcPts(x0, y0, r, 0, 90);   // top-left corner
+        arcPts(mx + r, my + r, r, 180, 270); // bottom-right corner (= x0+sz, y0+sz)
+      } else {
+        // Type B: TR corner + BL corner
+        arcPts(mx + r, y0, r, 90, 180);  // top-right corner (= x0+sz, y0)
+        arcPts(x0, my + r, r, 270, 360); // bottom-left corner (= x0, y0+sz)
+      }
+    };
+    const cell = (x0: number, y0: number, sz: number, depth: number) => {
+      if (depth <= 0 || sz / 2 < MIN_TILE || rand() < 0.5) {
+        drawTile(x0, y0, sz);
+      } else {
+        const h = sz / 2;
+        cell(x0,     y0,     h, depth - 1);
+        cell(x0 + h, y0,     h, depth - 1);
+        cell(x0,     y0 + h, h, depth - 1);
+        cell(x0 + h, y0 + h, h, depth - 1);
+      }
+    };
+    // Determine grid extent (same logic as firmware: cover work area with cells)
+    const ts = Math.max(MIN_TILE, cmd.tileSize);
+    const xMin = cmd.cx - Math.ceil(cmd.cx / ts) * ts - ts;
+    const yMin = cmd.cy - Math.ceil(cmd.cy / ts) * ts - ts;
+    for (let gy = yMin; gy < cmd.cy + ts * 10; gy += ts)
+      for (let gx = xMin; gx < cmd.cx + ts * 10; gx += ts)
+        cell(gx, gy, ts, cmd.depth);
   } else if (cmd.type === 'bullseye') {
     for (let ri = 0; ri < 4; ri++) {
       const rad = 20 + ri * 20;
@@ -463,6 +616,19 @@ export function usePlotter() {
     setQueue((q) => q.slice(1));
   }, [send, animatePath, pushLog]);
 
+  // Quiet raw send for bulk script execution — no individual log lines,
+  // returns true on ok, false on error/network failure.
+  const sendRaw = useCallback(async (endpoint: string): Promise<boolean> => {
+    if (!ipRef.current) return false;
+    try {
+      const d = await apiGet(ipRef.current, endpoint);
+      return d.status === 'ok';
+    } catch {
+      setConnected(false);
+      return false;
+    }
+  }, []);
+
   const stop = useCallback(() => {
     cancelRef.current = true;
     setMoving(false);
@@ -512,7 +678,7 @@ export function usePlotter() {
     status, jobs,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, stop, clearPaths, clearFault, pushLog,
+    enqueue, sendRaw, stop, clearPaths, clearFault, pushLog,
     DEFAULTS,
   };
 }

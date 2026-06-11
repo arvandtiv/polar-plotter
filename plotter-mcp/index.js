@@ -294,6 +294,38 @@ Examples:
   }),
 );
 
+// plot_truchet ────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_truchet',
+  `Draw a multi-scale Truchet tiling over the work area (Carlson 2018).
+
+The work area is divided into a grid of tile_size×tile_size mm cells. Each cell
+independently either draws a Truchet tile (two quarter-circle arcs connecting
+edge midpoints) or recursively subdivides into four smaller cells, up to \`depth\`
+levels deep. Minimum tile size is 20 mm.
+
+tile_size controls the base cell size; depth controls how many subdivision
+levels are possible (0 = flat single-scale, 1–4 = increasingly fractal).
+seed makes the pattern reproducible — same seed + same params = same result.
+
+Examples:
+  tile_size=80, depth=0          → flat uniform grid of quarter-circle arcs
+  tile_size=80, depth=2          → multi-scale fractal-like tiling
+  tile_size=60, depth=3, seed=7  → fine, complex, reproducible pattern`,
+  {
+    cx:        z.number().default(0).describe('Center X of the tiling grid in mm (default 0)'),
+    cy:        z.number().default(0).describe('Center Y of the tiling grid in mm (default 0)'),
+    tile_size: z.number().min(20).default(60).describe('Base cell size in mm — min 20 mm (default 60)'),
+    depth:     z.number().int().min(0).max(4).default(2).describe('Max subdivision depth 0–4 (default 2)'),
+    seed:      z.number().int().min(0).default(42).describe('Random seed — same seed = same pattern (default 42)'),
+  },
+  async ({ cx, cy, tile_size, depth, seed }) => ({
+    content: [{ type: 'text', text: ok(await drawAndWait(
+      `truchet?cx=${cx}&cy=${cy}&tile_size=${tile_size}&depth=${depth}&seed=${seed}`,
+    )) }],
+  }),
+);
+
 // plot_bullseye ──────────────────────────────────────────────────────────────
 server.tool(
   'plot_bullseye',
@@ -419,12 +451,13 @@ Each command object must have a "type" field plus the parameters for that type:
   { "type": "accel",   "amax": 300 }
   { "type": "current", "run_ma": 500, "hold_ma": 150 }
   { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }
+  { "type": "truchet", "cx": 0, "cy": 0, "tile_size": 60, "depth": 2, "seed": 42 }
   { "type": "bullseye","cx": 0, "cy": 0 }
   { "type": "grid",    "cx": 0, "cy": 0 }`,
   {
     commands: z.array(z.object({
       type: z.enum([
-        'goto', 'line', 'circle', 'square', 'wobbly',
+        'goto', 'line', 'circle', 'square', 'wobbly', 'truchet',
         'bullseye', 'grid', 'border',
         'pen', 'home', 'sethome', 'stop',
         'speed', 'accel', 'current',
@@ -526,6 +559,12 @@ function buildEndpoint(cmd) {
         `wobbly?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}&r=${p.r ?? 50}` +
         `&bound_r=${p.bound_r ?? 0}&wobble=${p.wobble ?? 0.4}` +
         `&harmonics=${p.harmonics ?? 3}&seed=${p.seed ?? 42}&cycles=${p.cycles ?? 1}`
+      );
+
+    case 'truchet':
+      return (
+        `truchet?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}` +
+        `&tile_size=${p.tile_size ?? 60}&depth=${p.depth ?? 2}&seed=${p.seed ?? 42}`
       );
 
     case 'bullseye':
