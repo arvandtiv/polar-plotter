@@ -766,35 +766,101 @@ static void wait_both_near(int32_t tl, int32_t tr, int32_t lookahead, int timeou
     }
 }
 
-/* Draw a straight Cartesian line from (x0,y0) to (x1,y1) mm, assuming the pen is
- * already at (x0,y0). Splits the line into <= LINE_SEG_MM pieces (so the path
- * stays straight -- a single coordinated move would be straight only in step
- * space and would bow), and STREAMS them: each sub-segment's target is issued as
- * soon as the gondola comes within LINE_LOOKAHEAD_MM of the previous one, so the
- * motion flows continuously instead of dead-stopping at every 2 mm. The final
- * sub-segment waits for a true stop, so the endpoint/corner is hit exactly. Pen
- * state is the caller's responsibility. */
-static void draw_line_mm(float x0, float y0, float x1, float y1)
+/* ---- streaming path planner -------------------------------------------------
+ * (rate-matched coordination; investigation in docs/motion_native_tmc5072.md)
+ *
+ * A "path" is a pen-state-constant polyline streamed to the chip with NO stop at
+ * interior waypoints — arcs, outlines and chained strokes flow as one motion.
+ * Per-segment roles:
+ *   first  -> full geometric profile scaling (exact equal-T from standstill)
+ *   middle -> rate-matched: only per-axis VMAX (= base * distance ratio) + the
+ *             targets are written; the chip blends between successive cruise
+ *             speeds at FULL AMAX (datasheet §11.2.5 joystick technique)
+ *   final  -> geometric scaling again, so both axes decelerate into the stop
+ *             together. The final segment is only known at path_end(), hence
+ *             the one-deep waypoint buffer.
+ * path_to() Cartesian-subdivides long spans into <= LINE_SEG_MM chunks (a single
+ * coordinated move is straight only in step space and would bow), and each
+ * chunk's target is issued as soon as the gondola is within LINE_LOOKAHEAD_MM of
+ * the previous one. Deltas are tracked from COMMANDED waypoints, never XACTUAL,
+ * so the equal-time scaling stays deterministic while in flight. */
+static struct {
+    bool    active;
+    bool    first;           /* next emitted segment starts from standstill */
+    bool    have_pend;       /* one-deep waypoint buffer occupied */
+    int32_t cur_l, cur_r;    /* last COMMANDED waypoint (steps) */
+    int32_t pend_l, pend_r;  /* buffered, not yet emitted waypoint (steps) */
+    float   x, y;            /* last accepted Cartesian point (mm, clamped) */
+} s_path;
+
+static void path_begin(float x0, float y0)
 {
-    float dx = x1 - x0, dy = y1 - y0;
+    clamp_xy(&x0, &y0);
+    plt_xy_to_steps(&g_geom, x0, y0, &s_path.cur_l, &s_path.cur_r);
+    s_path.x = x0; s_path.y = y0;
+    s_path.active = true; s_path.first = true; s_path.have_pend = false;
+}
+
+static void path_emit(bool last)
+{
+    int32_t tl = s_path.pend_l, tr = s_path.pend_r;
+    if (s_path.first || last)
+        tmc5072_move_scaled_from(&tmc, tr, tl, s_path.cur_r, s_path.cur_l);  /* THETA=right, RHO=left */
+    else
+        tmc5072_move_rate_matched(&tmc, tr, tl, s_path.cur_r, s_path.cur_l);
+    s_path.first = false;
+    s_path.cur_l = tl; s_path.cur_r = tr;
+    s_path.have_pend = false;
+    if (last) {
+        wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);   /* exact, synchronized stop */
+        wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
+    } else {
+        int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * g_geom.steps_per_mm);
+        wait_both_near(tl, tr, lookahead, MOVE_TIMEOUT_MS);   /* keep flowing */
+    }
+}
+
+static void path_to(float x, float y)
+{
+    if (!s_path.active || motion_should_abort()) return;
+    clamp_xy(&x, &y);
+    float dx = x - s_path.x, dy = y - s_path.y;
     float len = sqrtf(dx * dx + dy * dy);
     int n = plt_line_segments(len, LINE_SEG_MM);
-    int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * g_geom.steps_per_mm);
-    int32_t sl, sr;
     for (int i = 1; i <= n; i++) {
-        if (motion_should_abort()) return;   /* escape or driver fault: drop remaining segments */
+        if (motion_should_abort()) return;   /* escape or driver fault: drop the rest */
         float t = (float)i / (float)n;
-        float px = x0 + dx * t, py = y0 + dy * t;
+        float px = s_path.x + dx * t, py = s_path.y + dy * t;
         clamp_xy(&px, &py);
+        int32_t sl, sr;
         plt_xy_to_steps(&g_geom, px, py, &sl, &sr);
-        tmc5072_move_coordinated(&tmc, sr, sl);   /* THETA=right, RHO=left */
-        if (i < n) {
-            wait_both_near(sl, sr, lookahead, MOVE_TIMEOUT_MS);   /* keep flowing */
-        } else {
-            wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);           /* exact at corner */
-            wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
-        }
+        /* Skip zero-length chunks (clamping can collapse them). */
+        int32_t rl = s_path.have_pend ? s_path.pend_l : s_path.cur_l;
+        int32_t rr = s_path.have_pend ? s_path.pend_r : s_path.cur_r;
+        if (sl == rl && sr == rr) continue;
+        if (s_path.have_pend) path_emit(false);
+        s_path.pend_l = sl; s_path.pend_r = sr; s_path.have_pend = true;
     }
+    s_path.x = x; s_path.y = y;
+}
+
+static void path_end(void)
+{
+    if (!s_path.active) return;
+    s_path.active = false;
+    if (motion_should_abort()) return;
+    if (s_path.have_pend) path_emit(true);
+}
+
+/* Draw a straight Cartesian line from (x0,y0) to (x1,y1) mm, assuming the pen is
+ * already at (x0,y0); stops exactly at the endpoint. Pen state is the caller's
+ * responsibility. (Single-stroke wrapper over the path streamer — multi-segment
+ * shapes should use path_begin/path_to/path_end directly so joints flow.) */
+static void draw_line_mm(float x0, float y0, float x1, float y1)
+{
+    path_begin(x0, y0);
+    path_to(x1, y1);
+    path_end();
 }
 
 /* The optional trailing [cycles] arg on line/circle/square repeats the shape
@@ -926,10 +992,15 @@ static void do_draw_line(float x0, float y0, float x1, float y1, int cycles)
     pen_lift();
     move_to_xy(x0, y0);
     pen_drop();
+    /* All passes form ONE streamed path: the retrace reversals are handled by
+     * the ramp generator (decel through zero, reverse), no dead stop between
+     * passes. */
+    path_begin(x0, y0);
     for (int c = 0; c < cycles; c++) {
-        if (c & 1) draw_line_mm(x1, y1, x0, y0);
-        else       draw_line_mm(x0, y0, x1, y1);
+        if (c & 1) path_to(x0, y0);
+        else       path_to(x1, y1);
     }
+    path_end();
     pen_lift();
 }
 
@@ -979,6 +1050,9 @@ static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mod
         pen_lift();
         move_to_xy(cx + r, cy);
         pen_drop();
+        /* Whole outline (all cycles) is ONE streamed path: chords flow with no
+         * per-chord stop (previously each chord dead-stopped at VSTOP). */
+        path_begin(cx + r, cy);
         for (int cyc = 0; cyc < cycles; cyc++) {
             float vx = r, vy = 0.0f;
             for (int k = 1; k <= n; k++) {
@@ -987,9 +1061,10 @@ static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mod
                 vx = nvx; vy = nvy;
                 float px = (k == n) ? cx + r : cx + vx;
                 float py = (k == n) ? cy     : cy + vy;
-                move_to_xy(px, py);
+                path_to(px, py);
             }
         }
+        path_end();
     }
     if (fill_mode == 1) {
         hatch_lines(cx, cy, true, r, hatch_angle, hatch_spacing);
@@ -1004,6 +1079,7 @@ static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mod
             pen_lift();
             move_to_xy(cx + ri, cy);
             pen_drop();
+            path_begin(cx + ri, cy);
             float vx_i = ri, vy_i = 0.0f;
             for (int k = 1; k <= ni; k++) {
                 float nvx = vx_i * dc_i - vy_i * ds_i;
@@ -1011,8 +1087,9 @@ static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mod
                 vx_i = nvx; vy_i = nvy;
                 float px = (k == ni) ? cx + ri : cx + vx_i;
                 float py = (k == ni) ? cy      : cy + vy_i;
-                move_to_xy(px, py);
+                path_to(px, py);
             }
+            path_end();
         }
     }
     pen_lift();
@@ -1137,11 +1214,13 @@ static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
     pen_lift();
     move_to_xy(px[0], py[0]);
     pen_drop();
+    /* The closed blob (all cycles) streams as ONE path — no stop per vertex. */
+    path_begin(px[0], py[0]);
     for (int c = 0; c < cycles; c++) {
         for (int i = 1; i <= n; i++)
-            draw_line_mm(px[(i - 1) % n], py[(i - 1) % n],
-                         px[i % n],       py[i % n]);
+            path_to(px[i % n], py[i % n]);
     }
+    path_end();
     pen_lift();
 #undef WOBBLY_MAX_PTS
 }
@@ -1205,6 +1284,7 @@ static struct { float x, y; bool down, valid; } s_tk_pen;
 
 static void tk_break(void)
 {
+    path_end();                       /* come to a clean stop before lifting */
     if (s_tk_pen.down) { pen_lift(); s_tk_pen.down = false; }
     s_tk_pen.valid = false;
 }
@@ -1260,14 +1340,16 @@ static void tk_seg(float x0, float y0, float x1, float y1)
                   fabsf(ax - s_tk_pen.x) < 0.05f &&
                   fabsf(ay - s_tk_pen.y) < 0.05f;
     if (!contig) {
+        path_end();                   /* stop the running stroke before pen-up */
         if (s_tk_pen.down) pen_lift();
         s_tk_pen.down = false;
         move_to_xy(ax, ay);
         if (motion_should_abort()) return;
         pen_drop();
         s_tk_pen.down = true;
+        path_begin(ax, ay);
     }
-    draw_line_mm(ax, ay, bx, by);
+    path_to(bx, by);                  /* contiguous chords stream as one path */
     s_tk_pen.x = bx; s_tk_pen.y = by; s_tk_pen.valid = true;
 }
 

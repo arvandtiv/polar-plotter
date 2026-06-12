@@ -168,6 +168,22 @@ void tmc5072_set_ramp_scale(tmc5072_t *dev, int motor, float scale);
  * only after the previous move has reached its target. */
 esp_err_t tmc5072_move_coordinated(tmc5072_t *dev, int32_t target0, int32_t target1);
 
+/* Same equal-time geometric scaling, but with each motor's travel measured from
+ * a caller-supplied waypoint instead of XACTUAL — deterministic when the
+ * previous segment is still in flight. Used by the path streamer for the first
+ * and final segments of a streamed path. */
+esp_err_t tmc5072_move_scaled_from(tmc5072_t *dev, int32_t target0, int32_t target1,
+                                    int32_t from0, int32_t from1);
+
+/* Mid-path streaming segment ("rate-matched", datasheet §11.2.5): writes only
+ * per-axis VMAX = base_vmax * (distance ratio) plus both XTARGETs. The axes
+ * blend between successive cruise speeds at FULL AMAX, so polyline/arc joints
+ * flow without a stop. PRECONDITION: positioning mode and already in motion —
+ * the first segment from standstill and the final stopping segment of a path
+ * must use tmc5072_move_scaled_from / _move_coordinated instead. */
+esp_err_t tmc5072_move_rate_matched(tmc5072_t *dev, int32_t target0, int32_t target1,
+                                     int32_t from0, int32_t from1);
+
 esp_err_t tmc5072_move_to(tmc5072_t *dev, int motor, int32_t position);
 int32_t   tmc5072_position(tmc5072_t *dev, int motor);
 bool      tmc5072_position_reached(tmc5072_t *dev, int motor);

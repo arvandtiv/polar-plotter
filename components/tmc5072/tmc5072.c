@@ -208,14 +208,14 @@ void tmc5072_set_ramp_scale(tmc5072_t *dev, int m, float scale)
     dev->applied_scale[m] = scale;
 }
 
-esp_err_t tmc5072_move_coordinated(tmc5072_t *dev, int32_t t0, int32_t t1)
+esp_err_t tmc5072_move_scaled_from(tmc5072_t *dev, int32_t t0, int32_t t1,
+                                    int32_t from0, int32_t from1)
 {
-    /* Δsteps for this segment = target - current position, per motor. (Read at a
-     * standstill -- see the header precondition -- so XACTUAL is the true start.) */
-    int32_t p0 = (int32_t)tmc5072_read(dev, TMC5072_XACTUAL(0), NULL);
-    int32_t p1 = (int32_t)tmc5072_read(dev, TMC5072_XACTUAL(1), NULL);
-    int32_t d0 = t0 - p0; if (d0 < 0) d0 = -d0;
-    int32_t d1 = t1 - p1; if (d1 < 0) d1 = -d1;
+    /* Δsteps per motor from the given start waypoints. Taking the deltas from
+     * COMMANDED waypoints (not XACTUAL) keeps the equal-time scaling
+     * deterministic even when the previous segment is still in flight. */
+    int32_t d0 = t0 - from0; if (d0 < 0) d0 = -d0;
+    int32_t d1 = t1 - from1; if (d1 < 0) d1 = -d1;
     int32_t dlong = (d0 > d1) ? d0 : d1;
 
     /* The longer-travel motor runs the full master ramp (= the move's duration T);
@@ -236,6 +236,45 @@ esp_err_t tmc5072_move_coordinated(tmc5072_t *dev, int32_t t0, int32_t t1)
      * frame of each other and ramp to target in parallel on their own. */
     tmc5072_write(dev, TMC5072_RAMPMODE(0), 0);
     tmc5072_write(dev, TMC5072_RAMPMODE(1), 0);
+    tmc5072_write(dev, TMC5072_XTARGET(0), (uint32_t)t0);
+    tmc5072_write(dev, TMC5072_XTARGET(1), (uint32_t)t1);
+    return ESP_OK;
+}
+
+esp_err_t tmc5072_move_coordinated(tmc5072_t *dev, int32_t t0, int32_t t1)
+{
+    /* Standstill entry point: XACTUAL is the true segment start (header
+     * precondition), so read it and delegate to the waypoint-based core. */
+    int32_t p0 = (int32_t)tmc5072_read(dev, TMC5072_XACTUAL(0), NULL);
+    int32_t p1 = (int32_t)tmc5072_read(dev, TMC5072_XACTUAL(1), NULL);
+    return tmc5072_move_scaled_from(dev, t0, t1, p0, p1);
+}
+
+esp_err_t tmc5072_move_rate_matched(tmc5072_t *dev, int32_t t0, int32_t t1,
+                                     int32_t from0, int32_t from1)
+{
+    /* Mid-path streaming (datasheet §11.2.5: "just modify VMAX"): write only a
+     * per-axis VMAX proportional to this segment's distance ratio, plus the two
+     * targets. Each axis blends from its previous cruise speed to the new one
+     * at FULL AMAX (the profile is never down-scaled here), so segment joints
+     * are taken stiffly and without a stop.
+     * PRECONDITION: both axes already in positioning mode and in flight — use
+     * tmc5072_move_coordinated / _move_scaled_from for the first segment of a
+     * path (standstill start) and for the final, stopping segment. */
+    int32_t d0 = t0 - from0; if (d0 < 0) d0 = -d0;
+    int32_t d1 = t1 - from1; if (d1 < 0) d1 = -d1;
+    int32_t dlong = (d0 > d1) ? d0 : d1;
+    if (dlong > 0) {
+        uint32_t v0 = ramp_scl(dev->base_ramp.vmax, (float)d0 / (float)dlong, 1);
+        uint32_t v1 = ramp_scl(dev->base_ramp.vmax, (float)d1 / (float)dlong, 1);
+        tmc5072_write(dev, TMC5072_VMAX(0), v0);
+        tmc5072_write(dev, TMC5072_VMAX(1), v1);
+        /* The written VMAX no longer matches base_ramp * applied_scale —
+         * invalidate the cache so the next scaled move rewrites a full,
+         * consistent profile instead of skipping an "unchanged" ratio. */
+        dev->applied_scale[0] = -1.0f;
+        dev->applied_scale[1] = -1.0f;
+    }
     tmc5072_write(dev, TMC5072_XTARGET(0), (uint32_t)t0);
     tmc5072_write(dev, TMC5072_XTARGET(1), (uint32_t)t1);
     return ESP_OK;
