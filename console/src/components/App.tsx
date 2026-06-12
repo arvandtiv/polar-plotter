@@ -13,6 +13,8 @@ import {
   type PlotterStatus,
   type JobEntry,
   DEFAULTS,
+  TRUCHET_MOTIF_NAMES,
+  TRUCHET_DEFAULT_MASK,
 } from '../hooks/usePlotter';
 
 // ================================================================
@@ -142,9 +144,9 @@ function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, de
 // A controlled numeric input would re-render on every parent state change, which erases
 // partial values like "-" or "1." mid-type and makes the field feel broken.
 // Instead the DOM owns the string; we only read and validate it on blur/Enter.
-function FieldInline({ label, value, onChange, unit, step = 1, min = -100000, max = 100000 }: {
+function FieldInline({ label, value, onChange, unit, step = 1, min = -100000, max = 100000, title }: {
   label: string; value: number; onChange: (v: number) => void;
-  unit?: string; step?: number; min?: number; max?: number;
+  unit?: string; step?: number; min?: number; max?: number; title?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
 
@@ -156,7 +158,7 @@ function FieldInline({ label, value, onChange, unit, step = 1, min = -100000, ma
   };
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1" title={title}>
       <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
       <div className="flex items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50 transition-colors">
         <input ref={ref} type="text" inputMode="numeric" defaultValue={String(value)}
@@ -578,6 +580,28 @@ function ErrorsPanel({ log }: { log: LogEntry[] }) {
   );
 }
 
+// Hover help for the Truchet motif chips, indexed like TRUCHET_MOTIF_NAMES.
+// Each motif is one tile design from Carlson's winged-tile family: a white
+// ribbon (strip of width cell/3) routed through the cell, ending exactly at
+// the 1/3 and 2/3 points of each edge so neighbouring cells join seamlessly.
+const TRUCHET_MOTIF_HELP = [
+  '\\  Diagonal ribbon: two arc strips hugging the top-right and bottom-left corners. The classic Truchet curve.',
+  '/  Diagonal ribbon, mirrored: arc strips on the top-left and bottom-right corners.',
+  '-  Horizontal ribbon straight across, plus a dot on the top and bottom edges.',
+  '|  Vertical ribbon straight down, plus a dot on the left and right edges.',
+  '+.  No ribbons — just a dot on all four edges. Calm filler tile.',
+  'x.  Centre blob: the square with all four corners bitten off, touching all four edges.',
+  '+  Two ribbons crossing in the middle: connects all four edges.',
+  'fne  "Frown north-east": one arc ribbon joining the top and right edges, dots on the other two.',
+  'fsw  "Frown south-west": arc ribbon joining the bottom and left edges, dots on the other two.',
+  'fnw  "Frown north-west": arc ribbon joining the top and left edges, dots on the other two.',
+  'fse  "Frown south-east": arc ribbon joining the bottom and right edges, dots on the other two.',
+  'tn  "T north": ribbon across left↔right with a stem up to the top edge; dot on the bottom.',
+  'ts  "T south": ribbon across left↔right with a stem down to the bottom edge; dot on the top.',
+  'te  "T east": ribbon down top↔bottom with a stem to the right edge; dot on the left.',
+  'tw  "T west": ribbon down top↔bottom with a stem to the left edge; dot on the right.',
+];
+
 // ================================================================
 //  Main App
 // ================================================================
@@ -591,7 +615,7 @@ const SCRIPT_HINT = `[
   { "type": "square", "cx": 0, "cy": 0, "size": 160, "fill_mode": 1 },
   { "type": "line", "x0": -80, "y0": 0, "x1": 80, "y1": 0, "cycles": 2 },
   { "type": "wobbly", "cx": 0, "cy": 50, "r": 60, "wobble": 0.4, "harmonics": 3 },
-  { "type": "truchet", "cx": 0, "cy": 0, "tile_size": 60, "depth": 2, "seed": 42 },
+  { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42 },
   { "type": "speed", "vmax": 200000 },
   { "type": "home" }
 ]`;
@@ -718,7 +742,7 @@ export default function App() {
   const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [lineF, setLine]    = useState({ x0: 0, y0: 0, x1: 100, y1: 0, cycles: 1 });
   const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1 });
-  const [truchet, setTruchet]   = useState({ cx: 0, cy: 0, tileSize: 60, depth: 2, seed: 42 });
+  const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('draw');
 
@@ -915,34 +939,46 @@ export default function App() {
 
                 {/* Truchet */}
                 <Card title="Truchet" icon="◔" accent="#0891b2" collapsible
-                  right={<Btn variant="go" onClick={() => P.enqueue({ type: 'truchet', ...truchet })}>Draw ◔</Btn>}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <FieldInline label="Center X" unit="mm" value={truchet.cx} onChange={ft('cx') as (v: number) => void} />
-                    <FieldInline label="Center Y" unit="mm" value={truchet.cy} onChange={ft('cy') as (v: number) => void} />
-                    <FieldInline label="Tile size" unit="mm" value={truchet.tileSize} min={20} max={200} step={5}
-                      onChange={ft('tileSize') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <div>
-                      <p className="mb-1 text-[11px] text-ink-500">Depth (0–4)</p>
-                      <div className="flex gap-1">
-                        {[0, 1, 2, 3, 4].map(d => (
-                          <button key={d} onClick={() => setTruchet(t => ({ ...t, depth: d }))}
-                            className={`flex-1 rounded py-1 text-xs font-mono transition-colors ${
-                              truchet.depth === d
-                                ? 'bg-cyan-600 text-white'
-                                : 'bg-ink-800 text-ink-400 hover:bg-ink-700'}`}>
-                            {d}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  right={<Btn variant="go"
+                    title={'Queue the full Truchet plot. The work area is split into a grid of square cells; each cell gets a random motif (from the enabled chips below). The white ribbons connect cell-to-cell because every motif meets the cell edges at the same 1/3 and 2/3 points; everything that is NOT ribbon gets hatched. Slow job — try Hatch spacing 0 first for a quick outlines-only proof on paper.'}
+                    onClick={() => P.enqueue({
+                      type: 'truchet', ...truchet,
+                      left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down, shape: bounds.shape,
+                    })}>Draw ◔</Btn>}>
+                  <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
+                    Carlson winged-motif tiling over the whole work area: the motif ribbons stay
+                    white, the background is hatched. Hatching is slow — wider spacing plots faster;
+                    spacing 0 = outlines only. Hover any control for details.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <FieldInline label="Columns" value={truchet.n} min={1} max={64} step={1}
+                      title={'How many cells across the work area. Cell size = work-area width ÷ columns, clamped to a 40 mm minimum (the pen can\'t draw the cell/3-wide ribbons cleanly below that). Rows are derived from the height, so the grid is always square cells, centred — a thin unhatched margin can remain top/bottom.'}
+                      onChange={ft('n') as (v: number) => void} />
+                    <FieldInline label="Hatch spacing" unit="mm" value={truchet.spacing} min={0} max={20} step={0.5}
+                      title={'Distance between hatch lines filling the background (negative space). Smaller = darker ground and much longer plot time; 3–4 mm is a good balance. 0 disables hatching entirely — only the ribbon outlines are drawn (fast, good for a positioning proof).'}
+                      onChange={ft('spacing') as (v: number) => void} />
+                    <FieldInline label="Hatch angle" unit="°" value={truchet.angle} min={0} max={180} step={5}
+                      title={'Direction of the hatch lines, in degrees (0 = horizontal, 45 = diagonal). All cells share one global line lattice, so the texture runs continuously across cell boundaries instead of restarting in every cell.'}
+                      onChange={ft('angle') as (v: number) => void} />
                     <FieldInline label="Seed" value={truchet.seed} min={0} max={99999} step={1}
+                      title={'Random seed for the motif placed in each cell. The same seed + same settings always reproduces the identical pattern (the preview and the plotter use the same generator). Change it to reshuffle the design without changing its character.'}
                       onChange={ft('seed') as (v: number) => void} />
-                    <div className="flex items-end">
-                      <p className="text-[11px] leading-relaxed text-ink-500">
-                        depth 0 = uniform grid<br/>depth 2–3 = fractal look
-                      </p>
+                  </div>
+                  <div className="mt-3">
+                    <p className="mb-1 text-[11px] text-ink-500"
+                      title={'Each chip is one tile design from Carlson\'s set (Bridges 2018). Enabled chips form the pool the random picker draws from — mixing 2–3 different shapes gives the richest patterns. All motifs share the same edge connection points, so any mix still joins seamlessly.'}>
+                      Motifs (cell size = width / columns, min 40 mm)</p>
+                    <div className="flex flex-wrap gap-1">
+                      {TRUCHET_MOTIF_NAMES.map((name, i) => (
+                        <button key={name} title={TRUCHET_MOTIF_HELP[i]}
+                          onClick={() => setTruchet(t => ({ ...t, motifs: t.motifs ^ (1 << i) }))}
+                          className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
+                            truchet.motifs & (1 << i)
+                              ? 'bg-cyan-600 text-white'
+                              : 'bg-ink-800 text-ink-400 hover:bg-ink-700'}`}>
+                          {name}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </Card>

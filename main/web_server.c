@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <math.h>
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -340,12 +341,14 @@ static esp_err_t handle_truchet(httpd_req_t *req)
 {
     char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_TRUCHET };
-    c.p[0] = qf(qs, "cx",        0.0f);
-    c.p[1] = qf(qs, "cy",        0.0f);
-    c.p[2] = qf(qs, "tile_size", 60.0f);
-    c.p[3] = qf(qs, "depth",      2.0f);
-    c.p[4] = qf(qs, "seed",      42.0f);
-    if (c.p[2] < 20.0f) { resp_json(req, "error", "tile_size must be >= 20 mm"); return ESP_OK; }
+    c.p[0] = qf(qs, "cx",      NAN);    /* NAN = centre of the work area */
+    c.p[1] = qf(qs, "cy",      NAN);
+    c.p[2] = qf(qs, "n",       4.0f);   /* columns; cell size clamps to >= 40 mm */
+    c.p[3] = qf(qs, "spacing", 3.0f);   /* hatch spacing mm; < 0.5 = outlines only */
+    c.p[4] = qf(qs, "angle",  45.0f);   /* hatch angle, degrees */
+    c.p[5] = qf(qs, "seed",   42.0f);
+    c.p[6] = qf(qs, "motifs",  0.0f);   /* enabled-motif bitmask; 0 = default set */
+    if (c.p[2] < 1.0f || c.p[2] > 64.0f) { resp_json(req, "error", "n must be 1..64"); return ESP_OK; }
     resp_json_id(req, "ok", "truchet queued", enqueue(&c));
     return ESP_OK;
 }

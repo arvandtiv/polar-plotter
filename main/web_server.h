@@ -25,7 +25,7 @@ typedef enum {
     WCMD_ACCEL,
     WCMD_CURRENT,
     WCMD_WOBBLY,   /* random closed curve via Fourier harmonics; p[]: cx cy r bound_r wobble harmonics seed cycles */
-    WCMD_TRUCHET,  /* multi-scale Truchet tiling;  p[]: cx cy tile_size depth seed */
+    WCMD_TRUCHET,  /* Truchet tiling (Carlson motifs, hatched ground); p[]: cx cy n spacing angle seed motif_mask */
 } wcmd_type_t;
 
 typedef struct {

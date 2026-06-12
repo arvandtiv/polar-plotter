@@ -295,35 +295,52 @@ Examples:
 );
 
 // plot_truchet ────────────────────────────────────────────────────────────────
+// Motif names (Carlson, Bridges 2018) → firmware bitmask bits.
+const TRUCHET_MOTIFS = {
+  '\\': 0, '/': 1, '-': 2, '|': 3, '+.': 4, 'x.': 5, '+': 6,
+  fne: 7, fsw: 8, fnw: 9, fse: 10, tn: 11, ts: 12, te: 13, tw: 14,
+};
+const TRUCHET_DEFAULT = ['\\', '/', 'x.', 'fne', 'fsw', 'fnw', 'fse'];
+
 server.tool(
   'plot_truchet',
-  `Draw a multi-scale Truchet tiling over the work area (Carlson 2018).
+  `Draw a Truchet tiling over the whole work area using Carlson's winged tile
+motifs (Bridges 2018): strips of width cell/3 meeting the cell edges at the 1/3
+and 2/3 points, so ribbons connect seamlessly cell-to-cell. The motif ribbons
+are left as white paper; the background (negative space) is hatched with
+globally aligned lines, so white channels wind through a continuous hatched
+field. This is a long-running job: hatching a full work area takes serious pen
+time — coarser spacing (3–4 mm) plots much faster.
 
-The work area is divided into a grid of tile_size×tile_size mm cells. Each cell
-independently either draws a Truchet tile (two quarter-circle arcs connecting
-edge midpoints) or recursively subdivides into four smaller cells, up to \`depth\`
-levels deep. Minimum tile size is 20 mm.
+n = number of grid columns (cell size = work-area width / n, clamped to
+>= 40 mm). Rows are derived from the height. seed makes the pattern
+reproducible. motifs picks which tile shapes appear — mixing 2–3 shapes gives
+the richest emergent forms. Available motifs:
+  \\\\ /        diagonal arc ribbons
+  - |         straight bars (with dots)
+  +           crossing bars
+  x.          centre blob
+  +.          four dots
+  fne fsw fnw fse   "frowns": one corner arc + two dots
+  tn ts te tw       "tees": bar + stem + one dot
 
-tile_size controls the base cell size; depth controls how many subdivision
-levels are possible (0 = flat single-scale, 1–4 = increasingly fractal).
-seed makes the pattern reproducible — same seed + same params = same result.
-
-Examples:
-  tile_size=80, depth=0          → flat uniform grid of quarter-circle arcs
-  tile_size=80, depth=2          → multi-scale fractal-like tiling
-  tile_size=60, depth=3, seed=7  → fine, complex, reproducible pattern`,
+In ellipse work-area mode the pattern is clipped to the ellipse boundary.`,
   {
-    cx:        z.number().default(0).describe('Center X of the tiling grid in mm (default 0)'),
-    cy:        z.number().default(0).describe('Center Y of the tiling grid in mm (default 0)'),
-    tile_size: z.number().min(20).default(60).describe('Base cell size in mm — min 20 mm (default 60)'),
-    depth:     z.number().int().min(0).max(4).default(2).describe('Max subdivision depth 0–4 (default 2)'),
-    seed:      z.number().int().min(0).default(42).describe('Random seed — same seed = same pattern (default 42)'),
+    n:        z.number().int().min(1).max(64).default(4).describe('Grid columns — cell size = width/n, clamped to >= 40 mm (default 4)'),
+    spacing:  z.number().min(0).default(3).describe('Hatch line spacing in mm; 0 = outlines only, no hatching (default 3)'),
+    angle:    z.number().default(45).describe('Hatch angle in degrees (default 45)'),
+    seed:     z.number().int().min(0).default(42).describe('Random seed — same seed = same pattern (default 42)'),
+    motifs:   z.array(z.enum(Object.keys(TRUCHET_MOTIFS))).default(TRUCHET_DEFAULT)
+                .describe('Motif names to draw from (default: arcs + frowns + blob)'),
   },
-  async ({ cx, cy, tile_size, depth, seed }) => ({
-    content: [{ type: 'text', text: ok(await drawAndWait(
-      `truchet?cx=${cx}&cy=${cy}&tile_size=${tile_size}&depth=${depth}&seed=${seed}`,
-    )) }],
-  }),
+  async ({ n, spacing, angle, seed, motifs }) => {
+    const mask = motifs.reduce((m, name) => m | (1 << TRUCHET_MOTIFS[name]), 0);
+    return {
+      content: [{ type: 'text', text: ok(await drawAndWait(
+        `truchet?n=${n}&spacing=${spacing}&angle=${angle}&seed=${seed}&motifs=${mask}`,
+      )) }],
+    };
+  },
 );
 
 // plot_bullseye ──────────────────────────────────────────────────────────────
@@ -451,7 +468,7 @@ Each command object must have a "type" field plus the parameters for that type:
   { "type": "accel",   "amax": 300 }
   { "type": "current", "run_ma": 500, "hold_ma": 150 }
   { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }
-  { "type": "truchet", "cx": 0, "cy": 0, "tile_size": 60, "depth": 2, "seed": 42 }
+  { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42, "motifs": 1955 }
   { "type": "bullseye","cx": 0, "cy": 0 }
   { "type": "grid",    "cx": 0, "cy": 0 }`,
   {
@@ -561,11 +578,16 @@ function buildEndpoint(cmd) {
         `&harmonics=${p.harmonics ?? 3}&seed=${p.seed ?? 42}&cycles=${p.cycles ?? 1}`
       );
 
-    case 'truchet':
+    case 'truchet': {
+      // motifs: either a numeric firmware bitmask or an array of motif names.
+      const mask = Array.isArray(p.motifs)
+        ? p.motifs.reduce((m, name) => m | (1 << (TRUCHET_MOTIFS[name] ?? 0)), 0)
+        : (p.motifs ?? 0);
       return (
-        `truchet?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}` +
-        `&tile_size=${p.tile_size ?? 60}&depth=${p.depth ?? 2}&seed=${p.seed ?? 42}`
+        `truchet?n=${p.n ?? 4}&spacing=${p.spacing ?? 3}` +
+        `&angle=${p.angle ?? 45}&seed=${p.seed ?? 42}&motifs=${mask}`
       );
+    }
 
     case 'bullseye':
       return `bullseye?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}`;

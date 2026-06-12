@@ -130,8 +130,11 @@ static void do_draw_grid(float cx, float cy);
 /* wobble: 0.0 = perfect circle … 1.0 = very distorted; harmonics controls shape complexity */
 static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
                             float wobble, int harmonics, int seed, int cycles);
-/* Multi-scale Truchet tiling: cx/cy=grid centre, tile_size=base cell mm, depth=subdivision levels */
-static void do_draw_truchet(float cx, float cy, float tile_size, int depth, int seed);
+/* Truchet tiling (Carlson 2018 winged motifs, single scale): cx/cy=grid centre
+ * (NAN = work-area centre), n=columns, spacing/angle = background hatch,
+ * mask = enabled-motif bitmask (0 = default set). */
+static void do_draw_truchet(float cx, float cy, int n, float spacing,
+                             float angle_deg, int seed, uint32_t mask);
 
 static void init_geometry(void)
 {
@@ -1143,113 +1146,471 @@ static void do_draw_wobbly(float cx, float cy, float r, float bound_r,
 #undef WOBBLY_MAX_PTS
 }
 
-/* ---- Truchet multi-scale tiling ------------------------------------------ */
-
-/* Draw a partial circular arc; pen must already be down.
- * Center (cx,cy), radius r, sweeps from start_deg to end_deg (degrees CW in
- * Y-down frame). Uses the same chord-rotation trick as do_draw_circle: the
- * segment count from plt_arc_segments() keeps the sagitta within
- * CIRCLE_CHORD_ERR_MM, and each chord is a single fast coordinated move. */
-static void draw_arc_steps(float cx, float cy, float r,
-                            float start_deg, float end_deg)
-{
-    float span = end_deg - start_deg;
-    int n_full = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
-    int n = (int)ceilf(fabsf(span) / 360.0f * (float)n_full);
-    if (n < 3) n = 3;
-
-    float dth = span / (float)n * PLT_PI / 180.0f;
-    float dc = cosf(dth), ds = sinf(dth);
-    float vx = r * cosf(start_deg * PLT_PI / 180.0f);
-    float vy = r * sinf(start_deg * PLT_PI / 180.0f);
-
-    for (int k = 0; k < n && !g_job_abort; k++) {
-        float nvx = vx * dc - vy * ds;
-        float nvy = vx * ds + vy * dc;
-        vx = nvx; vy = nvy;
-        move_to_xy(cx + vx, cy + vy);
-    }
-    /* Snap exactly to the declared endpoint to kill float accumulation. */
-    if (!g_job_abort)
-        move_to_xy(cx + r * cosf(end_deg * PLT_PI / 180.0f),
-                   cy + r * sinf(end_deg * PLT_PI / 180.0f));
-}
-
-/* Draw one Truchet tile at (x0,y0) side sz: two quarter-circle arcs whose
- * chord endpoints sit at edge midpoints, so arcs join seamlessly at tile
- * boundaries.
+/* ---- Truchet tiling (Carlson 2018, single-scale winged motifs) ------------
  *
- * In Y-down coordinates (0°=right, 90°=down):
- *   type A: TL corner (0°→90°)  + BR corner (180°→270°)  top↔left, bottom↔right
- *   type B: TR corner (90°→180°) + BL corner (270°→360°)  right↔top, left↔bottom  */
-static void draw_truchet_tile(float x0, float y0, float sz, bool type_b)
-{
-    if (g_job_abort) return;
-    float r = sz * 0.5f;
-    struct { float cx, cy, a0, a1; } arcs[2];
+ * Carlson's multi-scale Truchet tile family ("Multi-Scale Truchet Patterns",
+ * Bridges 2018): strips of width sz/3 whose boundaries meet each tile edge at
+ * the 1/3 and 2/3 points, plus disks of radius sz/6 at every edge midpoint
+ * (the "wings" — dots on dot-edges, rounded strip caps at the grid boundary).
+ * The motif (positive space) is left as white paper; the background (negative
+ * space) is hatched with globally phase-aligned lines so the texture reads as
+ * one continuous field across tile boundaries.
+ *
+ * Strip/disk tangency does the seam work: a midpoint disk is tangent to both
+ * strip boundary curves at the edge's 1/3 and 2/3 points, so ribbons flow
+ * smoothly tile-to-tile with no bookkeeping. Each tile strokes only its own
+ * side of a shared edge (its strip curves, or its inward dot semicircle); the
+ * neighbour completes the picture from its side. */
 
-    if (!type_b) {
-        arcs[0].cx = x0;      arcs[0].cy = y0;      arcs[0].a0 =   0.f; arcs[0].a1 =  90.f;
-        arcs[1].cx = x0 + sz; arcs[1].cy = y0 + sz; arcs[1].a0 = 180.f; arcs[1].a1 = 270.f;
-    } else {
-        arcs[0].cx = x0 + sz; arcs[0].cy = y0;      arcs[0].a0 =  90.f; arcs[0].a1 = 180.f;
-        arcs[1].cx = x0;      arcs[1].cy = y0 + sz; arcs[1].a0 = 270.f; arcs[1].a1 = 360.f;
+/* Motif indices. Carlson's set is closed under rotation, so rotations are
+ * distinct motifs — there is no separate rotation parameter. */
+enum {
+    TM_BS = 0,   /* \   two diagonal arc strips (NE + SW corners)      */
+    TM_FS,       /* /   two diagonal arc strips (NW + SE corners)      */
+    TM_HB,       /* -   horizontal bar, dots N + S                     */
+    TM_VB,       /* |   vertical bar,   dots E + W                     */
+    TM_DOTS,     /* +.  four dots                                      */
+    TM_BLOB,     /* x.  centre blob (square minus corner bites)        */
+    TM_PLUS,     /* +   crossing bars                                  */
+    TM_FNE, TM_FSW, TM_FNW, TM_FSE,   /* frowns: one arc strip + 2 dots */
+    TM_TN,  TM_TS,  TM_TE,  TM_TW,    /* tees: bar + stem, 1 dot        */
+    TM_COUNT
+};
+#define TRUCHET_ALL_MASK      ((1u << TM_COUNT) - 1u)
+#define TRUCHET_DEFAULT_MASK  0x07A3u  /* \ / x. fne fsw fnw fse */
+#define TRUCHET_MIN_CELL_MM   40.0f
+#define TRUCHET_MAX_CELLS     1024
+
+/* Edges in N,E,S,W order (bits 0..3); set bit = that edge carries a dot
+ * (its two 1/3-2/3 points pair with each other) instead of a strip. */
+static const uint8_t tm_dot_edges[TM_COUNT] = {
+    0, 0, 5, 10, 15, 0, 0,   /* \ / - | +. x. + */
+    12, 3, 6, 9,             /* fne fsw fnw fse */
+    4, 1, 8, 2,              /* tn ts te tw     */
+};
+
+/* Reproducible PRNG shared bit-for-bit with the console preview (numerical
+ * recipes LCG) — libc rand() differs per toolchain, so it can't be mirrored. */
+static uint32_t s_tk_rng;
+static inline uint32_t tk_rand(void)
+{
+    s_tk_rng = s_tk_rng * 1664525u + 1013904223u;
+    return (s_tk_rng >> 16) & 0x7fff;
+}
+
+/* Streaming pen sink: feed consecutive segments; clips each to the work area
+ * (rect + inscribed ellipse when active) and manages pen lift/drop across
+ * gaps, so contiguous segments draw as one unbroken path. */
+static struct { float x, y; bool down, valid; } s_tk_pen;
+
+static void tk_break(void)
+{
+    if (s_tk_pen.down) { pen_lift(); s_tk_pen.down = false; }
+    s_tk_pen.valid = false;
+}
+
+/* Clip segment (x0,y0)->(x1,y1) to the work area; false = fully outside. */
+static bool tk_clip_seg(float x0, float y0, float x1, float y1,
+                         float *t0, float *t1)
+{
+    *t0 = 0.0f; *t1 = 1.0f;
+    float dx = x1 - x0, dy = y1 - y0;
+    float ps[4] = { -dx, dx, -dy, dy };
+    float qs[4] = { x0 - g_x_min, g_x_max - x0, y0 - g_y_min, g_y_max - y0 };
+    for (int k = 0; k < 4; k++) {
+        if (fabsf(ps[k]) < 1e-9f) {
+            if (qs[k] < 0.0f) return false;
+        } else {
+            float r = qs[k] / ps[k];
+            if (ps[k] < 0.0f) { if (r > *t0) *t0 = r; }
+            else               { if (r < *t1) *t1 = r; }
+        }
     }
-    for (int i = 0; i < 2 && !g_job_abort; i++) {
-        float sx = arcs[i].cx + r * cosf(arcs[i].a0 * PLT_PI / 180.0f);
-        float sy = arcs[i].cy + r * sinf(arcs[i].a0 * PLT_PI / 180.0f);
-        pen_lift();
-        move_to_xy(sx, sy);
+    if (g_bounds_ellipse) {
+        float ccx, ccy, rx, ry;
+        ellipse_norm(0, 0, &ccx, &ccy, &rx, &ry);
+        if (rx <= 0.0f || ry <= 0.0f) return false;
+        float ex = (x0 - ccx) / rx, ey = (y0 - ccy) / ry;
+        float fx = dx / rx,        fy = dy / ry;
+        float a = fx * fx + fy * fy;
+        float b = 2.0f * (ex * fx + ey * fy);
+        float c = ex * ex + ey * ey - 1.0f;
+        if (a < 1e-12f) {
+            if (c > 0.0f) return false;
+        } else {
+            float disc = b * b - 4.0f * a * c;
+            if (disc < 0.0f) return false;
+            float sq = sqrtf(disc);
+            float u0 = (-b - sq) / (2.0f * a), u1 = (-b + sq) / (2.0f * a);
+            if (u0 > *t0) *t0 = u0;
+            if (u1 < *t1) *t1 = u1;
+        }
+    }
+    return *t1 > *t0;
+}
+
+static void tk_seg(float x0, float y0, float x1, float y1)
+{
+    if (motion_should_abort()) return;
+    float t0, t1;
+    if (!tk_clip_seg(x0, y0, x1, y1, &t0, &t1)) { tk_break(); return; }
+    float ax = x0 + (x1 - x0) * t0, ay = y0 + (y1 - y0) * t0;
+    float bx = x0 + (x1 - x0) * t1, by = y0 + (y1 - y0) * t1;
+    bool contig = s_tk_pen.valid && s_tk_pen.down &&
+                  fabsf(ax - s_tk_pen.x) < 0.05f &&
+                  fabsf(ay - s_tk_pen.y) < 0.05f;
+    if (!contig) {
+        if (s_tk_pen.down) pen_lift();
+        s_tk_pen.down = false;
+        move_to_xy(ax, ay);
+        if (motion_should_abort()) return;
         pen_drop();
-        draw_arc_steps(arcs[i].cx, arcs[i].cy, r, arcs[i].a0, arcs[i].a1);
+        s_tk_pen.down = true;
+    }
+    draw_line_mm(ax, ay, bx, by);
+    s_tk_pen.x = bx; s_tk_pen.y = by; s_tk_pen.valid = true;
+}
+
+/* Polyline a circular arc through the pen sink (degrees, Y-down frame). */
+static void tk_arc(float cx, float cy, float r, float a0_deg, float a1_deg)
+{
+    int n_full = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    int n = (int)ceilf(fabsf(a1_deg - a0_deg) / 360.0f * (float)n_full);
+    if (n < 4) n = 4;
+    float px = cx + r * cosf(a0_deg * PLT_PI / 180.0f);
+    float py = cy + r * sinf(a0_deg * PLT_PI / 180.0f);
+    for (int k = 1; k <= n && !g_job_abort; k++) {
+        float a = (a0_deg + (a1_deg - a0_deg) * (float)k / (float)n)
+                  * PLT_PI / 180.0f;
+        float nx = cx + r * cosf(a), ny = cy + r * sinf(a);
+        tk_seg(px, py, nx, ny);
+        px = nx; py = ny;
     }
 }
 
-/* Minimum tile side below which we stop subdividing (pen can't draw cleanly
- * below ~20mm arcs on this machine). */
-#define TRUCHET_MIN_TILE_MM  20.0f
-
-/* Recursively tile one cell: draw a tile OR split into four sub-cells.
- * At depth=0 always draws; at depth>0 each cell independently flips a coin
- * (50 % chance of subdivision, provided the half-size is still drawable). */
-static void truchet_cell(float x0, float y0, float sz, int depth)
+/* Semicircle of the midpoint disk on edge e (0=N,1=E,2=S,3=W) of the tile at
+ * (x0,y0): inner half (bulging into the tile) for dots, outer half for the
+ * rounded caps / dot completion on grid-boundary edges. */
+static void tk_dot_half(int e, float x0, float y0, float sz, bool outer)
 {
-    if (g_job_abort) return;
-    bool subdivide = (depth > 0) && (sz * 0.5f >= TRUCHET_MIN_TILE_MM) && (rand() & 1);
-    if (!subdivide) {
-        draw_truchet_tile(x0, y0, sz, (bool)(rand() & 1));
-    } else {
-        float h = sz * 0.5f;
-        truchet_cell(x0,     y0,     h, depth - 1);
-        truchet_cell(x0 + h, y0,     h, depth - 1);
-        truchet_cell(x0,     y0 + h, h, depth - 1);
-        truchet_cell(x0 + h, y0 + h, h, depth - 1);
+    static const float mu[4] = { 0.5f, 1.0f, 0.5f, 0.0f };
+    static const float mv[4] = { 0.0f, 0.5f, 1.0f, 0.5f };
+    static const float a_in[4] = { 0.0f, 90.0f, 180.0f, 270.0f }; /* inner start */
+    float a0 = a_in[e] + (outer ? 180.0f : 0.0f);
+    tk_arc(x0 + mu[e] * sz, y0 + mv[e] * sz, sz / 6.0f, a0, a0 + 180.0f);
+}
+
+/* Stroke the motif's strip boundary curves. Corner-quadrant angle ranges in
+ * the Y-down frame: NW(0,0)=0..90, NE(1,0)=90..180, SE(1,1)=180..270,
+ * SW(0,1)=270..360. All endpoints land on the edges' 1/3-2/3 points. */
+static void tk_motif_strokes(int m, float x0, float y0, float sz)
+{
+    const float A = sz / 3.0f, B = 2.0f * sz / 3.0f;
+    const float nwx = x0,      nwy = y0;
+    const float nex = x0 + sz, ney = y0;
+    const float sex = x0 + sz, sey = y0 + sz;
+    const float swx = x0,      swy = y0 + sz;
+
+    switch (m) {
+    case TM_BS:
+        tk_arc(nex, ney, A,  90, 180);  tk_arc(nex, ney, B,  90, 180);
+        tk_arc(swx, swy, A, 270, 360);  tk_arc(swx, swy, B, 270, 360);
+        break;
+    case TM_FS:
+        tk_arc(nwx, nwy, A,   0,  90);  tk_arc(nwx, nwy, B,   0,  90);
+        tk_arc(sex, sey, A, 180, 270);  tk_arc(sex, sey, B, 180, 270);
+        break;
+    case TM_HB:
+        tk_seg(x0, y0 + A, x0 + sz, y0 + A);
+        tk_seg(x0 + sz, y0 + B, x0, y0 + B);
+        break;
+    case TM_VB:
+        tk_seg(x0 + A, y0, x0 + A, y0 + sz);
+        tk_seg(x0 + B, y0 + sz, x0 + B, y0);
+        break;
+    case TM_DOTS:
+        break;                          /* dots only — drawn from tm_dot_edges */
+    case TM_BLOB:
+        tk_arc(nwx, nwy, A,   0,  90);  tk_arc(swx, swy, A, 270, 360);
+        tk_arc(sex, sey, A, 180, 270);  tk_arc(nex, ney, A,  90, 180);
+        break;
+    case TM_PLUS:                       /* bar lines broken at the crossing */
+        tk_seg(x0, y0 + A, x0 + A, y0 + A);  tk_seg(x0 + B, y0 + A, x0 + sz, y0 + A);
+        tk_seg(x0, y0 + B, x0 + A, y0 + B);  tk_seg(x0 + B, y0 + B, x0 + sz, y0 + B);
+        tk_seg(x0 + A, y0, x0 + A, y0 + A);  tk_seg(x0 + A, y0 + B, x0 + A, y0 + sz);
+        tk_seg(x0 + B, y0, x0 + B, y0 + A);  tk_seg(x0 + B, y0 + B, x0 + B, y0 + sz);
+        break;
+    case TM_FNE:
+        tk_arc(nex, ney, A,  90, 180);  tk_arc(nex, ney, B,  90, 180);
+        break;
+    case TM_FSW:
+        tk_arc(swx, swy, A, 270, 360);  tk_arc(swx, swy, B, 270, 360);
+        break;
+    case TM_FNW:
+        tk_arc(nwx, nwy, A,   0,  90);  tk_arc(nwx, nwy, B,   0,  90);
+        break;
+    case TM_FSE:
+        tk_arc(sex, sey, A, 180, 270);  tk_arc(sex, sey, B, 180, 270);
+        break;
+    case TM_TN:                         /* bar bottom edge + stem fillets */
+        tk_seg(x0, y0 + B, x0 + sz, y0 + B);
+        tk_arc(nwx, nwy, A, 0, 90);     tk_arc(nex, ney, A, 90, 180);
+        break;
+    case TM_TS:
+        tk_seg(x0, y0 + A, x0 + sz, y0 + A);
+        tk_arc(swx, swy, A, 270, 360);  tk_arc(sex, sey, A, 180, 270);
+        break;
+    case TM_TE:
+        tk_seg(x0 + A, y0, x0 + A, y0 + sz);
+        tk_arc(nex, ney, A, 90, 180);   tk_arc(sex, sey, A, 180, 270);
+        break;
+    case TM_TW:
+        tk_seg(x0 + B, y0, x0 + B, y0 + sz);
+        tk_arc(nwx, nwy, A, 0, 90);     tk_arc(swx, swy, A, 270, 360);
+        break;
+    default:
+        break;
     }
 }
 
-/* Multi-scale Truchet: cover the work area with tile_size×tile_size cells;
- * each cell may independently subdivide up to `depth` times (Carlson 2018).
- * Grid is centred at (cx, cy). Same seed → same pattern. */
-static void do_draw_truchet(float cx, float cy, float tile_size, int depth, int seed)
+/* Positive-space (strip) test in tile-unit coords. Dots are NOT included here:
+ * the hatch excluder always masks all four midpoint disks, which covers own
+ * dots, own strip caps, and the neighbour's wings reaching across the edge. */
+static inline float tk_d2(float u, float v, float px, float py)
 {
-    if (tile_size < TRUCHET_MIN_TILE_MM) tile_size = TRUCHET_MIN_TILE_MM;
-    if (depth < 0) depth = 0;
-    if (depth > 4) depth = 4;
+    float dx = u - px, dy = v - py;
+    return dx * dx + dy * dy;
+}
+
+static bool tk_inside_motif(int m, float u, float v)
+{
+    const float R1 = 1.0f / 9.0f, R2 = 4.0f / 9.0f;  /* (1/3)^2, (2/3)^2 */
+    #define ANN(cx, cy)  (tk_d2(u, v, cx, cy) >= R1 && tk_d2(u, v, cx, cy) <= R2)
+    #define QD(cx, cy)   (tk_d2(u, v, cx, cy) <  R1)
+    switch (m) {
+    case TM_BS:   return ANN(1, 0) || ANN(0, 1);
+    case TM_FS:   return ANN(0, 0) || ANN(1, 1);
+    case TM_HB:   return v >= 1.0f / 3.0f && v <= 2.0f / 3.0f;
+    case TM_VB:   return u >= 1.0f / 3.0f && u <= 2.0f / 3.0f;
+    case TM_DOTS: return false;
+    case TM_BLOB: return !(QD(0, 0) || QD(1, 0) || QD(1, 1) || QD(0, 1));
+    case TM_PLUS: return (v >= 1.0f / 3.0f && v <= 2.0f / 3.0f) ||
+                         (u >= 1.0f / 3.0f && u <= 2.0f / 3.0f);
+    case TM_FNE:  return ANN(1, 0);
+    case TM_FSW:  return ANN(0, 1);
+    case TM_FNW:  return ANN(0, 0);
+    case TM_FSE:  return ANN(1, 1);
+    case TM_TN:   return v <= 2.0f / 3.0f && !QD(0, 0) && !QD(1, 0);
+    case TM_TS:   return v >= 1.0f / 3.0f && !QD(0, 1) && !QD(1, 1);
+    case TM_TE:   return u >= 1.0f / 3.0f && !QD(1, 0) && !QD(1, 1);
+    case TM_TW:   return u <= 2.0f / 3.0f && !QD(0, 0) && !QD(0, 1);
+    default:      return false;
+    }
+    #undef ANN
+    #undef QD
+}
+
+static bool tk_hatch_excluded(int m, float u, float v)
+{
+    const float RD = 1.0f / 36.0f;                   /* (1/6)^2 */
+    if (tk_inside_motif(m, u, v)) return true;
+    return tk_d2(u, v, 0.5f, 0.0f) <= RD || tk_d2(u, v, 1.0f, 0.5f) <= RD ||
+           tk_d2(u, v, 0.5f, 1.0f) <= RD || tk_d2(u, v, 0.0f, 0.5f) <= RD;
+}
+
+/* Hatch one tile's negative space. Hatch lines live on a GLOBAL lattice
+ * (offset = k*spacing along the hatch normal, in machine coords) so the
+ * texture is phase-continuous across every tile. Each line is clipped to the
+ * tile square, split at every crossing of a motif boundary curve, and the
+ * sub-intervals whose midpoints fall in negative space are drawn (snaking
+ * direction by line parity to cut pen-up travel). */
+static void tk_hatch_tile(int m, float x0, float y0, float sz,
+                           float angle_deg, float spacing)
+{
+    /* Candidate boundary circles (unit coords: cx, cy, r): the four midpoint
+     * disks always, plus the motif's arc/bite circles. */
+    float circ[12][3];
+    int nc = 0;
+    static const float mid[4][2] = { {0.5f, 0}, {1, 0.5f}, {0.5f, 1}, {0, 0.5f} };
+    for (int e = 0; e < 4; e++) {
+        circ[nc][0] = mid[e][0]; circ[nc][1] = mid[e][1]; circ[nc][2] = 1.0f / 6.0f;
+        nc++;
+    }
+    static const float cnr[4][2] = { {0, 0}, {1, 0}, {1, 1}, {0, 1} }; /* NW NE SE SW */
+    #define ADD_C(ci, r)  do { circ[nc][0] = cnr[ci][0]; circ[nc][1] = cnr[ci][1]; \
+                               circ[nc][2] = (r); nc++; } while (0)
+    switch (m) {
+    case TM_BS:   ADD_C(1, 1.0f/3); ADD_C(1, 2.0f/3); ADD_C(3, 1.0f/3); ADD_C(3, 2.0f/3); break;
+    case TM_FS:   ADD_C(0, 1.0f/3); ADD_C(0, 2.0f/3); ADD_C(2, 1.0f/3); ADD_C(2, 2.0f/3); break;
+    case TM_BLOB: ADD_C(0, 1.0f/3); ADD_C(1, 1.0f/3); ADD_C(2, 1.0f/3); ADD_C(3, 1.0f/3); break;
+    case TM_FNE:  ADD_C(1, 1.0f/3); ADD_C(1, 2.0f/3); break;
+    case TM_FSW:  ADD_C(3, 1.0f/3); ADD_C(3, 2.0f/3); break;
+    case TM_FNW:  ADD_C(0, 1.0f/3); ADD_C(0, 2.0f/3); break;
+    case TM_FSE:  ADD_C(2, 1.0f/3); ADD_C(2, 2.0f/3); break;
+    case TM_TN:   ADD_C(0, 1.0f/3); ADD_C(1, 1.0f/3); break;
+    case TM_TS:   ADD_C(3, 1.0f/3); ADD_C(2, 1.0f/3); break;
+    case TM_TE:   ADD_C(1, 1.0f/3); ADD_C(2, 1.0f/3); break;
+    case TM_TW:   ADD_C(0, 1.0f/3); ADD_C(3, 1.0f/3); break;
+    default: break;
+    }
+    #undef ADD_C
+
+    /* Candidate straight boundaries: vertical u=c / horizontal v=c. */
+    float lu[2], lv[2];
+    int nlu = 0, nlv = 0;
+    switch (m) {
+    case TM_HB:   lv[nlv++] = 1.0f/3; lv[nlv++] = 2.0f/3; break;
+    case TM_VB:   lu[nlu++] = 1.0f/3; lu[nlu++] = 2.0f/3; break;
+    case TM_PLUS: lv[nlv++] = 1.0f/3; lv[nlv++] = 2.0f/3;
+                  lu[nlu++] = 1.0f/3; lu[nlu++] = 2.0f/3; break;
+    case TM_TN:   lv[nlv++] = 2.0f/3; break;
+    case TM_TS:   lv[nlv++] = 1.0f/3; break;
+    case TM_TE:   lu[nlu++] = 1.0f/3; break;
+    case TM_TW:   lu[nlu++] = 2.0f/3; break;
+    default: break;
+    }
+
+    float th = angle_deg * PLT_PI / 180.0f;
+    float dx = cosf(th),  dy = sinf(th);     /* along the hatch line   */
+    float nx = -sinf(th), ny = cosf(th);     /* hatch normal (offsets) */
+
+    /* Global lattice line indices covering this tile. */
+    float offs[4] = {
+        x0 * nx +  y0       * ny,  (x0 + sz) * nx +  y0       * ny,
+        x0 * nx + (y0 + sz) * ny,  (x0 + sz) * nx + (y0 + sz) * ny,
+    };
+    float omin = offs[0], omax = offs[0];
+    for (int i = 1; i < 4; i++) {
+        if (offs[i] < omin) omin = offs[i];
+        if (offs[i] > omax) omax = offs[i];
+    }
+    int k0 = (int)ceilf(omin / spacing), k1 = (int)floorf(omax / spacing);
+
+    for (int k = k0; k <= k1 && !motion_should_abort(); k++) {
+        float lx = (float)k * spacing * nx, ly = (float)k * spacing * ny;
+        float s0, s1;
+        if (!clip_to_rect(x0 + sz * 0.5f, y0 + sz * 0.5f, sz * 0.5f,
+                          lx, ly, dx, dy, &s0, &s1))
+            continue;
+
+        /* Split points: every boundary-curve crossing inside [s0, s1]. */
+        float ts[32];
+        int nt = 0;
+        ts[nt++] = s0; ts[nt++] = s1;
+        for (int i = 0; i < nc && nt < 30; i++) {
+            float u0, u1;
+            if (clip_to_circle(x0 + circ[i][0] * sz, y0 + circ[i][1] * sz,
+                               circ[i][2] * sz, lx, ly, dx, dy, &u0, &u1)) {
+                if (u0 > s0 && u0 < s1) ts[nt++] = u0;
+                if (u1 > s0 && u1 < s1) ts[nt++] = u1;
+            }
+        }
+        for (int i = 0; i < nlu && nt < 31; i++) {
+            if (fabsf(dx) > 1e-7f) {
+                float t = (x0 + lu[i] * sz - lx) / dx;
+                if (t > s0 && t < s1) ts[nt++] = t;
+            }
+        }
+        for (int i = 0; i < nlv && nt < 31; i++) {
+            if (fabsf(dy) > 1e-7f) {
+                float t = (y0 + lv[i] * sz - ly) / dy;
+                if (t > s0 && t < s1) ts[nt++] = t;
+            }
+        }
+        for (int i = 1; i < nt; i++) {           /* insertion sort (tiny n) */
+            float v = ts[i];
+            int j = i - 1;
+            while (j >= 0 && ts[j] > v) { ts[j + 1] = ts[j]; j--; }
+            ts[j + 1] = v;
+        }
+
+        /* Keep negative-space intervals, then emit (snaked by line parity). */
+        float keep[16][2];
+        int nk = 0;
+        for (int i = 0; i + 1 < nt && nk < 16; i++) {
+            if (ts[i + 1] - ts[i] < 0.05f) continue;
+            float tm2 = 0.5f * (ts[i] + ts[i + 1]);
+            float pu = (lx + tm2 * dx - x0) / sz, pv = (ly + tm2 * dy - y0) / sz;
+            if (!tk_hatch_excluded(m, pu, pv)) {
+                keep[nk][0] = ts[i]; keep[nk][1] = ts[i + 1]; nk++;
+            }
+        }
+        for (int i = 0; i < nk; i++) {
+            int idx = (k & 1) ? (nk - 1 - i) : i;
+            float a = keep[idx][0], b = keep[idx][1];
+            if (k & 1) { float t = a; a = b; b = t; }
+            tk_seg(lx + a * dx, ly + a * dy, lx + b * dx, ly + b * dy);
+        }
+    }
+}
+
+/* Cover the work area with an n-column grid of square Truchet cells (rows
+ * derived from the height), each decorated with a random motif from `mask`
+ * and its negative space hatched. (cx,cy)=grid centre, NAN = work-area
+ * centre. Same seed + params => same drawing (mirrored by the web preview). */
+static void do_draw_truchet(float cx, float cy, int n, float spacing,
+                             float angle_deg, int seed, uint32_t mask)
+{
+    static uint8_t picks[TRUCHET_MAX_CELLS];
+
+    mask &= TRUCHET_ALL_MASK;
+    if (mask == 0) mask = TRUCHET_DEFAULT_MASK;
+    int motifs[TM_COUNT], nm = 0;
+    for (int i = 0; i < TM_COUNT; i++)
+        if (mask & (1u << i)) motifs[nm++] = i;
+
+    float W = g_x_max - g_x_min, H = g_y_max - g_y_min;
+    if (n < 1) n = 1;
+    float sz = W / (float)n;
+    if (sz < TRUCHET_MIN_CELL_MM) {
+        n = (int)(W / TRUCHET_MIN_CELL_MM);
+        if (n < 1) n = 1;
+        sz = W / (float)n;
+        web_log("truchet: cells clamped to >=%.0f mm -> %d cols",
+                (double)TRUCHET_MIN_CELL_MM, n);
+    }
+    int rows = (int)(H / sz);
+    if (rows < 1) rows = 1;
+    while (n * rows > TRUCHET_MAX_CELLS) rows--;
+    if (isnan(cx)) cx = 0.5f * (g_x_min + g_x_max);
+    if (isnan(cy)) cy = 0.5f * (g_y_min + g_y_max);
+    float gx = cx - (float)n * sz * 0.5f;
+    float gy = cy - (float)rows * sz * 0.5f;
+
+    /* Row-major motif picks FIRST so the RNG stream is independent of the
+     * serpentine draw order / skipped off-area cells (preview must match). */
+    s_tk_rng = (uint32_t)seed;
+    for (int i = 0; i < n * rows; i++)
+        picks[i] = (uint8_t)motifs[tk_rand() % (uint32_t)nm];
 
     tmc5072_enable(&tmc, true);
-    srand((unsigned)seed);
+    s_tk_pen.down = false; s_tk_pen.valid = false;
+    pen_lift();
+    web_log("truchet: %dx%d cells of %.0f mm, %d motifs, hatch %.1f mm @ %.0f deg",
+            n, rows, (double)sz, nm, (double)spacing, (double)angle_deg);
 
-    int cols = (int)((g_x_max - g_x_min) / tile_size);
-    int rows = (int)((g_y_max - g_y_min) / tile_size);
-    if (cols < 1) cols = 1;
-    if (rows < 1) rows = 1;
-    float gx = cx - (float)cols * tile_size * 0.5f;
-    float gy = cy - (float)rows * tile_size * 0.5f;
+    for (int ri = 0; ri < rows && !motion_should_abort(); ri++) {
+        for (int c2 = 0; c2 < n && !motion_should_abort(); c2++) {
+            int ci = (ri & 1) ? (n - 1 - c2) : c2;   /* serpentine for travel */
+            float tx = gx + (float)ci * sz, ty = gy + (float)ri * sz;
+            if (tx > g_x_max || tx + sz < g_x_min ||
+                ty > g_y_max || ty + sz < g_y_min)
+                continue;
+            int m = picks[ri * n + ci];
 
-    for (int ri = 0; ri < rows && !g_job_abort; ri++)
-        for (int ci = 0; ci < cols && !g_job_abort; ci++)
-            truchet_cell(gx + ci * tile_size, gy + ri * tile_size, tile_size, depth);
+            tk_motif_strokes(m, tx, ty, sz);
+            for (int e = 0; e < 4; e++) {
+                bool grid_edge = (e == 0 && ri == 0) || (e == 2 && ri == rows - 1) ||
+                                 (e == 3 && ci == 0) || (e == 1 && ci == n - 1);
+                if (tm_dot_edges[m] & (1u << e)) tk_dot_half(e, tx, ty, sz, false);
+                if (grid_edge)                    tk_dot_half(e, tx, ty, sz, true);
+            }
+            if (spacing >= 0.5f)
+                tk_hatch_tile(m, tx, ty, sz, angle_deg, spacing);
+        }
+    }
 
+    tk_break();
     pen_lift();
     emit_pos_event();
 }
@@ -1501,11 +1862,11 @@ static void web_draw_task(void *arg)
                 web_log("wobbly done");
                 break;
             case WCMD_TRUCHET:
-                web_log("truchet (%.1f,%.1f) tile=%.0f depth=%d seed=%d",
-                        (double)cmd.p[0], (double)cmd.p[1],
-                        (double)cmd.p[2], (int)cmd.p[3], (int)cmd.p[4]);
-                do_draw_truchet(cmd.p[0], cmd.p[1], cmd.p[2],
-                                (int)cmd.p[3], (int)cmd.p[4]);
+                web_log("truchet n=%d spacing=%.1f angle=%.0f seed=%d motifs=0x%x",
+                        (int)cmd.p[2], (double)cmd.p[3], (double)cmd.p[4],
+                        (int)cmd.p[5], (unsigned)cmd.p[6]);
+                do_draw_truchet(cmd.p[0], cmd.p[1], (int)cmd.p[2], cmd.p[3],
+                                cmd.p[4], (int)cmd.p[5], (uint32_t)cmd.p[6]);
                 web_log("truchet done");
                 break;
             case WCMD_SETHOME:
@@ -1683,19 +2044,22 @@ static int cmd_wobbly(int argc, char **argv)
 
 static int cmd_truchet(int argc, char **argv)
 {
-    if (argc < 3) {
-        printf("usage: truchet <tile_size_mm> <depth 0-4> [seed] [cx] [cy]\n");
-        printf("  tile_size: base grid cell side (mm); depth: subdivision levels (0=single scale)\n");
+    if (argc < 2) {
+        printf("usage: truchet <n_cols> [spacing_mm] [angle_deg] [seed] [motif_mask_hex]\n");
+        printf("  Carlson winged-motif tiling over the work area: ribbons stay white,\n");
+        printf("  background hatched. Cells >=%.0f mm; spacing 0 = outlines only.\n",
+               (double)TRUCHET_MIN_CELL_MM);
         return 0;
     }
-    float tile  = atof(argv[1]);
-    int   depth = atoi(argv[2]);
-    int   seed  = (argc >= 4) ? atoi(argv[3]) : 42;
-    float cx    = (argc >= 5) ? atof(argv[4]) : 0.0f;
-    float cy    = (argc >= 6) ? atof(argv[5]) : 0.0f;
-    printf("truchet tile=%.0f depth=%d seed=%d centre=(%.0f,%.0f)\n",
-           (double)tile, depth, seed, (double)cx, (double)cy);
-    do_draw_truchet(cx, cy, tile, depth, seed);
+    int      n       = atoi(argv[1]);
+    float    spacing = (argc >= 3) ? atof(argv[2]) : 3.0f;
+    float    angle   = (argc >= 4) ? atof(argv[3]) : 45.0f;
+    int      seed    = (argc >= 5) ? atoi(argv[4]) : 42;
+    uint32_t mask    = (argc >= 6) ? (uint32_t)strtoul(argv[5], NULL, 16)
+                                   : TRUCHET_DEFAULT_MASK;
+    printf("truchet n=%d spacing=%.1f angle=%.0f seed=%d motifs=0x%x\n",
+           n, (double)spacing, (double)angle, seed, (unsigned)mask);
+    do_draw_truchet(NAN, NAN, n, spacing, angle, seed, mask);
     printf("truchet done\n");
     return 0;
 }
@@ -1756,7 +2120,7 @@ static void register_commands(void)
         { .command = "circle", .help = "Draw a circle: circle <cx> <cy> <r_mm> [cycles] [fill 0|1]", .func = cmd_circle },
         { .command = "square",   .help = "Draw a square: square <cx> <cy> <size_mm> [cycles] [fill 0|1]", .func = cmd_square },
         { .command = "wobbly",   .help = "Random closed curve: wobbly <cx> <cy> <r> [bound_r] [wobble 0-1] [harmonics 1-8] [seed] [cycles]", .func = cmd_wobbly },
-        { .command = "truchet",  .help = "Multi-scale Truchet tiling: truchet <tile_mm> <depth 0-4> [seed] [cx] [cy]", .func = cmd_truchet },
+        { .command = "truchet",  .help = "Truchet tiling (hatched ground): truchet <n_cols> [spacing] [angle] [seed] [mask_hex]", .func = cmd_truchet },
         { .command = "bullseye", .help = "Draw calibration crosshair: bullseye [cx cy] (10mm arms, 5 passes)",        .func = cmd_bullseye },
         { .command = "grid",     .help = "Draw calibration grid: grid [cx cy] (10x10 lines, 8mm spacing, 100mm long)", .func = cmd_grid },
         { .command = "where",  .help = "Read XACTUAL back as an (x,y) mm coordinate", .func = cmd_where },

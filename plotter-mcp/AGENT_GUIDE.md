@@ -69,7 +69,7 @@ Rules:
 | `plot_circle` | Circle. `fill_mode` 0=outline, 1=hatch, 2=concentric rings. | `cx,cy,r, cycles, fill_mode, hatch_angle, spacing, outline` |
 | `plot_square` | Axis‑aligned square, same fill options as circle. | `cx,cy,size, cycles, fill_mode, hatch_angle, spacing, outline` |
 | `plot_wobbly` | Closed organic "blob" via a radial Fourier series — great for clouds, foliage, abstract forms. | `cx,cy,r, bound_r, wobble(0–1), harmonics(1–8), seed, cycles` |
-| `plot_truchet` | Multi-scale Truchet tiling (Carlson 2018): quarter-circle arcs over a recursive grid — intricate, fills large areas in one call. | `cx,cy, tile_size(≥20), depth(0–4), seed` |
+| `plot_truchet` | Truchet tiling (Carlson 2018 winged motifs): white ribbons through a hatched ground, whole work area in one call. **Slow** — see §recipes. | `n, spacing, angle, seed, motifs[]` |
 | `plot_bullseye` | Calibration crosshair + rings at a point. | `cx, cy` |
 | `plot_grid` | Calibration grid: 10×10 lines, 8 mm apart, 100 mm long (spans `cx±50, cy±50`). Checks straightness/squareness. | `cx, cy` |
 | `plot_border` | Trace the work-area boundary once (pen down). Draws exactly what the firmware thinks is the edge — useful for confirming the canvas limits before a plot. | — |
@@ -101,7 +101,7 @@ out of bounds) or an escape fires.
   { "type": "line",    "x0": -50, "y0": 0, "x1": 50, "y1": 0, "cycles": 2 },
   { "type": "circle",  "cx": 0, "cy": 100, "r": 60, "fill_mode": 2, "spacing": 4 },
   { "type": "wobbly",  "cx": -120, "cy": -80, "r": 50, "wobble": 0.5, "harmonics": 4, "seed": 7 },
-  { "type": "truchet", "cx": 0, "cy": 0, "tile_size": 60, "depth": 2, "seed": 42 },
+  { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42 },
   { "type": "home" }
 ]
 ```
@@ -139,11 +139,11 @@ out of bounds) or an escape fires.
 - **Use `plot_wobbly`** for anything organic; vary `seed` for different shapes,
   `harmonics` for complexity (1≈soft blob, 8≈jagged), `wobble` for how far from a
   circle.
-- **Use `plot_truchet`** to fill large areas with an intricate, self-similar tiling in
-  a single call — great for backgrounds, texture fills, or abstract pages. `depth 0` =
-  uniform flat grid; `depth 2–3` = Carlson-style multi-scale fractal look. Always
-  check that the work area is fully set up before calling it (it covers the whole
-  canvas). Change `seed` for a completely different pattern of the same character.
+- **Use `plot_truchet`** for a full-page figure/ground composition in one call: white
+  Carlson-motif ribbons winding through a continuously hatched field. Check the work
+  area is fully set up first (it covers the whole canvas), budget real plot time for
+  the hatching (wider `spacing` = much faster), and try `spacing: 0` first for a fast
+  outlines-only proof. Change `seed` for a different pattern of the same character.
 
 ## 7. Caveats & gotchas
 
@@ -252,28 +252,37 @@ bound_r]`. Great for clouds, foliage, rocks, abstract blobs.
 Quick recipes: `wobble 0.2, harmonics 2` = soft pebble · `0.5, 4` = leaf/cloud ·
 `0.9, 7` = spiky burst. Change only `seed` to get a different shape of the same character.
 
-### `plot_truchet` — multi-scale Truchet tiling
-Covers the work area with a grid of `tile_size × tile_size` mm cells. Each cell either
-draws two quarter-circle arcs connecting edge midpoints (a Truchet tile), or recursively
-splits into four half-size cells — controlled by `depth` and a random coin flip (seeded
-by `seed`). The two arcs per tile connect opposite edge midpoints: one orientation links
-top↔left and bottom↔right; the other links top↔right and bottom↔left. Adjacent tiles
-share edge-midpoint endpoints, so arcs from neighbouring cells chain into flowing curves
-across the canvas.
+### `plot_truchet` — Truchet tiling with hatched ground
+Covers the work area with an `n`-column grid of square cells (rows derived from the
+height; cell size clamped to ≥ 40 mm). Each cell gets a random motif from Carlson's
+winged tile family (Bridges 2018): strips of width cell/3 whose boundaries meet every
+cell edge at the 1/3 and 2/3 points, plus dots/caps of radius cell/6 at edge midpoints.
+Because all cells share those connection points, the strips chain into continuous white
+ribbons across the whole sheet.
 
-`depth 0` = flat uniform grid (50% chance of each orientation, no subdivision). Higher
-depth = more recursion → finer detail nested inside coarser cells (Carlson 2018 style).
-Minimum drawable tile size is 20 mm (set by firmware; `tile_size` below this is clamped).
+Rendering is figure/ground: the motif ribbons are **left as white paper**; everything
+else (the negative space) is **hatched** with lines on a single global lattice, so the
+hatch texture is phase-continuous across cell boundaries. In ellipse work-area mode the
+whole pattern is clipped to the ellipse edge. **This is the slowest tool per call** —
+hatching a full canvas at 2 mm spacing is a multi-hour plot; 3–4 mm is much faster.
 
 | Var | Type | Range | Default | Meaning |
 |-----|------|-------|---------|---------|
-| `cx,cy` | number | any | 0, 0 | Origin of the tiling grid (grid aligns to multiples of `tile_size` from this point). |
-| `tile_size` | number | ≥ 20 | 60 | Base cell size in mm. |
-| `depth` | int | 0–4 | 2 | Maximum subdivision depth. 0 = flat; 2–3 = visually fractal. |
+| `n` | int | 1–64 | 4 | Grid columns. Cell = width/n, clamped to ≥ 40 mm. |
+| `spacing` | number | ≥ 0 | 3 | Hatch line spacing mm. 0 = outlines only (fast preview on paper). |
+| `angle` | number | any | 45 | Hatch angle, degrees. |
 | `seed` | int | ≥ 0 | 42 | Random seed. Same seed + same params = identical pattern. |
+| `motifs` | string[] | see below | arcs+frowns+blob | Which tile shapes appear. |
 
-Quick recipes: `tile_size 80, depth 0` = simple uniform Truchet · `tile_size 60, depth 2`
-= standard multi-scale · `tile_size 40, depth 3, seed 7` = very dense fractal page-fill.
+Motif names: `\` `/` (diagonal arc ribbons), `-` `|` (bars), `+` (crossing bars),
+`x.` (centre blob), `+.` (four dots), `fne fsw fnw fse` (frowns: one corner arc + dots),
+`tn ts te tw` (tees: bar + stem). Carlson's richest results come from mixing 2–3 shapes,
+e.g. `["\\","fnw","x."]`. In `plot_script`, `motifs` may also be a numeric firmware
+bitmask (bit order as listed above).
+
+Quick recipes: `n 4, spacing 3` = bold default page · `n 6, spacing 4, motifs ["\\","/"]`
+= classic arc labyrinth · `spacing 0` = quick ink-free-ish outline proof before
+committing to the full hatch.
 
 ### `plot_border` — trace the work-area boundary
 Draws the work-area limit path exactly once, pen down. Follows whatever the firmware
