@@ -164,10 +164,14 @@ static void resp_json(httpd_req_t *req, const char *status, const char *msg)
  * /api/status until g_job_done >= id ("wait till the job is actually done"). */
 static uint32_t enqueue(wcmd_t *cmd)
 {
+    if (!g_draw_queue) return 0;
     uint32_t id = ++g_job_enqueued;
     cmd->id = id;
-    if (g_draw_queue)
-        xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200));
+    if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200)) != pdTRUE) {
+        /* Queue full: release the id so g_job_enqueued stays consistent. */
+        --g_job_enqueued;
+        return 0;
+    }
     return id;
 }
 
@@ -180,6 +184,14 @@ static void resp_json_id(httpd_req_t *req, const char *status, const char *msg, 
     snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"msg\":\"%s\",\"id\":%lu}\n",
              status, msg, (unsigned long)id);
     httpd_resp_sendstr(req, buf);
+}
+
+/* Enqueue helper: sends the queued-ok+id response or an error if the queue is full. */
+static void resp_enqueue(httpd_req_t *req, const char *label, wcmd_t *cmd)
+{
+    uint32_t id = enqueue(cmd);
+    if (id == 0) { resp_json(req, "error", "queue full"); return; }
+    resp_json_id(req, "ok", label, id);
 }
 
 /* Out-of-bounds gate: reject (no enqueue) anything that would leave the work area
@@ -218,7 +230,7 @@ static esp_err_t handle_circle(httpd_req_t *req)
     c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
     if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
     if (!box_ok(req, c.p[0], c.p[1], c.p[2], c.p[2])) return ESP_OK;
-    resp_json_id(req, "ok", "circle queued", enqueue(&c));
+    resp_enqueue(req, "circle queued", &c);
     return ESP_OK;
 }
 
@@ -236,7 +248,7 @@ static esp_err_t handle_square(httpd_req_t *req)
     c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
     if (c.p[2] <= 0) { resp_json(req, "error", "size must be > 0"); return ESP_OK; }
     if (!box_ok(req, c.p[0], c.p[1], c.p[2] * 0.5f, c.p[2] * 0.5f)) return ESP_OK;
-    resp_json_id(req, "ok", "square queued", enqueue(&c));
+    resp_enqueue(req, "square queued", &c);
     return ESP_OK;
 }
 
@@ -250,7 +262,7 @@ static esp_err_t handle_line(httpd_req_t *req)
     c.p[3] = qf(qs, "y1",    0.0f);
     c.p[4] = qf(qs, "cycles", 1.0f);
     if (!pt_ok(req, c.p[0], c.p[1]) || !pt_ok(req, c.p[2], c.p[3])) return ESP_OK;
-    resp_json_id(req, "ok", "line queued", enqueue(&c));
+    resp_enqueue(req, "line queued", &c);
     return ESP_OK;
 }
 
@@ -261,14 +273,14 @@ static esp_err_t handle_goto(httpd_req_t *req)
     c.p[0] = qf(qs, "x", 0.0f);
     c.p[1] = qf(qs, "y", 0.0f);
     if (!pt_ok(req, c.p[0], c.p[1])) return ESP_OK;
-    resp_json_id(req, "ok", "goto queued", enqueue(&c));
+    resp_enqueue(req, "goto queued", &c);
     return ESP_OK;
 }
 
 static esp_err_t handle_home(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_HOME };
-    resp_json_id(req, "ok", "home queued", enqueue(&c));
+    resp_enqueue(req, "home queued", &c);
     return ESP_OK;
 }
 
@@ -291,7 +303,7 @@ static esp_err_t handle_pen(httpd_req_t *req)
     if (strcmp(pos, "up") == 0)        c.type = WCMD_PEN_UP;
     else if (strcmp(pos, "down") == 0) c.type = WCMD_PEN_DOWN;
     else { c.type = WCMD_PEN_DEG; c.p[0] = qf(qs, "deg", 90.0f); }
-    resp_json_id(req, "ok", "pen queued", enqueue(&c));
+    resp_enqueue(req, "pen queued", &c);
     return ESP_OK;
 }
 
@@ -302,7 +314,7 @@ static esp_err_t handle_bullseye(httpd_req_t *req)
     c.p[0] = qf(qs, "cx", 0.0f);
     c.p[1] = qf(qs, "cy", 0.0f);
     if (!box_ok(req, c.p[0], c.p[1], 10.0f, 10.0f)) return ESP_OK;   /* 10mm arms */
-    resp_json_id(req, "ok", "bullseye queued", enqueue(&c));
+    resp_enqueue(req, "bullseye queued", &c);
     return ESP_OK;
 }
 
@@ -313,7 +325,7 @@ static esp_err_t handle_grid(httpd_req_t *req)
     c.p[0] = qf(qs, "cx", 0.0f);
     c.p[1] = qf(qs, "cy", 0.0f);
     if (!box_ok(req, c.p[0], c.p[1], 50.0f, 50.0f)) return ESP_OK;   /* 100mm lines */
-    resp_json_id(req, "ok", "grid queued", enqueue(&c));
+    resp_enqueue(req, "grid queued", &c);
     return ESP_OK;
 }
 
@@ -333,7 +345,7 @@ static esp_err_t handle_wobbly(httpd_req_t *req)
     /* default bound_r = r * 1.5 when caller passes 0 */
     if (c.p[3] <= 0.0f) c.p[3] = c.p[2] * 1.5f;
     if (!box_ok(req, c.p[0], c.p[1], c.p[3], c.p[3])) return ESP_OK;   /* bound_r extent */
-    resp_json_id(req, "ok", "wobbly queued", enqueue(&c));
+    resp_enqueue(req, "wobbly queued", &c);
     return ESP_OK;
 }
 
@@ -349,14 +361,14 @@ static esp_err_t handle_truchet(httpd_req_t *req)
     c.p[5] = qf(qs, "seed",   42.0f);
     c.p[6] = qf(qs, "motifs",  0.0f);   /* enabled-motif bitmask; 0 = default set */
     if (c.p[2] < 1.0f || c.p[2] > 64.0f) { resp_json(req, "error", "n must be 1..64"); return ESP_OK; }
-    resp_json_id(req, "ok", "truchet queued", enqueue(&c));
+    resp_enqueue(req, "truchet queued", &c);
     return ESP_OK;
 }
 
 static esp_err_t handle_sethome(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_SETHOME };
-    resp_json_id(req, "ok", "sethome queued", enqueue(&c));
+    resp_enqueue(req, "sethome queued", &c);
     return ESP_OK;
 }
 
@@ -365,7 +377,7 @@ static esp_err_t handle_sethome(httpd_req_t *req)
 static esp_err_t handle_border(httpd_req_t *req)
 {
     wcmd_t c = { .type = WCMD_BORDER };
-    resp_json_id(req, "ok", "border queued", enqueue(&c));
+    resp_enqueue(req, "border queued", &c);
     return ESP_OK;
 }
 
@@ -378,7 +390,7 @@ static esp_err_t handle_bounds(httpd_req_t *req)
     c.p[2] = qf(qs, "yn", -600.0f);   /* Y− (bottom / negative-Y limit) */
     c.p[3] = qf(qs, "yp",  400.0f);   /* Y+ (top / positive-Y limit)   */
     c.p[4] = qf(qs, "shape", 0.0f);   /* 0 = rectangle, 1 = inscribed ellipse */
-    resp_json_id(req, "ok", "bounds queued", enqueue(&c));
+    resp_enqueue(req, "bounds queued", &c);
     return ESP_OK;
 }
 
@@ -387,7 +399,7 @@ static esp_err_t handle_speed(httpd_req_t *req)
     char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_SPEED };
     c.p[0] = qf(qs, "vmax", 200000.0f);
-    resp_json_id(req, "ok", "speed queued", enqueue(&c));
+    resp_enqueue(req, "speed queued", &c);
     return ESP_OK;
 }
 
@@ -396,7 +408,7 @@ static esp_err_t handle_accel(httpd_req_t *req)
     char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_ACCEL };
     c.p[0] = qf(qs, "amax", 500.0f);
-    resp_json_id(req, "ok", "accel queued", enqueue(&c));
+    resp_enqueue(req, "accel queued", &c);
     return ESP_OK;
 }
 
@@ -406,7 +418,7 @@ static esp_err_t handle_cur(httpd_req_t *req)
     wcmd_t c = { .type = WCMD_CURRENT };
     c.p[0] = qf(qs, "run",   300.0f);
     c.p[1] = qf(qs, "hold",  -1.0f);   /* -1 = leave hold current unchanged */
-    resp_json_id(req, "ok", "current queued", enqueue(&c));
+    resp_enqueue(req, "current queued", &c);
     return ESP_OK;
 }
 
@@ -608,7 +620,7 @@ esp_err_t web_server_start(void)
 {
     s_log_stream = xStreamBufferCreate(LOG_STREAM_BYTES, 1);
     s_log_mutex  = xSemaphoreCreateMutex();
-    g_draw_queue = xQueueCreate(16, sizeof(wcmd_t));
+    g_draw_queue = xQueueCreate(256, sizeof(wcmd_t));
     s_sse_req_q  = xQueueCreate(1, sizeof(httpd_req_t *));
     if (!s_log_stream || !s_log_mutex || !g_draw_queue || !s_sse_req_q) {
         ESP_LOGE(TAG, "OOM allocating web server resources");

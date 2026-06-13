@@ -1798,6 +1798,9 @@ void plotter_abort_now(void)
     tmc5072_stop(&tmc, MOTOR_THETA);
     tmc5072_stop(&tmc, MOTOR_RHO);
     if (g_draw_queue) xQueueReset(g_draw_queue);
+    /* Declare all queued jobs done so g_job_done catches up to g_job_enqueued.
+     * Without this the system stays stuck at non-idle forever after a flush. */
+    g_job_done = g_job_enqueued;
     pen_lift();
 }
 
@@ -1986,7 +1989,8 @@ static void web_draw_task(void *arg)
                 break;
         }
         if (cmd.id) {
-            g_job_done = cmd.id;
+            /* Monotonic: plotter_abort_now may have jumped g_job_done ahead. */
+            if (cmd.id > g_job_done) g_job_done = cmd.id;
             if (g_aimode)
                 printf("[AI] job %lu %s: %s\n", (unsigned long)cmd.id,
                        g_job_abort ? "ABORTED" : "done", g_job_desc);
