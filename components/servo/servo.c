@@ -1,52 +1,36 @@
 #include "servo.h"
-#include "driver/ledc.h"
+#include "hardware/pwm.h"
+#include "hardware/gpio.h"
+#include "hardware/clocks.h"
 
-#define SERVO_MODE        LEDC_LOW_SPEED_MODE
-#define SERVO_TIMER       LEDC_TIMER_0
-#define SERVO_RES_BITS    LEDC_TIMER_14_BIT     /* 16384 ticks per period */
-#define SERVO_FREQ_HZ     50                    /* 20 ms period */
-#define SERVO_PERIOD_US   20000
-#define SERVO_TICKS_MAX   (1u << 14)
+/* 50 Hz with a 20 000-tick period, 1 tick = 1 µs.
+ * sys_clk / clkdiv / wrap = freq  →  150 000 000 / 150 / 20 000 = 50 Hz.
+ * (RP2350 default sys_clk is 150 MHz.) */
+#define SERVO_WRAP      19999u   /* wrap = 20 000 – 1 */
+#define SERVO_CLKDIV    150.0f   /* float divider: 150 MHz / 150 = 1 µs tick */
 
-static int s_channel;
+static uint s_slice;
+static uint s_channel;
 
-static uint32_t us_to_duty(uint32_t us)
+void servo_init(int gpio)
 {
-    if (us > SERVO_PERIOD_US) us = SERVO_PERIOD_US;
-    return (uint32_t)(((uint64_t)us * SERVO_TICKS_MAX) / SERVO_PERIOD_US);
-}
+    gpio_set_function(gpio, GPIO_FUNC_PWM);
+    s_slice   = pwm_gpio_to_slice_num((uint)gpio);
+    s_channel = pwm_gpio_to_channel((uint)gpio);
 
-esp_err_t servo_init(int gpio, int channel)
-{
-    ledc_timer_config_t timer = {
-        .speed_mode      = SERVO_MODE,
-        .duty_resolution = SERVO_RES_BITS,
-        .timer_num       = SERVO_TIMER,
-        .freq_hz         = SERVO_FREQ_HZ,
-        .clk_cfg         = LEDC_AUTO_CLK,
-    };
-    esp_err_t err = ledc_timer_config(&timer);
-    if (err != ESP_OK) return err;
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv(&cfg, SERVO_CLKDIV);
+    pwm_config_set_wrap(&cfg, SERVO_WRAP);
+    pwm_init(s_slice, &cfg, true);
 
-    ledc_channel_config_t ch = {
-        .gpio_num   = gpio,
-        .speed_mode = SERVO_MODE,
-        .channel    = channel,
-        .timer_sel  = SERVO_TIMER,
-        .duty       = 0,
-        .hpoint     = 0,
-    };
-    err = ledc_channel_config(&ch);
-    if (err != ESP_OK) return err;
-
-    s_channel = channel;
-    return ESP_OK;
+    /* Start at neutral (1500 µs = 90°). */
+    pwm_set_chan_level(s_slice, s_channel, 1500u);
 }
 
 void servo_write_us(uint32_t microseconds)
 {
-    ledc_set_duty(SERVO_MODE, s_channel, us_to_duty(microseconds));
-    ledc_update_duty(SERVO_MODE, s_channel);
+    if (microseconds > 20000u) microseconds = 20000u;
+    pwm_set_chan_level(s_slice, s_channel, (uint16_t)microseconds);
 }
 
 void servo_write_deg(float degrees)

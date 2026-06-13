@@ -1,0 +1,76 @@
+#pragma once
+
+/* lwIP options for Pico 2W (CYW43 / RP2350) + FreeRTOS.
+ * Based on the pico-w FreeRTOS examples lwipopts.h. */
+
+#define NO_SYS                          0   /* FreeRTOS integration */
+#define SYS_LIGHTWEIGHT_PROT            1
+#define LWIP_TIMEVAL_PRIVATE            0   /* pico-sdk provides struct timeval */
+
+/* Sockets (BSD API) */
+#define LWIP_SOCKET                     1
+#define LWIP_NETCONN                    0
+#define LWIP_COMPAT_SOCKETS             1   /* use socket() / send() / recv() directly */
+#define LWIP_SOCKET_SET_ERRNO           1
+#define LWIP_PROVIDE_ERRNO              1
+
+/* Socket timeouts (needed for SO_RCVTIMEO / SO_SNDTIMEO) */
+#define LWIP_SO_RCVTIMEO                1
+#define LWIP_SO_SNDTIMEO                1
+#define LWIP_SO_RCVBUF                  1
+
+/* Memory */
+#define MEM_LIBC_MALLOC                 0
+#define MEM_ALIGNMENT                   4
+#define MEM_SIZE                        (20 * 1024)
+#define MEMP_NUM_TCP_SEG               32
+#define MEMP_NUM_ARP_QUEUE             10
+#define PBUF_POOL_SIZE                  24
+
+/* TCP */
+#define LWIP_TCP                        1
+#define TCP_MSS                         1460
+#define TCP_WND                         (8 * TCP_MSS)
+#define TCP_SND_BUF                     (8 * TCP_MSS)
+#define TCP_SND_QUEUELEN               ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
+#define LWIP_TCP_KEEPALIVE              1
+
+/* UDP */
+#define LWIP_UDP                        1
+
+/* ICMP */
+#define LWIP_ICMP                       1
+
+/* ARP / Ethernet */
+#define LWIP_ARP                        1
+#define LWIP_ETHERNET                   1
+
+/* DHCP */
+#define LWIP_DHCP                       1
+#define DHCP_DOES_ARP_CHECK             0
+#define LWIP_DHCP_DOES_ACD_CHECK        0
+
+/* DNS */
+#define LWIP_DNS                        1
+
+/* Netif callbacks */
+#define LWIP_NETIF_STATUS_CALLBACK      1
+#define LWIP_NETIF_LINK_CALLBACK        1
+#define LWIP_NETIF_HOSTNAME             1
+
+/* Misc */
+#define LWIP_IPV4                       1
+#define LWIP_IPV6                       0
+#define LWIP_RAW                        1
+#define LWIP_NETIF_TX_SINGLE_PBUF       1
+#define LWIP_CHKSUM_ALGORITHM           3
+
+/* Stats (disable in production to save memory) */
+#define LWIP_STATS                      0
+#define MEM_STATS                       0
+#define SYS_STATS                       0
+#define MEMP_STATS                      0
+#define LINK_STATS                      0
+
+/* Debug (all off for production) */
+#define LWIP_DEBUG                      0

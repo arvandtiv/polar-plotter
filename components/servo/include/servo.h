@@ -1,13 +1,10 @@
 #pragma once
 #include <stdint.h>
-#include "esp_err.h"
 
-/* Minimal SG90 (50 Hz) pen-lift driver built on the LEDC peripheral.
- * channel is an ledc_channel_t value (e.g. LEDC_CHANNEL_0). */
-esp_err_t servo_init(int gpio, int channel);
+/* SG90 servo driver built on the RP2350 hardware PWM peripheral.
+ * 50 Hz (20 ms period); pulse width 500–2500 µs maps to 0–180°.
+ * The GPIO number is stored at init and used by every subsequent call. */
 
-/* Raw pulse width in microseconds (SG90: ~500..2500 us). */
+void servo_init(int gpio);
 void servo_write_us(uint32_t microseconds);
-
-/* Convenience: 0..180 degrees mapped to 500..2500 us. */
 void servo_write_deg(float degrees);

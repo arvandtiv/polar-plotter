@@ -1,139 +1,83 @@
 #pragma once
-#include "driver/spi_master.h"
-#include "driver/ledc.h"
 
 /* ============================================================
- *  Board: Waveshare ESP32-S3-Nano (WS-26745).
- *  It follows the Arduino Nano ESP32 pin map, so the silkscreen
- *  labels are NOT 1:1 with GPIO numbers. The SPI header pins are
- *  labeled SCK / MOSI / MISO (these are D13 / D11 / D12); CS is
- *  the pin labeled D10. GPIO numbers below are verified from the
- *  Waveshare ESP32-S3-Nano schematic (docs/).
+ *  Board: Raspberry Pi Pico 2W  (RP2350 + CYW43439 WiFi/BT)
+ *
+ *  SPI0 pins (top-left block of the Pico header, easy to wire):
+ *    Physical Pico pin 4  = GP2  → TMC5072 SCK
+ *    Physical Pico pin 5  = GP3  → TMC5072 SDI  (MOSI)
+ *    Physical Pico pin 6  = GP4  → TMC5072 SDO  (MISO, with 4.7k pull-up to 3.3V)
+ *    Physical Pico pin 7  = GP5  → TMC5072 CSN  (manual GPIO, active-LOW)
+ *    Physical Pico pin 9  = GP6  → TMC5072 ENN  (active-LOW enable)
+ *    Physical Pico pin 10 = GP7  → SG90 servo PWM
+ *    GND from Physical pin 8 (between GP5 and GP6) or any GND pin.
+ *
+ *  The Pico 2W is a 3.3 V system — direct SPI to the TMC5072-BOB at
+ *  VCCIO=3.3 V, shared ground.  No level shifter needed.
  * ============================================================ */
-#define PIN_SCK    48   /* hdr "SCK"  (D13)  orange  SPI clock                */
-#define PIN_MOSI   38   /* hdr "MOSI" (D11)  red     SDI (ESP32 -> TMC)       */
-#define PIN_MISO   47   /* hdr "MISO" (D12)  brown   SDO (4.7k pull-up VCCIO) */
-#define PIN_CSN    21   /* hdr "D10"         yellow  chip select             */
-#define PIN_ENN     8   /* hdr "D5"          green   active-LOW enable        */
-#define PIN_SERVO   9   /* hdr "D6"          orange  SG90 PWM                 */
 
-/* Direct-wired ENN (no optocoupler): the TMC enables when its ENN pin is LOW,
- * so the ESP32 drives D5 LOW to enable. 0 = drive low to enable. */
+/* SPI0 hardware pins */
+#define PIN_SCK    2    /* GP2  SPI0_SCK  */
+#define PIN_MOSI   3    /* GP3  SPI0_TX   */
+#define PIN_MISO   4    /* GP4  SPI0_RX   */
+
+/* Manual GPIOs */
+#define PIN_CSN    5    /* GP5  chip-select (active-LOW)     */
+#define PIN_ENN    6    /* GP6  enable (active-LOW to enable)*/
+#define PIN_SERVO  7    /* GP7  SG90 PWM                     */
+
+/* ENN is direct-wired, active-LOW: drive LOW to enable the TMC. */
 #define ENN_ON_LEVEL  0
 
-/* SPI clock. Bus is wired direct ESP32<->TMC (VCCIO=3.3V, shared ground), so it
- * runs fast. 1 MHz is a safe start on jumper wires; the TMC5072 handles several
- * MHz, so raise this once comms are confirmed. */
-#define TMC_SPI_HOST  SPI2_HOST
-#define TMC_SPI_HZ    1000000   /* 1 MHz (direct-wired) */
+/* SPI instance and clock */
+#define TMC_SPI_INST  spi0
+#define TMC_SPI_HZ    1000000   /* 1 MHz, safe start; can raise after comms confirmed */
 
-/* Pen lift servo — angles carried over from the wall-plotter (same mechanism). */
-#define SERVO_LEDC_CHANNEL  LEDC_CHANNEL_0
-#define PEN_UP_DEG          180
-#define PEN_DOWN_DEG        120
-#define PEN_DWELL_MS        200
+/* Pen lift servo */
+#define PEN_UP_DEG    180
+#define PEN_DOWN_DEG  120
+#define PEN_DWELL_MS  200
 
-/* TMC5072 is a dual driver — one chip, two motors. 0 = driver 1, 1 = driver 2. */
-#define MOTOR_THETA  0   /* "motor 1 / left"  */
-#define MOTOR_RHO    1   /* "motor 2 / right" */
+/* TMC5072 dual driver: 0 = driver 1 (left belt), 1 = driver 2 (right belt) */
+#define MOTOR_THETA  0
+#define MOTOR_RHO    1
 
-/* ---- Driver current calibration ----
- * Current in mA is derived from the BOB's sense resistor. R_SENSE MUST match
- * your TMC5072-BOB (check its schematic/silkscreen) or the mA figures are wrong.
- * The console prints the resulting CS + estimated mA so you can calibrate by
- * measuring actual coil current. */
-#define R_SENSE      0.15f   /* OHMS — VERIFY on your board! */
-#define VSENSE_HIGH  0       /* 0: Vfs=0.325V (more range), 1: Vfs=0.180V (low-mA resolution) */
+/* Current calibration (R_SENSE must match the TMC5072-BOB schematic). */
+#define R_SENSE      0.15f
+#define VSENSE_HIGH  0
 
-/* ---- Mechanical setup (same machine as ../wall-plotter; see CLAUDE.md) ----
- * GT2 belt, 20-tooth pulley -> 40 mm of belt per motor revolution.
- * 1.8deg motor -> 200 full steps/rev.
- * steps/mm = STEPS_PER_REV * microsteps / BELT_MM_PER_REV = 5 * microsteps
- *   -> 1280 steps/mm at the TMC5072's native 256 microsteps. */
+/* Mechanical (same machine as ESP32 build; see CLAUDE.md). */
 #define STEPS_PER_REV    200
-#define MICROSTEPS       256      /* TMC5072 native (MRES=0); matches CHOPCONF */
-#define BELT_MM_PER_REV  40.0f    /* GT2 2mm pitch * 20 teeth */
-/* microsteps per mm of belt = 200 * 256 / 40 = 1280 */
-#define STEPS_PER_MM          ((float)(STEPS_PER_REV * MICROSTEPS) / BELT_MM_PER_REV)
-#define MOTOR_SPAN_MM    978.0f   /* anchor-to-anchor; re-measure for this build */
-
-/* Origin definition, the easy-to-measure way: instead of the vertical drop, give
- * the MEASURED belt length (motor -> gondola) with the gondola parked at the
- * midpoint origin. Both belts are equal there by symmetry, so one number defines
- * the home. The firmware derives the vertical drop from this and the span
- * (drop = sqrt(HOME_BELT_MM^2 - (MOTOR_SPAN_MM/2)^2)) at startup.
- * Measured for this build: 715 mm each. Update if `setbelt` finds a better value. */
-#define HOME_BELT_MM     715.0f   /* belt length at the origin (both belts equal) */
-
-/* Belt-lengthening -> step-sign per motor. The left motor is mirror-mounted
- * (CLAUDE.md), so the two often differ. THESE ARE GUESSES — confirm on the real
- * machine with the `belt` dry-run + `jog` before trusting `goto`. This is the
- * axis/sign knob that caused the earlier calibration grief; flip a value here
- * (and rebuild) if a motor drives the wrong way. */
+#define MICROSTEPS       256
+#define BELT_MM_PER_REV  40.0f
+#define STEPS_PER_MM     ((float)(STEPS_PER_REV * MICROSTEPS) / BELT_MM_PER_REV)
+#define MOTOR_SPAN_MM    978.0f
+#define HOME_BELT_MM     715.0f
 #define LEFT_DIR_SIGN    (+1)
 #define RIGHT_DIR_SIGN   (+1)
 
-/* Drawable area limits (mm, origin at centre). The gondola will be clamped to
- * this rectangle and a warning printed if any command targets outside it. */
+/* Drawable area limits (mm, origin at centre). */
 #define X_MAX_MM   240.0f
 #define X_MIN_MM  -240.0f
 #define Y_MAX_MM   200.0f
 #define Y_MIN_MM  -200.0f
 
-/* Max chord bulge (sagitta) when approximating arcs/circles with line segments.
- * Smaller = rounder but more (slower) segments. 0.3 mm is a good plotter default;
- * the `circle` command sizes its segment count from this and the radius. */
+/* Arc / line quality */
 #define CIRCLE_CHORD_ERR_MM  0.3f
-#define HATCH_SPACING_MM     3.0f   /* gap between fill hatch lines (mm) */
-
-/* Max length of a single straight-line sub-segment (mm). Straight Cartesian
- * lines (e.g. `square` edges) are split into pieces this long so the step-space
- * interpolation stays visually straight. Smaller = more accurate but slower:
- * the motor's lookahead window = LOOKAHEAD + SEG, and equilibrium drawing speed
- * scales with sqrt(window). On this machine (span ~978mm, drop ~521mm) the bow
- * per segment scales as L²/span, so at 5mm the bow is ~0.025mm — well below pen
- * tip width and invisible. 2mm was unnecessarily conservative. */
+#define HATCH_SPACING_MM     3.0f
 #define LINE_SEG_MM          5.0f
-
-/* Look-ahead distance for smooth (non-stop) line drawing: while drawing an edge,
- * the next sub-segment target is issued as soon as the gondola comes within this
- * distance of the current one -- so the ramp generator never decelerates to a
- * full stop mid-edge and the motion stays continuous. MUST be < LINE_SEG_MM so
- * waypoints aren't skipped (which would let the bow back in). Larger = smoother
- * but cuts slightly inside the path; corners stay exact (each edge ends with a
- * real stop). */
 #define LINE_LOOKAHEAD_MM    2.0f
 
-/* ---- WiFi + UDP boundary-hit listener ----
- * Joins the same network the camera-tracking Python script (gondola_boundary_keeper.py,
- * sibling ../wall-plotter project) runs on. That script sends single-byte UDP edge
- * codes ('1'/'2'/'3'/'4' = side hit, 'o' = drifted far past the arena); on receiving
- * any of them this firmware homes the gondola (see home_gondola() in main.c).
- * NOTE: station mode gets a DHCP IP -- read it off the serial log after boot and
- * point the Python script's target IP at it (or set a DHCP reservation on your router). */
+/* WiFi credentials */
 #define WIFI_SSID         "BUBSUNNY"
 #define WIFI_PASS         "Babijooni123!"
-#define UDP_LISTEN_PORT   8888
 
-/* ---- WiFi + UDP drawing-pattern stream (separate port/task from the boundary
- * listener above, on purpose: keeping them independent means a boundary-hit
- * code can always preempt an in-flight pattern with the hard stop in
- * home_gondola(), instead of queuing up behind whatever point is mid-move).
- * Wire format: one point per datagram, ASCII "<m1_target> <m2_target> <pen 0|1>"
- * -- raw absolute XTARGET microstep positions, NOT (x,y) plotter coordinates.
- * The Python side (cv2 pattern generator) owns the x,y -> belt-length -> step
- * conversion; firmware just walks the resulting points. See pattern_stream_task(). */
+/* UDP ports (same as ESP32 build) */
+#define UDP_LISTEN_PORT    8888
 #define PATTERN_LISTEN_PORT 8889
 
-/* ---- Self-test defaults (all changeable live over the serial console) ---- */
-/* RUN de-rated 600 -> 400 mA: a pen gondola needs little torque, and this is the
- * heat source during a multi-hour plot (motors hold RUN current the whole time).
- * With R_SENSE unverified the true coil current may already exceed the requested
- * figure, so the lower setpoint is the safe default. HOLD stays at 200 mA — a
- * hanging V-plotter needs holding torque so the gondola doesn't slip when idle. */
-#define TEST_RUN_MA      400.0f   /* run current */
-#define TEST_HOLD_MA     200.0f   /* standstill current */
-#define TEST_VMAX        200000   /* speed (microsteps/t) */
-#define TEST_AMPLITUDE   51200    /* travel (microsteps; 200 full-steps * 256 ustep = 1 rev) */
-#define TEST_CYCLES      4        /* back-and-forth repetitions */
+/* Motion defaults */
+#define TEST_RUN_MA      400.0f
+#define TEST_HOLD_MA     200.0f
+#define TEST_VMAX        200000
 #define MOVE_TIMEOUT_MS  8000

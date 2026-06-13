@@ -1,10 +1,19 @@
-/* web_server.c — HTTP server + Server-Sent Events log stream.
+/* web_server.c — lwIP BSD-socket HTTP + SSE server for RP2350/Pico 2W.
  *
- * Exposes drawing commands as GET /api/<cmd>?<params> and streams log output
- * to a browser at GET /events (Server-Sent Events). HTTP handlers push commands
- * onto g_draw_queue; web_draw_task in main.c executes them so handlers return
- * immediately. Only one SSE client is supported at a time (stream buffer is
- * single-reader). web_log() is safe to call from any task.
+ * Replaces the ESP-IDF esp_http_server with a hand-rolled TCP accept loop using
+ * lwIP POSIX-compatible sockets.  The public interface (wcmd_t, g_draw_queue,
+ * web_log, web_pos_event, web_server_init, web_server_listen) is identical to
+ * the ESP32 build so main.c and the rest of the plotter logic are unchanged.
+ *
+ * Architecture:
+ *   http_server_task   — accept loop; parses the request line, dispatches to
+ *                        a handler function (int sock, const char *qs).
+ *   sse_task           — owns the long-lived EventSource connection; the accept
+ *                        loop hands over the socket fd via s_sse_fd_q so the
+ *                        server can keep accepting API calls while SSE streams.
+ *   stream_write / web_log / web_pos_event — produce SSE-framed data into
+ *                        s_log_stream (a FreeRTOS StreamBuffer); sse_task reads
+ *                        and forwards it.
  */
 #include "web_server.h"
 #include <stdio.h>
@@ -12,96 +21,75 @@
 #include <string.h>
 #include <stdarg.h>
 #include <math.h>
-#include "esp_http_server.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/stream_buffer.h"
-#include "freertos/semphr.h"
+#include <ctype.h>
 
-static const char *TAG = "web";
+#include "lwip/sockets.h"
+
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "stream_buffer.h"
+#include "semphr.h"
+#include "task.h"
+
+#define HTTP_PORT 80
 
 QueueHandle_t g_draw_queue = NULL;
 
-/* Job tracking & escape state (declared extern in web_server.h). */
 volatile uint32_t g_job_enqueued = 0;
 volatile uint32_t g_job_current  = 0;
 volatile uint32_t g_job_done     = 0;
 volatile bool     g_job_abort    = false;
 char              g_job_desc[128] = "idle";
 
-/* Driver-fault latch (set by the motion task's driver_fault_scan(), cleared only
- * by /api/clearfault). Sticky so a fault survives until explicitly acknowledged —
- * this is what the MCP polls to halt/pause a script. 0 = driver healthy. */
-volatile uint32_t g_drv_fault     = 0;
-char              g_drv_flags[96]  = "ok";
+volatile uint32_t g_drv_fault    = 0;
+char              g_drv_flags[96] = "ok";
 
 #define LOG_STREAM_BYTES 2048
-static StreamBufferHandle_t s_log_stream  = NULL;
-static SemaphoreHandle_t    s_log_mutex   = NULL;
-static QueueHandle_t        s_sse_req_q   = NULL;  /* passes async req to sse_task */
+static StreamBufferHandle_t s_log_stream = NULL;
+static SemaphoreHandle_t    s_log_mutex  = NULL;
+/* Depth-1 queue: xQueueOverwrite replaces any pending fd when a new browser
+ * connects, which also kills the stale connection cleanly. */
+static QueueHandle_t s_sse_fd_q = NULL;
 
-/* SSE task: owns the long-lived EventSource connection so the httpd worker is free.
- *
- * Architecture: esp_http_server has ONE worker task. If handle_events() kept the
- * connection open in a loop, no other HTTP request could be served (the worker would
- * be stuck). Instead, handle_events() calls httpd_req_async_handler_begin() to hand
- * off the request to this dedicated task and returns immediately — freeing the worker
- * for circle/goto/stop calls while SSE streams in parallel.
- *
- * Only one SSE client at a time: xQueueOverwrite() drops the previous async_req when
- * a new browser tab connects, which also kills the old connection cleanly. */
+/* ---- SSE task ---- */
+
 static void sse_task(void *arg)
 {
     (void)arg;
+    int fd = -1;
     for (;;) {
-        httpd_req_t *req = NULL;
-        /* Block here (no CPU usage) until handle_events() gives us an async request. */
-        xQueueReceive(s_sse_req_q, &req, portMAX_DELAY);
-        if (!req) continue;
+        /* Non-blocking check for a new incoming connection first. */
+        int new_fd;
+        TickType_t wait = (fd < 0) ? pdMS_TO_TICKS(1000) : 0;
+        if (xQueueReceive(s_sse_fd_q, &new_fd, wait) == pdTRUE) {
+            if (fd >= 0) { shutdown(fd, SHUT_RDWR); close(fd); }
+            fd = new_fd;
+        }
+        if (fd < 0) continue;
 
         char buf[300];
-        for (;;) {
-            /* Block up to 2 s for data from the log stream. */
-            size_t n = xStreamBufferReceive(s_log_stream, buf, sizeof(buf) - 1,
-                                            pdMS_TO_TICKS(2000));
-            esp_err_t err;
-            if (n > 0) {
-                /* Forward whatever the producers wrote (already SSE-framed). */
-                err = httpd_resp_send_chunk(req, buf, (ssize_t)n);
-            } else {
-                /* No data for 2 s: send an SSE comment as a heartbeat so the
-                 * browser doesn't time out and close the EventSource. */
-                err = httpd_resp_send_chunk(req, ": hb\n\n", 6);
-            }
-            /* Any send error means the browser closed the tab — exit and wait
-             * for the next connection. */
-            if (err != ESP_OK) break;
-        }
-        /* Zero-length chunk signals end-of-response, then release the async slot. */
-        httpd_resp_send_chunk(req, NULL, 0);
-        httpd_req_async_handler_complete(req);
+        /* Block up to 2 s for log data; send a heartbeat comment if none arrives. */
+        size_t n = xStreamBufferReceive(s_log_stream, buf, sizeof(buf) - 1,
+                                        pdMS_TO_TICKS(2000));
+        int ret;
+        if (n > 0) ret = send(fd, buf, (int)n, 0);
+        else       ret = send(fd, ": hb\n\n", 6, 0);
+
+        if (ret < 0) { close(fd); fd = -1; }
     }
 }
 
-/* ---- Log/event sink (producer side) ---- */
+/* ---- Log/event stream (producer side) ---- */
 
-/* Write a fully-framed SSE event into the stream buffer. The SSE handler
- * passes bytes through verbatim, so producers own the framing.
- * The mutex serialises writes from web_log() and web_pos_event() which may be
- * called from different tasks (the draw task and any future sensor task). */
 static void stream_write(const char *data, size_t len)
 {
     if (!s_log_stream || !len) return;
     if (xSemaphoreTake(s_log_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
-        xStreamBufferSend(s_log_stream, data, len, 0);   /* drop if full */
+        xStreamBufferSend(s_log_stream, data, len, 0);
         xSemaphoreGive(s_log_mutex);
     }
 }
 
-/* web_log(): SSE-wrap a printf-style message as an unnamed event.
- * The browser's es.onmessage handler picks these up as plain log lines.
- * Format: "data: <text>\n\n" per the SSE spec. */
 void web_log(const char *fmt, ...)
 {
     if (!s_log_stream) return;
@@ -116,11 +104,6 @@ void web_log(const char *fmt, ...)
     if (total > 0) stream_write(event, (size_t)total);
 }
 
-/* web_pos_event(): SSE-wrap an (x,y) position as a NAMED "pos" event.
- * Named events bypass es.onmessage and are caught by es.addEventListener('pos',…)
- * in usePlotter.ts — so position updates update the canvas dot without
- * polluting the log window with coordinate spam.
- * Format: "event: pos\ndata: {…}\n\n" per the SSE spec. */
 void web_pos_event(float x, float y)
 {
     if (!s_log_stream) return;
@@ -132,314 +115,326 @@ void web_pos_event(float x, float y)
 }
 
 /* ---- Query-string helpers ---- */
-static void get_qs(httpd_req_t *req, char *buf, size_t len)
-{
-    size_t qlen = httpd_req_get_url_query_len(req) + 1;
-    buf[0] = '\0';
-    if (qlen > 1 && qlen <= len)
-        httpd_req_get_url_query_str(req, buf, qlen);
-}
 
 static float qf(const char *qs, const char *key, float def)
 {
-    char val[32] = {};
-    if (qs && httpd_query_key_value(qs, key, val, sizeof(val)) == ESP_OK)
-        return (float)atof(val);
+    if (!qs || !*qs) return def;
+    size_t klen = strlen(key);
+    const char *p = qs;
+    while (*p) {
+        if (strncmp(p, key, klen) == 0 && p[klen] == '=') {
+            char val[32]; size_t vi = 0;
+            const char *vs = p + klen + 1;
+            while (*vs && *vs != '&' && vi < sizeof(val) - 1) val[vi++] = *vs++;
+            val[vi] = '\0';
+            return (float)atof(val);
+        }
+        while (*p && *p != '&') p++;
+        if (*p == '&') p++;
+    }
     return def;
 }
 
-/* ---- Shared response ---- */
-static void resp_json(httpd_req_t *req, const char *status, const char *msg)
+/* URL-decode a query-string value into out. */
+static void url_decode(char *out, size_t out_size, const char *src)
 {
-    char buf[180];
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"msg\":\"%s\"}\n", status, msg);
-    httpd_resp_sendstr(req, buf);
+    size_t di = 0;
+    while (*src && di < out_size - 1) {
+        if (*src == '%' && isxdigit((unsigned char)src[1]) && isxdigit((unsigned char)src[2])) {
+            char hex[3] = { src[1], src[2], '\0' };
+            out[di++] = (char)strtol(hex, NULL, 16);
+            src += 3;
+        } else if (*src == '+') { out[di++] = ' '; src++; }
+        else                    { out[di++] = *src++; }
+    }
+    out[di] = '\0';
 }
 
-/* Push a draw command onto the queue for web_draw_task (in main.c) to execute and
- * return its job id. HTTP handlers return immediately after this — the motor waits
- * happen in web_draw_task. The caller hands the id back to the client so it can poll
- * /api/status until g_job_done >= id ("wait till the job is actually done"). */
+static bool qs_str(const char *qs, const char *key, char *out, size_t out_size)
+{
+    if (!qs || !*qs) return false;
+    size_t klen = strlen(key);
+    const char *p = qs;
+    while (*p) {
+        if (strncmp(p, key, klen) == 0 && p[klen] == '=') {
+            char raw[64]; size_t ri = 0;
+            const char *vs = p + klen + 1;
+            while (*vs && *vs != '&' && ri < sizeof(raw) - 1) raw[ri++] = *vs++;
+            raw[ri] = '\0';
+            url_decode(out, out_size, raw);
+            return true;
+        }
+        while (*p && *p != '&') p++;
+        if (*p == '&') p++;
+    }
+    return false;
+}
+
+/* ---- HTTP response helpers ---- */
+
+static void send_response(int sock, int code, const char *ctype, const char *body)
+{
+    int body_len = (int)strlen(body);
+    char hdr[256];
+    int hlen = snprintf(hdr, sizeof(hdr),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %d\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Connection: close\r\n\r\n",
+        code,
+        code == 200 ? "OK" : (code == 404 ? "Not Found" : "Error"),
+        ctype, body_len);
+    send(sock, hdr, hlen, 0);
+    send(sock, body, body_len, 0);
+}
+
+static void resp_json(int sock, const char *status, const char *msg)
+{
+    char buf[180];
+    snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"msg\":\"%s\"}\n", status, msg);
+    send_response(sock, 200, "application/json", buf);
+}
+
+static void resp_json_id(int sock, const char *status, const char *msg, uint32_t id)
+{
+    char buf[200];
+    snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"msg\":\"%s\",\"id\":%lu}\n",
+             status, msg, (unsigned long)id);
+    send_response(sock, 200, "application/json", buf);
+}
+
+/* ---- Queue helpers ---- */
+
 static uint32_t enqueue(wcmd_t *cmd)
 {
     if (!g_draw_queue) return 0;
     uint32_t id = ++g_job_enqueued;
     cmd->id = id;
     if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200)) != pdTRUE) {
-        /* Queue full: release the id so g_job_enqueued stays consistent. */
         --g_job_enqueued;
         return 0;
     }
     return id;
 }
 
-/* Same shape as resp_json but also carries the job id so the client can wait on it. */
-static void resp_json_id(httpd_req_t *req, const char *status, const char *msg, uint32_t id)
-{
-    char buf[200];
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"msg\":\"%s\",\"id\":%lu}\n",
-             status, msg, (unsigned long)id);
-    httpd_resp_sendstr(req, buf);
-}
-
-/* Enqueue helper: sends the queued-ok+id response or an error if the queue is full. */
-static void resp_enqueue(httpd_req_t *req, const char *label, wcmd_t *cmd)
+static void resp_enqueue(int sock, const char *label, wcmd_t *cmd)
 {
     uint32_t id = enqueue(cmd);
-    if (id == 0) { resp_json(req, "error", "queue full"); return; }
-    resp_json_id(req, "ok", label, id);
+    if (id == 0) { resp_json(sock, "error", "queue full"); return; }
+    resp_json_id(sock, "ok", label, id);
 }
 
-/* Out-of-bounds gate: reject (no enqueue) anything that would leave the work area
- * set in the console / via /api/bounds. pt_ok checks a single point; box_ok checks
- * the full bounding box of a shape (centre +/- half-extents). Returns false AND
- * sends the error response when the target is outside — caller just returns. */
-static bool pt_ok(httpd_req_t *req, float x, float y)
+/* ---- Bounds checks ---- */
+
+static bool pt_ok(int sock, float x, float y)
 {
     if (plotter_in_bounds(x, y)) return true;
-    resp_json(req, "error", "target outside work area (see /api/status bounds)");
+    resp_json(sock, "error", "target outside work area (see /api/status bounds)");
     return false;
 }
 
-static bool box_ok(httpd_req_t *req, float cx, float cy, float hx, float hy)
+static bool box_ok(int sock, float cx, float cy, float hx, float hy)
 {
     if (plotter_in_bounds(cx - hx, cy - hy) && plotter_in_bounds(cx + hx, cy + hy) &&
         plotter_in_bounds(cx - hx, cy + hy) && plotter_in_bounds(cx + hx, cy - hy))
         return true;
-    resp_json(req, "error", "shape extent outside work area (see /api/status bounds)");
+    resp_json(sock, "error", "shape extent outside work area (see /api/status bounds)");
     return false;
 }
 
 /* ---- API handlers ---- */
 
-static esp_err_t handle_circle(httpd_req_t *req)
+static void handle_circle(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_CIRCLE };
     c.p[0] = qf(qs, "cx",       0.0f);
     c.p[1] = qf(qs, "cy",       0.0f);
     c.p[2] = qf(qs, "r",       50.0f);
     c.p[3] = qf(qs, "cycles",   1.0f);
     c.p[4] = qf(qs, "fill",     0.0f);
-    c.p[5] = qf(qs, "angle",    0.0f);   /* hatch angle, degrees */
-    c.p[6] = qf(qs, "spacing",  3.0f);   /* hatch line spacing, mm */
-    c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
-    if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
-    if (!box_ok(req, c.p[0], c.p[1], c.p[2], c.p[2])) return ESP_OK;
-    resp_enqueue(req, "circle queued", &c);
-    return ESP_OK;
+    c.p[5] = qf(qs, "angle",    0.0f);
+    c.p[6] = qf(qs, "spacing",  3.0f);
+    c.p[7] = qf(qs, "outline",  1.0f);
+    if (c.p[2] <= 0) { resp_json(sock, "error", "r must be > 0"); return; }
+    if (!box_ok(sock, c.p[0], c.p[1], c.p[2], c.p[2])) return;
+    resp_enqueue(sock, "circle queued", &c);
 }
 
-static esp_err_t handle_square(httpd_req_t *req)
+static void handle_square(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_SQUARE };
     c.p[0] = qf(qs, "cx",       0.0f);
     c.p[1] = qf(qs, "cy",       0.0f);
     c.p[2] = qf(qs, "size",   100.0f);
     c.p[3] = qf(qs, "cycles",   1.0f);
     c.p[4] = qf(qs, "fill",     0.0f);
-    c.p[5] = qf(qs, "angle",    0.0f);   /* hatch angle, degrees */
-    c.p[6] = qf(qs, "spacing",  3.0f);   /* hatch line spacing, mm */
-    c.p[7] = qf(qs, "outline",  1.0f);   /* 1 = draw perimeter, 0 = fill only */
-    if (c.p[2] <= 0) { resp_json(req, "error", "size must be > 0"); return ESP_OK; }
-    if (!box_ok(req, c.p[0], c.p[1], c.p[2] * 0.5f, c.p[2] * 0.5f)) return ESP_OK;
-    resp_enqueue(req, "square queued", &c);
-    return ESP_OK;
+    c.p[5] = qf(qs, "angle",    0.0f);
+    c.p[6] = qf(qs, "spacing",  3.0f);
+    c.p[7] = qf(qs, "outline",  1.0f);
+    if (c.p[2] <= 0) { resp_json(sock, "error", "size must be > 0"); return; }
+    if (!box_ok(sock, c.p[0], c.p[1], c.p[2] * 0.5f, c.p[2] * 0.5f)) return;
+    resp_enqueue(sock, "square queued", &c);
 }
 
-static esp_err_t handle_line(httpd_req_t *req)
+static void handle_line(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_LINE };
     c.p[0] = qf(qs, "x0",    0.0f);
     c.p[1] = qf(qs, "y0",    0.0f);
     c.p[2] = qf(qs, "x1",  100.0f);
     c.p[3] = qf(qs, "y1",    0.0f);
     c.p[4] = qf(qs, "cycles", 1.0f);
-    if (!pt_ok(req, c.p[0], c.p[1]) || !pt_ok(req, c.p[2], c.p[3])) return ESP_OK;
-    resp_enqueue(req, "line queued", &c);
-    return ESP_OK;
+    if (!pt_ok(sock, c.p[0], c.p[1]) || !pt_ok(sock, c.p[2], c.p[3])) return;
+    resp_enqueue(sock, "line queued", &c);
 }
 
-static esp_err_t handle_goto(httpd_req_t *req)
+static void handle_goto(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_GOTO };
     c.p[0] = qf(qs, "x", 0.0f);
     c.p[1] = qf(qs, "y", 0.0f);
-    if (!pt_ok(req, c.p[0], c.p[1])) return ESP_OK;
-    resp_enqueue(req, "goto queued", &c);
-    return ESP_OK;
+    if (!pt_ok(sock, c.p[0], c.p[1])) return;
+    resp_enqueue(sock, "goto queued", &c);
 }
 
-static esp_err_t handle_home(httpd_req_t *req)
+static void handle_home(int sock, const char *qs)
 {
+    (void)qs;
     wcmd_t c = { .type = WCMD_HOME };
-    resp_enqueue(req, "home queued", &c);
-    return ESP_OK;
+    resp_enqueue(sock, "home queued", &c);
 }
 
-static esp_err_t handle_stop(httpd_req_t *req)
+static void handle_stop(int sock, const char *qs)
 {
+    (void)qs;
     wcmd_t c = { .type = WCMD_STOP };
-    /* SendToFront so STOP jumps ahead of any queued circle/square/etc. */
     if (g_draw_queue)
         xQueueSendToFront(g_draw_queue, &c, pdMS_TO_TICKS(200));
-    resp_json(req, "ok", "stop sent");
-    return ESP_OK;
+    resp_json(sock, "ok", "stop sent");
 }
 
-static esp_err_t handle_pen(httpd_req_t *req)
+static void handle_pen(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
-    char pos[16] = {};
-    httpd_query_key_value(qs, "pos", pos, sizeof(pos));
-    wcmd_t c = {};
-    if (strcmp(pos, "up") == 0)        c.type = WCMD_PEN_UP;
+    char pos[16] = "";
+    qs_str(qs, "pos", pos, sizeof(pos));
+    wcmd_t c = { 0 };
+    if      (strcmp(pos, "up")   == 0) c.type = WCMD_PEN_UP;
     else if (strcmp(pos, "down") == 0) c.type = WCMD_PEN_DOWN;
     else { c.type = WCMD_PEN_DEG; c.p[0] = qf(qs, "deg", 90.0f); }
-    resp_enqueue(req, "pen queued", &c);
-    return ESP_OK;
+    resp_enqueue(sock, "pen queued", &c);
 }
 
-static esp_err_t handle_bullseye(httpd_req_t *req)
+static void handle_bullseye(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_BULLSEYE };
     c.p[0] = qf(qs, "cx", 0.0f);
     c.p[1] = qf(qs, "cy", 0.0f);
-    if (!box_ok(req, c.p[0], c.p[1], 10.0f, 10.0f)) return ESP_OK;   /* 10mm arms */
-    resp_enqueue(req, "bullseye queued", &c);
-    return ESP_OK;
+    if (!box_ok(sock, c.p[0], c.p[1], 10.0f, 10.0f)) return;
+    resp_enqueue(sock, "bullseye queued", &c);
 }
 
-static esp_err_t handle_grid(httpd_req_t *req)
+static void handle_grid(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_GRID };
     c.p[0] = qf(qs, "cx", 0.0f);
     c.p[1] = qf(qs, "cy", 0.0f);
-    if (!box_ok(req, c.p[0], c.p[1], 50.0f, 50.0f)) return ESP_OK;   /* 100mm lines */
-    resp_enqueue(req, "grid queued", &c);
-    return ESP_OK;
+    if (!box_ok(sock, c.p[0], c.p[1], 50.0f, 50.0f)) return;
+    resp_enqueue(sock, "grid queued", &c);
 }
 
-static esp_err_t handle_wobbly(httpd_req_t *req)
+static void handle_wobbly(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_WOBBLY };
     c.p[0] = qf(qs, "cx",        0.0f);
     c.p[1] = qf(qs, "cy",        0.0f);
     c.p[2] = qf(qs, "r",        50.0f);
-    c.p[3] = qf(qs, "bound_r",   0.0f);   /* 0 = use r*1.5 default (set in do_draw_wobbly) */
-    c.p[4] = qf(qs, "wobble",    0.4f);   /* 0=circle .. 1=max distortion */
-    c.p[5] = qf(qs, "harmonics", 3.0f);   /* 1=gentle blob  8=complex jagged */
-    c.p[6] = qf(qs, "seed",     42.0f);   /* integer seed for reproducibility */
+    c.p[3] = qf(qs, "bound_r",   0.0f);
+    c.p[4] = qf(qs, "wobble",    0.4f);
+    c.p[5] = qf(qs, "harmonics", 3.0f);
+    c.p[6] = qf(qs, "seed",     42.0f);
     c.p[7] = qf(qs, "cycles",    1.0f);
-    if (c.p[2] <= 0) { resp_json(req, "error", "r must be > 0"); return ESP_OK; }
-    /* default bound_r = r * 1.5 when caller passes 0 */
+    if (c.p[2] <= 0) { resp_json(sock, "error", "r must be > 0"); return; }
     if (c.p[3] <= 0.0f) c.p[3] = c.p[2] * 1.5f;
-    if (!box_ok(req, c.p[0], c.p[1], c.p[3], c.p[3])) return ESP_OK;   /* bound_r extent */
-    resp_enqueue(req, "wobbly queued", &c);
-    return ESP_OK;
+    if (!box_ok(sock, c.p[0], c.p[1], c.p[3], c.p[3])) return;
+    resp_enqueue(sock, "wobbly queued", &c);
 }
 
-static esp_err_t handle_truchet(httpd_req_t *req)
+static void handle_truchet(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_TRUCHET };
-    c.p[0] = qf(qs, "cx",      NAN);    /* NAN = centre of the work area */
+    c.p[0] = qf(qs, "cx",      NAN);
     c.p[1] = qf(qs, "cy",      NAN);
-    c.p[2] = qf(qs, "n",       4.0f);   /* columns; cell size clamps to >= 40 mm */
-    c.p[3] = qf(qs, "spacing", 3.0f);   /* hatch spacing mm; < 0.5 = outlines only */
-    c.p[4] = qf(qs, "angle",  45.0f);   /* hatch angle, degrees */
+    c.p[2] = qf(qs, "n",       4.0f);
+    c.p[3] = qf(qs, "spacing", 3.0f);
+    c.p[4] = qf(qs, "angle",  45.0f);
     c.p[5] = qf(qs, "seed",   42.0f);
-    c.p[6] = qf(qs, "motifs",  0.0f);   /* enabled-motif bitmask; 0 = default set */
-    if (c.p[2] < 1.0f || c.p[2] > 64.0f) { resp_json(req, "error", "n must be 1..64"); return ESP_OK; }
-    resp_enqueue(req, "truchet queued", &c);
-    return ESP_OK;
+    c.p[6] = qf(qs, "motifs",  0.0f);
+    if (c.p[2] < 1.0f || c.p[2] > 64.0f) {
+        resp_json(sock, "error", "n must be 1..64"); return;
+    }
+    resp_enqueue(sock, "truchet queued", &c);
 }
 
-static esp_err_t handle_sethome(httpd_req_t *req)
+static void handle_sethome(int sock, const char *qs)
 {
+    (void)qs;
     wcmd_t c = { .type = WCMD_SETHOME };
-    resp_enqueue(req, "sethome queued", &c);
-    return ESP_OK;
+    resp_enqueue(sock, "sethome queued", &c);
 }
 
-/* Trace the work-area limit path once (rect edges or ellipse perimeter, per the
- * current bounds shape). No params — the firmware uses its stored bounds. */
-static esp_err_t handle_border(httpd_req_t *req)
+static void handle_border(int sock, const char *qs)
 {
+    (void)qs;
     wcmd_t c = { .type = WCMD_BORDER };
-    resp_enqueue(req, "border queued", &c);
-    return ESP_OK;
+    resp_enqueue(sock, "border queued", &c);
 }
 
-static esp_err_t handle_bounds(httpd_req_t *req)
+static void handle_bounds(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_BOUNDS };
-    c.p[0] = qf(qs, "xn", -300.0f);   /* X− (left / negative-X limit)  */
-    c.p[1] = qf(qs, "xp",  300.0f);   /* X+ (right / positive-X limit) */
-    c.p[2] = qf(qs, "yn", -600.0f);   /* Y− (bottom / negative-Y limit) */
-    c.p[3] = qf(qs, "yp",  400.0f);   /* Y+ (top / positive-Y limit)   */
-    c.p[4] = qf(qs, "shape", 0.0f);   /* 0 = rectangle, 1 = inscribed ellipse */
-    resp_enqueue(req, "bounds queued", &c);
-    return ESP_OK;
+    c.p[0] = qf(qs, "xn", -300.0f);
+    c.p[1] = qf(qs, "xp",  300.0f);
+    c.p[2] = qf(qs, "yn", -600.0f);
+    c.p[3] = qf(qs, "yp",  400.0f);
+    c.p[4] = qf(qs, "shape", 0.0f);
+    resp_enqueue(sock, "bounds queued", &c);
 }
 
-static esp_err_t handle_speed(httpd_req_t *req)
+static void handle_speed(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_SPEED };
     c.p[0] = qf(qs, "vmax", 200000.0f);
-    resp_enqueue(req, "speed queued", &c);
-    return ESP_OK;
+    resp_enqueue(sock, "speed queued", &c);
 }
 
-static esp_err_t handle_accel(httpd_req_t *req)
+static void handle_accel(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_ACCEL };
     c.p[0] = qf(qs, "amax", 500.0f);
-    resp_enqueue(req, "accel queued", &c);
-    return ESP_OK;
+    resp_enqueue(sock, "accel queued", &c);
 }
 
-static esp_err_t handle_cur(httpd_req_t *req)
+static void handle_cur(int sock, const char *qs)
 {
-    char qs[256]; get_qs(req, qs, sizeof(qs));
     wcmd_t c = { .type = WCMD_CURRENT };
     c.p[0] = qf(qs, "run",   300.0f);
-    c.p[1] = qf(qs, "hold",  -1.0f);   /* -1 = leave hold current unchanged */
-    resp_enqueue(req, "current queued", &c);
-    return ESP_OK;
+    c.p[1] = qf(qs, "hold",  -1.0f);
+    resp_enqueue(sock, "current queued", &c);
 }
 
-/* Status report: the work area (bounds), live position, and the job queue cursor
- * (enqueued / current / done / pending). This is the MCP's source of truth — it
- * polls here to (a) learn the dimension limits set in the console and (b) wait
- * until g_done >= the id it was handed, i.e. its job actually finished. */
-static esp_err_t handle_status(httpd_req_t *req)
+static void handle_status(int sock, const char *qs)
 {
+    (void)qs;
     float xn, xp, yn, yp, x = 0.0f, y = 0.0f;
     plotter_get_bounds(&xn, &xp, &yn, &yp);
     plotter_get_xy(&x, &y);
     int pending = (int)(g_job_enqueued - g_job_done);
     bool idle = (pending == 0);
-
     uint32_t mv = 0, ma = 0; float run_ma = 0.0f, hold_ma = 0.0f;
     plotter_get_motion(&mv, &ma, &run_ma, &hold_ma);
 
     char buf[800];
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
         "\"pending\":%d,\"idle\":%s,\"aborting\":%s,\"job\":\"%s\","
@@ -454,50 +449,38 @@ static esp_err_t handle_status(httpd_req_t *req)
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
         plotter_bounds_ellipse() ? "true" : "false",
         (unsigned long)mv, (unsigned long)ma, (double)run_ma, (double)hold_ma);
-    httpd_resp_sendstr(req, buf);
-    return ESP_OK;
+    send_response(sock, 200, "application/json", buf);
 }
 
-/* Escape / emergency stop: preempts the running job (not just queued ones), flushes
- * the pending queue, and lifts the pen. Unlike /api/stop (which only queues a STOP
- * behind the in-flight move), this interrupts immediately via the g_job_abort flag. */
-static esp_err_t handle_abort(httpd_req_t *req)
+static void handle_abort(int sock, const char *qs)
 {
+    (void)qs;
     plotter_abort_now();
-    resp_json(req, "ok", "ABORT: motion stopped, queue flushed, pen up");
-    return ESP_OK;
+    resp_json(sock, "ok", "ABORT: motion stopped, queue flushed, pen up");
 }
 
-/* Clear a latched driver fault: re-enables the drivers (the only way to clear a
- * latched short-to-GND) and drops g_drv_fault. The MCP calls this after a driver
- * fault is resolved, before resuming the paused script. */
-static esp_err_t handle_clearfault(httpd_req_t *req)
+static void handle_clearfault(int sock, const char *qs)
 {
+    (void)qs;
     plotter_clear_fault();
-    resp_json(req, "ok", "driver fault cleared, drivers re-enabled");
-    return ESP_OK;
+    resp_json(sock, "ok", "driver fault cleared, drivers re-enabled");
 }
 
-/* SSE handler: keeps the connection open and streams bytes from s_log_stream.
- * Producers (web_log, web_pos_event) write fully-framed SSE events.
- * Uses async handler so the httpd worker task is freed immediately. */
-static esp_err_t handle_events(httpd_req_t *req)
+/* SSE: sends response headers, then transfers socket ownership to sse_task.
+ * Caller must NOT close the socket after this returns. */
+static void handle_events(int sock)
 {
-    httpd_resp_set_type(req, "text/event-stream");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    httpd_resp_set_hdr(req, "Connection",    "keep-alive");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-
-    httpd_req_t *async_req;
-    if (httpd_req_async_handler_begin(req, &async_req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
-    xQueueOverwrite(s_sse_req_q, &async_req);  /* drops previous client if any */
-    return ESP_OK;
+    const char *hdr =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/event-stream\r\n"
+        "Cache-Control: no-cache\r\n"
+        "Connection: keep-alive\r\n"
+        "Access-Control-Allow-Origin: *\r\n\r\n";
+    send(sock, hdr, strlen(hdr), 0);
+    xQueueOverwrite(s_sse_fd_q, &sock);
 }
 
-/* ---- Minimal web UI (served at /) ---- */
+/* ---- Embedded web UI ---- */
 static const char s_html[] =
     "<!DOCTYPE html><html><head><meta charset=utf-8>"
     "<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -613,67 +596,140 @@ static const char s_html[] =
     "};"
     "</script></body></html>";
 
-static esp_err_t handle_root(httpd_req_t *req)
+/* ---- Route table ---- */
+
+typedef void (*handler_fn_t)(int sock, const char *qs);
+typedef struct { const char *path; handler_fn_t fn; } route_t;
+
+static const route_t s_routes[] = {
+    { "/api/circle",     handle_circle     },
+    { "/api/square",     handle_square     },
+    { "/api/line",       handle_line       },
+    { "/api/goto",       handle_goto       },
+    { "/api/home",       handle_home       },
+    { "/api/stop",       handle_stop       },
+    { "/api/pen",        handle_pen        },
+    { "/api/bullseye",   handle_bullseye   },
+    { "/api/grid",       handle_grid       },
+    { "/api/border",     handle_border     },
+    { "/api/wobbly",     handle_wobbly     },
+    { "/api/truchet",    handle_truchet    },
+    { "/api/sethome",    handle_sethome    },
+    { "/api/bounds",     handle_bounds     },
+    { "/api/speed",      handle_speed      },
+    { "/api/accel",      handle_accel      },
+    { "/api/cur",        handle_cur        },
+    { "/api/status",     handle_status     },
+    { "/api/abort",      handle_abort      },
+    { "/api/clearfault", handle_clearfault },
+};
+#define N_ROUTES (sizeof(s_routes) / sizeof(s_routes[0]))
+
+/* ---- HTTP server task ---- */
+
+static void http_server_task(void *arg)
 {
-    httpd_resp_set_type(req, "text/html; charset=utf-8");
-    httpd_resp_sendstr(req, s_html);
-    return ESP_OK;
+    (void)arg;
+
+    int srv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (srv_sock < 0) { printf("[web] socket() failed\n"); vTaskDelete(NULL); }
+
+    int yes = 1;
+    setsockopt(srv_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+
+    struct sockaddr_in addr = {
+        .sin_family      = AF_INET,
+        .sin_port        = htons(HTTP_PORT),
+        .sin_addr.s_addr = INADDR_ANY,
+    };
+    if (bind(srv_sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        printf("[web] bind() failed\n"); close(srv_sock); vTaskDelete(NULL);
+    }
+    listen(srv_sock, 5);
+    printf("[web] HTTP server on port %d\n", HTTP_PORT);
+
+    char req_buf[1024];
+    for (;;) {
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        int client_sock = accept(srv_sock, (struct sockaddr *)&client_addr, &client_len);
+        if (client_sock < 0) continue;
+
+        /* 3-second receive timeout so a stalled client doesn't block the loop. */
+        struct timeval tv = { .tv_sec = 3, .tv_usec = 0 };
+        setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+        /* Accumulate until we see the end of headers (\r\n\r\n). */
+        int total = 0; bool got_end = false;
+        while (total < (int)sizeof(req_buf) - 1) {
+            int n = recv(client_sock, req_buf + total, sizeof(req_buf) - 1 - total, 0);
+            if (n <= 0) break;
+            total += n;
+            req_buf[total] = '\0';
+            if (strstr(req_buf, "\r\n\r\n")) { got_end = true; break; }
+        }
+        if (!got_end || total < 4) { close(client_sock); continue; }
+
+        /* Parse the request line: "METHOD /path?qs HTTP/x.y". */
+        char *eol = strstr(req_buf, "\r\n");
+        if (!eol) { close(client_sock); continue; }
+        *eol = '\0';
+
+        char *sp1 = strchr(req_buf, ' ');
+        char *sp2 = sp1 ? strchr(sp1 + 1, ' ') : NULL;
+        if (!sp1 || !sp2) { close(client_sock); continue; }
+        *sp2 = '\0';
+        char *url = sp1 + 1;
+
+        /* Split path from query string. */
+        char *qmark = strchr(url, '?');
+        const char *qs = "";
+        if (qmark) { *qmark = '\0'; qs = qmark + 1; }
+
+        /* Root: serve the embedded web UI. */
+        if (strcmp(url, "/") == 0) {
+            send_response(client_sock, 200, "text/html; charset=utf-8", s_html);
+            close(client_sock);
+            continue;
+        }
+
+        /* SSE: transfer socket to sse_task — do NOT close it here. */
+        if (strcmp(url, "/events") == 0) {
+            handle_events(client_sock);
+            continue;
+        }
+
+        /* Dispatch API routes. */
+        bool found = false;
+        for (size_t k = 0; k < N_ROUTES; k++) {
+            if (strcmp(url, s_routes[k].path) == 0) {
+                s_routes[k].fn(client_sock, qs);
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+            send_response(client_sock, 404, "application/json",
+                          "{\"status\":\"error\",\"msg\":\"not found\"}\n");
+        close(client_sock);
+    }
 }
 
-/* ---- Server init ---- */
-esp_err_t web_server_start(void)
+/* ---- Two-phase init ---- */
+
+void web_server_init(void)
 {
     s_log_stream = xStreamBufferCreate(LOG_STREAM_BYTES, 1);
     s_log_mutex  = xSemaphoreCreateMutex();
     g_draw_queue = xQueueCreate(256, sizeof(wcmd_t));
-    s_sse_req_q  = xQueueCreate(1, sizeof(httpd_req_t *));
-    if (!s_log_stream || !s_log_mutex || !g_draw_queue || !s_sse_req_q) {
-        ESP_LOGE(TAG, "OOM allocating web server resources");
-        return ESP_ERR_NO_MEM;
+    s_sse_fd_q   = xQueueCreate(1, sizeof(int));
+    if (!s_log_stream || !s_log_mutex || !g_draw_queue || !s_sse_fd_q) {
+        printf("[web] OOM\n"); return;
     }
-    xTaskCreate(sse_task, "sse", 4096, NULL, 5, NULL);
+    xTaskCreate(sse_task, "sse", 2048, NULL, 5, NULL);
+}
 
-    httpd_config_t cfg  = HTTPD_DEFAULT_CONFIG();
-    cfg.max_open_sockets  = 7;    /* SSE connection + several API calls in flight */
-    cfg.max_uri_handlers  = 25;   /* default 8 — silently drops routes beyond the cap, so bump it */
-    cfg.stack_size        = 8192;
-    cfg.lru_purge_enable  = true;
-
-    httpd_handle_t srv = NULL;
-    esp_err_t err = httpd_start(&srv, &cfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_start: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    static const httpd_uri_t routes[] = {
-        { .uri = "/",             .method = HTTP_GET, .handler = handle_root     },
-        { .uri = "/api/circle",   .method = HTTP_GET, .handler = handle_circle   },
-        { .uri = "/api/square",   .method = HTTP_GET, .handler = handle_square   },
-        { .uri = "/api/line",     .method = HTTP_GET, .handler = handle_line     },
-        { .uri = "/api/goto",     .method = HTTP_GET, .handler = handle_goto     },
-        { .uri = "/api/home",     .method = HTTP_GET, .handler = handle_home     },
-        { .uri = "/api/stop",     .method = HTTP_GET, .handler = handle_stop     },
-        { .uri = "/api/pen",      .method = HTTP_GET, .handler = handle_pen      },
-        { .uri = "/api/bullseye", .method = HTTP_GET, .handler = handle_bullseye },
-        { .uri = "/api/grid",     .method = HTTP_GET, .handler = handle_grid     },
-        { .uri = "/api/border",   .method = HTTP_GET, .handler = handle_border   },
-        { .uri = "/api/wobbly",   .method = HTTP_GET, .handler = handle_wobbly   },
-        { .uri = "/api/truchet",  .method = HTTP_GET, .handler = handle_truchet  },
-        { .uri = "/api/sethome",  .method = HTTP_GET, .handler = handle_sethome  },
-        { .uri = "/api/bounds",   .method = HTTP_GET, .handler = handle_bounds   },
-        { .uri = "/api/speed",    .method = HTTP_GET, .handler = handle_speed    },
-        { .uri = "/api/accel",    .method = HTTP_GET, .handler = handle_accel    },
-        { .uri = "/api/cur",      .method = HTTP_GET, .handler = handle_cur      },
-        { .uri = "/api/status",   .method = HTTP_GET, .handler = handle_status   },
-        { .uri = "/api/abort",    .method = HTTP_GET, .handler = handle_abort    },
-        { .uri = "/api/clearfault", .method = HTTP_GET, .handler = handle_clearfault },
-        { .uri = "/events",       .method = HTTP_GET, .handler = handle_events   },
-    };
-    for (size_t k = 0; k < sizeof(routes) / sizeof(routes[0]); k++)
-        httpd_register_uri_handler(srv, &routes[k]);
-
-    ESP_LOGI(TAG, "HTTP server started on port %d — open http://<ip>/ in a browser",
-             cfg.server_port);
-    return ESP_OK;
+void web_server_listen(void)
+{
+    xTaskCreate(http_server_task, "http", 4096, NULL, 5, NULL);
 }
