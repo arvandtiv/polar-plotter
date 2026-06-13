@@ -424,7 +424,7 @@ function LogView({ log }: { log: LogEntry[] }) {
   }[kind]);
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
   return (
-    <div ref={ref} className="overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed h-full">
+    <div ref={ref} className="h-[100px] overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
       {log.map((l) => (
         <div key={l.id} className={`log-line flex gap-2.5 ${color(l.kind)}`}>
           <span className="shrink-0 text-ink-700 tabular-nums" suppressHydrationWarning>{fmtTime(l.t)}</span>
@@ -539,11 +539,13 @@ function JobProgress({ status }: { status: PlotterStatus | null }) {
 }
 
 function JobList({ jobs }: { jobs: JobEntry[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [jobs.length]);
   if (!jobs.length) return <p className="text-[12px] text-ink-500">No jobs yet. Queue work from the MCP or the Draw tab.</p>;
   const dot = (s: JobEntry['state']) => (s === 'done' ? '✓' : s === 'doing' ? '▶' : '○');
   const cls = (s: JobEntry['state']) => (s === 'done' ? 'text-go' : s === 'doing' ? 'text-warn' : 'text-ink-600');
   return (
-    <div className="max-h-48 space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
+    <div ref={ref} className="h-[100px] space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
       {jobs.map((j) => (
         <div key={j.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
           <span className={`${cls(j.state)} ${j.state === 'doing' ? 'blink' : ''}`}>{dot(j.state)}</span>
@@ -567,7 +569,7 @@ function ErrorsPanel({ log }: { log: LogEntry[] }) {
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [errs.length]);
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
   return (
-    <div ref={ref} className="h-48 overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
+    <div ref={ref} className="h-[100px] overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
       {errs.length === 0 ? (
         <div className="text-ink-600">No errors. Driver faults and command errors will appear here.</div>
       ) : (
@@ -1066,13 +1068,13 @@ export default function App() {
 
             {/* Log — sits directly after the method cards, flex-1 to fill any
                 leftover height. Collapses to just its header. */}
-            <Card title="Log" icon="❯" accent="#059669" className="flex flex-col flex-1"
+            <Card title="Log" icon="❯" accent="#059669" className=""
               collapsible
               right={
                 <button onClick={() => P.pushLog('sys', '— cleared —')}
                   className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
               }>
-              <div className="flex-1 min-h-[12rem]"><LogView log={log} /></div>
+              <LogView log={log} />
             </Card>
             </div>{/* end methods + log scroll region */}
           </div>
