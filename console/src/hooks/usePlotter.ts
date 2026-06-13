@@ -720,8 +720,12 @@ export function usePlotter() {
 
     const poll = async () => {
       let s: RawStatus;
-      try { s = await getStatus(ip); } catch { return; }   // SSE onerror handles the link badge
+      try { s = await getStatus(ip); } catch {
+        setConnected(false);
+        return;
+      }
       if (!alive) return;
+      setConnected(true);   // HTTP reachable → link is up even if SSE hasn't opened yet
 
       // On first successful response, seed work-area and motion params from the firmware
       // so the console reflects what's actually configured rather than hard-coded defaults.
