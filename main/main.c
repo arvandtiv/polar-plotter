@@ -2047,14 +2047,17 @@ static int cmd_aimode(int argc, char **argv)
 static int cmd_jobs(int argc, char **argv)
 {
     (void)argc; (void)argv;
-    int pending = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
-    bool idle = (g_job_done >= g_job_enqueued) && pending == 0;
+    int pending = (int)(g_job_enqueued - g_job_done);
+    bool idle = (pending == 0);
     printf("jobs: enqueued=%lu current=%lu done=%lu pending=%d  -> %s\n",
            (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
            (unsigned long)g_job_done, pending, idle ? "IDLE" : "BUSY");
     if (!idle && g_job_current > g_job_done)
-        printf("  running job %lu: %s%s\n", (unsigned long)g_job_current, g_job_desc,
+        printf("  running: job %lu — %s%s\n", (unsigned long)g_job_current, g_job_desc,
                g_job_abort ? " (aborting)" : "");
+    if (pending > 1)
+        printf("  waiting: %d more job%s queued after current\n",
+               pending - 1, pending - 1 == 1 ? "" : "s");
     return 0;
 }
 

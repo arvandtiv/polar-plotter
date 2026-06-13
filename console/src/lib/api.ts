@@ -15,6 +15,7 @@ export function storeIp(ip: string): void {
 export interface ApiResult {
   status: 'ok' | 'error';
   msg: string;
+  id?: number;   // job id returned by enqueue endpoints
 }
 
 // All firmware API calls are plain HTTP GETs. The firmware returns JSON

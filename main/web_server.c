@@ -431,8 +431,8 @@ static esp_err_t handle_status(httpd_req_t *req)
     float xn, xp, yn, yp, x = 0.0f, y = 0.0f;
     plotter_get_bounds(&xn, &xp, &yn, &yp);
     plotter_get_xy(&x, &y);
-    int pending = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
-    bool idle = (g_job_done >= g_job_enqueued) && pending == 0;
+    int pending = (int)(g_job_enqueued - g_job_done);
+    bool idle = (pending == 0);
 
     char buf[560];
     httpd_resp_set_type(req, "application/json");

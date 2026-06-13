@@ -549,7 +549,9 @@ function JobList({ jobs }: { jobs: JobEntry[] }) {
           <span className={`${cls(j.state)} ${j.state === 'doing' ? 'blink' : ''}`}>{dot(j.state)}</span>
           <span className="w-9 shrink-0 tabular-nums text-ink-700">#{j.id}</span>
           <span className={`flex-1 truncate ${j.state === 'pending' ? 'text-ink-500' : 'text-ink-200'}`}>
-            {j.label || (j.state === 'pending' ? 'pending…' : '—')}
+            {j.state === 'pending'
+              ? `${j.label || 'job'} — pending`
+              : (j.label || '—')}
           </span>
         </div>
       ))}

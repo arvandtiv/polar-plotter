@@ -787,15 +787,17 @@ export function usePlotter() {
     }), []);
 
   // ---- API send ------------------------------------------------
-  const send = useCallback(async (endpoint: string) => {
-    if (!ipRef.current) { pushLog('warn', `> ${endpoint} → no IP set`); return; }
+  const send = useCallback(async (endpoint: string): Promise<import('../lib/api').ApiResult | null> => {
+    if (!ipRef.current) { pushLog('warn', `> ${endpoint} → no IP set`); return null; }
     try {
       const d = await apiGet(ipRef.current, endpoint);
       if (d.status === 'ok') pushLog('ok', `[ok] ${d.msg}`);
       else pushLog('err', `[err] ${d.msg}`);
+      return d;
     } catch (e) {
       setConnected(false);
       pushLog('err', `[net] ${String(e)}`);
+      return null;
     }
   }, [pushLog]);
 
@@ -833,7 +835,10 @@ export function usePlotter() {
     const pts = buildPath(cmd);
     setQueue((q) => [...q, cmd.type]);
     setMoving(true);
-    await Promise.all([send(ep), animatePath(pts, color)]);
+    const [d] = await Promise.all([send(ep), animatePath(pts, color)]);
+    /* Register the job label at submit time so pending entries in the job list
+     * show their type (e.g. "line — pending") instead of a blank "pending…". */
+    if (d?.id) jobLabels.current.set(d.id, cmd.type);
     setMoving(false);
     setQueue((q) => q.slice(1));
   }, [send, animatePath, pushLog]);
