@@ -1857,10 +1857,57 @@ static void web_draw_task(void *arg)
         g_job_abort = false;
         if (cmd.id) {
             g_job_current = cmd.id;
-            snprintf(g_job_desc, sizeof(g_job_desc), "%s", wcmd_name(cmd.type));
+            switch (cmd.type) {
+                case WCMD_LINE:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "line (%.0f,%.0f)→(%.0f,%.0f)%s",
+                             (double)cmd.p[0], (double)cmd.p[1],
+                             (double)cmd.p[2], (double)cmd.p[3],
+                             (int)cmd.p[4] > 1 ? " ×N" : "");
+                    break;
+                case WCMD_CIRCLE:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "circle (%.0f,%.0f) r=%.0f%s",
+                             (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
+                             (int)cmd.p[3] > 1 ? " ×N" : "");
+                    break;
+                case WCMD_SQUARE:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "square (%.0f,%.0f) s=%.0f%s",
+                             (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
+                             (int)cmd.p[3] > 1 ? " ×N" : "");
+                    break;
+                case WCMD_GOTO:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "goto (%.0f,%.0f)", (double)cmd.p[0], (double)cmd.p[1]);
+                    break;
+                case WCMD_BULLSEYE:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "bullseye (%.0f,%.0f)", (double)cmd.p[0], (double)cmd.p[1]);
+                    break;
+                case WCMD_GRID:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "grid (%.0f,%.0f)", (double)cmd.p[0], (double)cmd.p[1]);
+                    break;
+                case WCMD_WOBBLY:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "wobbly (%.0f,%.0f) r=%.0f%s",
+                             (double)cmd.p[0], (double)cmd.p[1], (double)cmd.p[2],
+                             (int)cmd.p[7] > 1 ? " ×N" : "");
+                    break;
+                case WCMD_TRUCHET:
+                    snprintf(g_job_desc, sizeof(g_job_desc),
+                             "truchet %d×%d sp=%.1f ang=%.0f°",
+                             (int)cmd.p[2], (int)cmd.p[2],
+                             (double)cmd.p[3], (double)cmd.p[4]);
+                    break;
+                default:
+                    snprintf(g_job_desc, sizeof(g_job_desc), "%s", wcmd_name(cmd.type));
+                    break;
+            }
             if (g_aimode) {
-                int pend = g_draw_queue ? (int)uxQueueMessagesWaiting(g_draw_queue) : 0;
-                printf("[AI] job %lu start: %-8s (pending %d)\n",
+                int pend = (int)(g_job_enqueued - g_job_current);
+                printf("[AI] job %lu start: %s (pending %d)\n",
                        (unsigned long)cmd.id, g_job_desc, pend);
             }
         }

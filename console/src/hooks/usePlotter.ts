@@ -82,6 +82,29 @@ export function cmdToQuery(cmd: PlotCmd): string {
   }
 }
 
+// ---- Human-readable job label ------------------------------------
+// Mirrors the firmware's g_job_desc formatting so the console shows the same
+// description whether the label comes from the client (pending) or from a
+// firmware status poll (running / done).
+export function cmdLabel(cmd: PlotCmd): string {
+  const f = (n: number) => n.toFixed(0);
+  const rep = (n: number) => n > 1 ? ` ×${n}` : '';
+  switch (cmd.type) {
+    case 'line':     return `line (${f(cmd.x0)},${f(cmd.y0)})→(${f(cmd.x1)},${f(cmd.y1)})${rep(cmd.cycles)}`;
+    case 'circle':   return `circle (${f(cmd.cx)},${f(cmd.cy)}) r=${f(cmd.r)}${rep(cmd.cycles)}`;
+    case 'square':   return `square (${f(cmd.cx)},${f(cmd.cy)}) s=${f(cmd.size)}${rep(cmd.cycles)}`;
+    case 'goto':     return `goto (${f(cmd.x)},${f(cmd.y)})`;
+    case 'bullseye': return `bullseye (${f(cmd.cx)},${f(cmd.cy)})`;
+    case 'grid':     return `grid (${f(cmd.cx)},${f(cmd.cy)})`;
+    case 'wobbly':   return `wobbly (${f(cmd.cx)},${f(cmd.cy)}) r=${f(cmd.r)}${rep(cmd.cycles)}`;
+    case 'truchet':  return `truchet ${cmd.n}×${cmd.n} sp=${cmd.spacing} ang=${cmd.angle}°`;
+    case 'border':   return 'border';
+    case 'home':     return 'home';
+    case 'sethome':  return 'sethome';
+    case 'pen':      return `pen ${cmd.pos}`;
+  }
+}
+
 // ---- JSON script parser ------------------------------------------
 // Accepts a JSON array of command objects and converts each to an API
 // query string. Same object shape as plot_script in the MCP, so scripts
@@ -838,7 +861,7 @@ export function usePlotter() {
     const [d] = await Promise.all([send(ep), animatePath(pts, color)]);
     /* Register the job label at submit time so pending entries in the job list
      * show their type (e.g. "line — pending") instead of a blank "pending…". */
-    if (d?.id) jobLabels.current.set(d.id, cmd.type);
+    if (d?.id) jobLabels.current.set(d.id, cmdLabel(cmd));
     setMoving(false);
     setQueue((q) => q.slice(1));
   }, [send, animatePath, pushLog]);

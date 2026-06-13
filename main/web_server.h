@@ -44,7 +44,7 @@ extern volatile uint32_t g_job_enqueued;  /* last id handed out (also = total en
 extern volatile uint32_t g_job_current;   /* id currently executing (0 before first job) */
 extern volatile uint32_t g_job_done;      /* last id that finished                       */
 extern volatile bool     g_job_abort;     /* set to interrupt the running job + skip rest */
-extern char              g_job_desc[48];  /* human label of the current/last job          */
+extern char              g_job_desc[128]; /* human label of the current/last job          */
 
 /* Driver-fault latch, updated by the motion task and reported via /api/status.
  * g_drv_fault is a sticky bitmask (0 = healthy); g_drv_flags is its human label

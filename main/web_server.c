@@ -28,7 +28,7 @@ volatile uint32_t g_job_enqueued = 0;
 volatile uint32_t g_job_current  = 0;
 volatile uint32_t g_job_done     = 0;
 volatile bool     g_job_abort    = false;
-char              g_job_desc[48]  = "idle";
+char              g_job_desc[128] = "idle";
 
 /* Driver-fault latch (set by the motion task's driver_fault_scan(), cleared only
  * by /api/clearfault). Sticky so a fault survives until explicitly acknowledged —
@@ -434,7 +434,7 @@ static esp_err_t handle_status(httpd_req_t *req)
     int pending = (int)(g_job_enqueued - g_job_done);
     bool idle = (pending == 0);
 
-    char buf[560];
+    char buf[700];
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     snprintf(buf, sizeof(buf),
