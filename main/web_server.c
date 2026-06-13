@@ -434,7 +434,10 @@ static esp_err_t handle_status(httpd_req_t *req)
     int pending = (int)(g_job_enqueued - g_job_done);
     bool idle = (pending == 0);
 
-    char buf[700];
+    uint32_t mv = 0, ma = 0; float run_ma = 0.0f, hold_ma = 0.0f;
+    plotter_get_motion(&mv, &ma, &run_ma, &hold_ma);
+
+    char buf[800];
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     snprintf(buf, sizeof(buf),
@@ -442,13 +445,15 @@ static esp_err_t handle_status(httpd_req_t *req)
         "\"pending\":%d,\"idle\":%s,\"aborting\":%s,\"job\":\"%s\","
         "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
-        "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s}}\n",
+        "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s},"
+        "\"motion\":{\"vmax\":%lu,\"amax\":%lu,\"run_ma\":%.1f,\"hold_ma\":%.1f}}\n",
         (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
         (unsigned long)g_job_done, pending, idle ? "true" : "false",
         g_job_abort ? "true" : "false", g_job_desc,
         g_drv_fault ? "false" : "true", g_drv_flags,
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
-        plotter_bounds_ellipse() ? "true" : "false");
+        plotter_bounds_ellipse() ? "true" : "false",
+        (unsigned long)mv, (unsigned long)ma, (double)run_ma, (double)hold_ma);
     httpd_resp_sendstr(req, buf);
     return ESP_OK;
 }

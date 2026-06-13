@@ -1789,6 +1789,14 @@ void plotter_get_xy(float *x, float *y)
     plt_steps_to_xy(&g_geom, sl, sr, x, y);
 }
 
+void plotter_get_motion(uint32_t *vmax, uint32_t *amax, float *run_ma, float *hold_ma)
+{
+    if (vmax)    *vmax    = g_vmax;
+    if (amax)    *amax    = g_accel;
+    if (run_ma)  *run_ma  = g_run_ma;
+    if (hold_ma) *hold_ma = g_hold_ma;
+}
+
 /* Escape / emergency stop. Sets g_job_abort (every motion wait + draw loop checks
  * it and bails), decelerates both motors now, flushes any pending jobs, and lifts
  * the pen. web_draw_task clears g_job_abort when it starts the next job. */

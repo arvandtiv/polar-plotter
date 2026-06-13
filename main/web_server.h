@@ -58,6 +58,7 @@ bool plotter_in_bounds(float x, float y);
 void plotter_get_bounds(float *xn, float *xp, float *yn, float *yp);
 bool plotter_bounds_ellipse(void);  /* true if the drawable area is the inscribed ellipse */
 void plotter_get_xy(float *x, float *y);
+void plotter_get_motion(uint32_t *vmax, uint32_t *amax, float *run_ma, float *hold_ma);
 void plotter_abort_now(void);   /* stop motors, flush the queue, lift the pen, set g_job_abort */
 void plotter_clear_fault(void); /* re-enable drivers (clear latched faults) + reset g_drv_fault */
 

@@ -37,6 +37,7 @@ export interface RawStatus {
   drv_ok: boolean; drv_flags: string;
   x: number; y: number;
   bounds: { xn: number; xp: number; yn: number; yp: number; ellipse: boolean };
+  motion: { vmax: number; amax: number; run_ma: number; hold_ma: number };
 }
 
 export async function getStatus(ip: string): Promise<RawStatus> {
