@@ -641,6 +641,10 @@ export function usePlotter() {
   // CURRENT job's label, so we remember each one to render the done-job history).
   const jobLabels = useRef<Map<number, string>>(new Map());
 
+  // Tracks whether we've already seeded bounds from the firmware on this IP.
+  // Reset when IP changes so a new plotter gets a fresh read.
+  const boundsSeeded = useRef(false);
+
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
   // The ref is updated every render so the callback always reads the current value.
@@ -709,12 +713,26 @@ export function usePlotter() {
   // label of the job running right now.
   useEffect(() => {
     if (!ip) { setStatus(null); setJobs([]); return; }
+    boundsSeeded.current = false;   // new IP → re-read bounds from that plotter
     let alive = true;
 
     const poll = async () => {
       let s: RawStatus;
       try { s = await getStatus(ip); } catch { return; }   // SSE onerror handles the link badge
       if (!alive) return;
+
+      // On first successful response, seed the work-area from the firmware so the
+      // console reflects what's actually configured there rather than the hard-coded default.
+      if (!boundsSeeded.current && s.bounds) {
+        boundsSeeded.current = true;
+        setBoundsState({
+          left:  -s.bounds.xn,
+          right:  s.bounds.xp,
+          up:     s.bounds.yp,
+          down:  -s.bounds.yn,
+          shape:  s.bounds.ellipse ? 'ellipse' : 'rect',
+        });
+      }
 
       if (s.job && s.current > 0) jobLabels.current.set(s.current, s.job);
 

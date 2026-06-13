@@ -36,7 +36,7 @@ export interface RawStatus {
   idle: boolean; aborting: boolean; job: string;
   drv_ok: boolean; drv_flags: string;
   x: number; y: number;
-  bounds: { xn: number; xp: number; yn: number; yp: number };
+  bounds: { xn: number; xp: number; yn: number; yp: number; ellipse: boolean };
 }
 
 export async function getStatus(ip: string): Promise<RawStatus> {

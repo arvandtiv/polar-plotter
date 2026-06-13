@@ -317,6 +317,18 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
   const [shape, setShape] = useState<'rect' | 'ellipse'>(bounds.shape);
   const parse = (s: string | undefined) => Math.max(0, parseFloat(s ?? '0') || 0);
 
+  // Sync uncontrolled inputs when bounds are seeded from the firmware on load.
+  useEffect(() => {
+    if (refs.up.current)    refs.up.current.value    = String(bounds.up);
+    if (refs.down.current)  refs.down.current.value  = String(bounds.down);
+    if (refs.left.current)  refs.left.current.value  = String(bounds.left);
+    if (refs.right.current) refs.right.current.value = String(bounds.right);
+    setShape(bounds.shape);
+  // refs object is recreated each render but underlying refs are stable;
+  // only bounds needs to trigger this effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bounds]);
+
   const apply = (shapeOverride?: 'rect' | 'ellipse') => {
     const nb: PlotterBounds = {
       up:    parse(refs.up.current?.value),
