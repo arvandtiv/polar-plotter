@@ -11,7 +11,7 @@ target_include_directories(polar_plotter PRIVATE
 target_link_libraries(polar_plotter
     pico_stdlib
     pico_float                     # sqrtf / cosf / sinf
-    pico_cyw43_arch_lwip_freertos  # WiFi + lwIP + FreeRTOS
+    pico_cyw43_arch_lwip_sys_freertos  # WiFi + lwIP + FreeRTOS (pico-sdk 2.x name)
     FreeRTOS-Kernel-Heap4
     hardware_spi
     hardware_pwm

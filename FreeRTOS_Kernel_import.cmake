@@ -19,10 +19,10 @@ if (NOT EXISTS ${FREERTOS_KERNEL_PATH})
     message(FATAL_ERROR "Directory '${FREERTOS_KERNEL_PATH}' not found")
 endif ()
 
-set(_IMPORT ${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
+set(_IMPORT ${FREERTOS_KERNEL_PATH}/portable/ThirdParty/Community-Supported-Ports/GCC/RP2350_ARM_NTZ/FreeRTOS_Kernel_import.cmake)
 if (NOT EXISTS ${_IMPORT})
     message(FATAL_ERROR
-        "FreeRTOS RP2040 port cmake helper not found at:\n  ${_IMPORT}\n"
+        "FreeRTOS RP2350 port cmake helper not found at:\n  ${_IMPORT}\n"
         "Make sure FREERTOS_KERNEL_PATH points to the FreeRTOS-Kernel repo root.")
 endif ()
 

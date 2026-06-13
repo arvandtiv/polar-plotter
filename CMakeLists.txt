@@ -13,6 +13,10 @@
 cmake_minimum_required(VERSION 3.13)
 
 include(pico_sdk_import.cmake)
+
+# Must be set before FreeRTOS_Kernel_import so library.cmake picks it up
+set(FREERTOS_CONFIG_FILE_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 include(FreeRTOS_Kernel_import.cmake)
 
 project(polar_plotter C CXX ASM)

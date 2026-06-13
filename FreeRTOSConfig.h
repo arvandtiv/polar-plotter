@@ -36,6 +36,12 @@
 #define configUSE_TRACE_FACILITY            0
 #define configUSE_STATS_FORMATTING_FUNCTIONS 0
 
+/* ---- RP2350 / Cortex-M33 hardware feature flags (required by Community port) ---- */
+#define configTICK_TYPE_WIDTH_IN_BITS       TICK_TYPE_WIDTH_32_BITS
+#define configENABLE_FPU                    1   /* M33 has FPU */
+#define configENABLE_MPU                    0   /* MPU not used */
+#define configENABLE_TRUSTZONE              0   /* TrustZone not used */
+
 /* ---- ARM Cortex-M33 interrupt priority ---- */
 #define configPRIO_BITS                     3
 #define configLIBRARY_LOWEST_INTERRUPT_PRIORITY         7
@@ -58,6 +64,7 @@
 #define INCLUDE_xSemaphoreGetMutexHolder    1
 #define INCLUDE_xTaskGetCurrentTaskHandle   1
 #define INCLUDE_eTaskGetState               1
+#define INCLUDE_xTimerPendFunctionCall      1   /* required by xEventGroupSetBitsFromISR */
 
 /* ---- Assertion ---- */
 #define configASSERT(x) do { if (!(x)) { for (;;) {} } } while (0)
