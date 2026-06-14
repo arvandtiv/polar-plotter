@@ -45,6 +45,10 @@
 #define TCP_SND_BUF                     (8 * TCP_MSS)
 #define TCP_SND_QUEUELEN               ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
 #define LWIP_TCP_KEEPALIVE              1
+/* Short TIME_WAIT so status-poll connections don't exhaust the PCB pool.
+ * Default MSL=60 s → TIME_WAIT=120 s is far too long for a LAN server with 5 PCBs. */
+#define TCP_MSL                         500    /* ms; TIME_WAIT = 2×MSL = 1 s */
+#define MEMP_NUM_TCP_PCB                10     /* listen + SSE + 8 for concurrent requests */
 
 /* UDP */
 #define LWIP_UDP                        1
