@@ -268,9 +268,9 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
 }) {
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
-  const vbX = -left - pad, vbY = -up - pad;
+  const vbX = -left - pad, vbY = -down - pad;
   const vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
-  const py = (y: number) => -y;  // +Y up in display, +Y down in firmware
+  const py = (y: number) => y;  // +Y down in firmware and in display
 
   const gridStep = vbW > 800 ? 100 : 50;
   const gx: number[] = [], gy: number[] = [];
@@ -287,13 +287,13 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
         {bounds.shape === 'ellipse' ? (
           <>
             {/* faint bounding box (what the inputs edit) + the actual drawable ellipse */}
-            <rect x={-left} y={py(up)} width={left + right} height={up + down}
+            <rect x={-left} y={-down} width={left + right} height={up + down}
               fill="none" stroke="#dce3ec" strokeWidth={sw} strokeDasharray={`${sw * 3} ${sw * 2}`} />
-            <ellipse cx={(right - left) / 2} cy={(down - up) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
+            <ellipse cx={(right - left) / 2} cy={(up - down) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
               fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} />
           </>
         ) : (
-          <rect x={-left} y={py(up)} width={left + right} height={up + down}
+          <rect x={-left} y={-down} width={left + right} height={up + down}
             fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} rx={sw} />
         )}
         {gx.map((x) => <line key={`gx${x}`} x1={x} y1={py(up)} x2={x} y2={py(-down)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
@@ -317,8 +317,8 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 font-mono text-[10px] text-ink-600">
-        <span className="absolute left-2 top-2">+Y {up}</span>
-        <span className="absolute left-2 bottom-2">−Y {down}</span>
+        <span className="absolute left-2 top-2">−Y {down}</span>
+        <span className="absolute left-2 bottom-2">+Y {up}</span>
         <span className="absolute right-2 top-1/2 -translate-y-1/2">+X {right}</span>
         <span className="absolute left-2 top-1/2 -translate-y-1/2">−X {left}</span>
       </div>
@@ -435,8 +435,8 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
         </div>
       </div>
 
-      {row(refs.up,    'Up  (+Y)',   bounds.up)}
-      {row(refs.down,  'Down (−Y)',  bounds.down)}
+      {row(refs.up,    'Down (+Y)',  bounds.up)}
+      {row(refs.down,  'Up  (−Y)',   bounds.down)}
       {row(refs.left,  'Left  (−X)', bounds.left)}
       {row(refs.right, 'Right (+X)', bounds.right)}
 
@@ -501,11 +501,11 @@ function JogPad({ onJog }: { onJog: (dx: number, dy: number) => void }) {
   return (
     <div className="flex flex-wrap items-center gap-4">
       <div className="grid grid-cols-3 grid-rows-3 gap-1.5 w-[150px]">
-        <Arrow dx={0}  dy={1}  char="↑" cls="col-start-2 row-start-1" />
+        <Arrow dx={0}  dy={-1} char="↑" cls="col-start-2 row-start-1" />
         <Arrow dx={-1} dy={0}  char="←" cls="col-start-1 row-start-2" />
         <div className="col-start-2 row-start-2 flex items-center justify-center font-mono text-[10px] text-ink-600">{step}mm</div>
         <Arrow dx={1}  dy={0}  char="→" cls="col-start-3 row-start-2" />
-        <Arrow dx={0}  dy={-1} char="↓" cls="col-start-2 row-start-3" />
+        <Arrow dx={0}  dy={1}  char="↓" cls="col-start-2 row-start-3" />
       </div>
       <div className="flex flex-col gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Step</span>
