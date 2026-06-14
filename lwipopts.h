@@ -27,6 +27,17 @@
 #define MEMP_NUM_ARP_QUEUE             10
 #define PBUF_POOL_SIZE                  24
 
+/* FreeRTOS thread/mailbox sizes — all default to 0 in lwIP opt.h which triggers
+ * LWIP_ASSERT panics in sys_mbox_new ("size > 0") and sys_thread_new
+ * ("invalid stacksize"). Stack sizes are in bytes (LWIP_FREERTOS_THREAD_STACKSIZE_IS_STACKWORDS=0). */
+#define TCPIP_THREAD_STACKSIZE          4096   /* bytes → 1024 words */
+#define TCPIP_THREAD_PRIO               4
+#define TCPIP_MBOX_SIZE                 8
+#define DEFAULT_TCP_RECVMBOX_SIZE       8
+#define DEFAULT_UDP_RECVMBOX_SIZE       6
+#define DEFAULT_RAW_RECVMBOX_SIZE       6
+#define DEFAULT_ACCEPTMBOX_SIZE         8
+
 /* TCP */
 #define LWIP_TCP                        1
 #define TCP_MSS                         1460

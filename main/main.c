@@ -1350,6 +1350,38 @@ static void web_draw_task(void *arg)
 /* ---- Console commands ---- */
 
 static int cmd_link(int argc, char **argv)   { (void)argc;(void)argv; link_check(); return 0; }
+
+static int cmd_spiraw(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    /* Read INPUT (0x04, contains VERSION) and GSTAT (0x01) raw bytes.
+     * Prints both SPI phases so we can see exactly what the chip returns. */
+    const struct { const char *name; uint8_t addr; const char *expect; } regs[] = {
+        { "INPUT/VERSION", TMC5072_INPUT, "phase2 byte1 should be 0x10" },
+        { "GSTAT",         TMC5072_GSTAT, "phase2 byte4 bit0=1 after reset" },
+    };
+    for (int r = 0; r < 2; r++) {
+        uint8_t tx[5] = { regs[r].addr & 0x7F, 0, 0, 0, 0 };
+        uint8_t p1[5] = {0}, p2[5] = {0};
+        xSemaphoreTake(tmc.lock, portMAX_DELAY);
+        gpio_put(tmc.pin_csn, 0);
+        spi_write_read_blocking(tmc.spi_inst, tx, p1, 5);
+        gpio_put(tmc.pin_csn, 1);
+        sleep_us(10);
+        gpio_put(tmc.pin_csn, 0);
+        spi_write_read_blocking(tmc.spi_inst, tx, p2, 5);
+        gpio_put(tmc.pin_csn, 1);
+        xSemaphoreGive(tmc.lock);
+        printf("%s:\n", regs[r].name);
+        printf("  TX:      %02x %02x %02x %02x %02x\n",
+               tx[0],tx[1],tx[2],tx[3],tx[4]);
+        printf("  phase 1: %02x %02x %02x %02x %02x\n",
+               p1[0],p1[1],p1[2],p1[3],p1[4]);
+        printf("  phase 2: %02x %02x %02x %02x %02x  (%s)\n",
+               p2[0],p2[1],p2[2],p2[3],p2[4], regs[r].expect);
+    }
+    return 0;
+}
 static int cmd_home(int argc, char **argv)   { (void)argc;(void)argv; home_gondola(); return 0; }
 static int cmd_stat(int argc, char **argv)   { (void)argc;(void)argv; print_status(MOTOR_THETA); print_status(MOTOR_RHO); return 0; }
 static int cmd_status(int argc, char **argv) { (void)argc;(void)argv; print_global_status(); print_full_status(MOTOR_THETA); print_full_status(MOTOR_RHO); return 0; }
@@ -1594,6 +1626,7 @@ typedef struct { const char *name; const char *help; cmd_fn_t fn; } cmd_entry_t;
 
 static const cmd_entry_t s_cmds[] = {
     { "link",      "Re-read SPI link (VERSION check)",                   cmd_link      },
+    { "spiraw",    "Raw SPI byte dump (debug)",                          cmd_spiraw    },
     { "cur",       "Set current: cur <run_mA> [hold_mA]",               cmd_cur       },
     { "speed",     "Set speed: speed <vmax>",                           cmd_speed     },
     { "accel",     "Set acceleration: accel <amax>",                    cmd_accel     },
@@ -1630,50 +1663,89 @@ static void console_loop(void)
     char line[256];
     char *argv[32];
     int  argc;
+    int  pos = 0;
 
     printf("\r\nPlotter console ready. Type 'help' for commands.\r\nplotter> ");
     fflush(stdout);
 
     while (true) {
-        if (!fgets(line, sizeof(line), stdin)) {
+        /* Non-blocking read — yield so USB interrupt can deliver characters. */
+        int c = getchar_timeout_us(0);
+        if (c == PICO_ERROR_TIMEOUT) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-        line[strcspn(line, "\r\n")] = '\0';
-        if (!*line) { printf("plotter> "); fflush(stdout); continue; }
 
-        argc = 0;
-        char *p = strtok(line, " \t");
-        while (p && argc < 32) { argv[argc++] = p; p = strtok(NULL, " \t"); }
-        if (argc == 0) { printf("plotter> "); fflush(stdout); continue; }
+        if (c == '\r' || c == '\n') {
+            line[pos] = '\0';
+            printf("\r\n");
+            pos = 0;
+            if (!*line) { printf("plotter> "); fflush(stdout); continue; }
 
-        if (!strcmp(argv[0], "help")) {
-            for (size_t i = 0; i < N_CMDS; i++)
-                printf("  %-12s %s\n", s_cmds[i].name, s_cmds[i].help);
-        } else {
-            bool found = false;
-            for (size_t i = 0; i < N_CMDS; i++) {
-                if (!strcmp(argv[0], s_cmds[i].name)) {
-                    s_cmds[i].fn(argc, argv);
-                    found = true;
-                    break;
+            argc = 0;
+            char *p = strtok(line, " \t");
+            while (p && argc < 32) { argv[argc++] = p; p = strtok(NULL, " \t"); }
+
+            if (!strcmp(argv[0], "help")) {
+                for (size_t i = 0; i < N_CMDS; i++)
+                    printf("  %-12s %s\n", s_cmds[i].name, s_cmds[i].help);
+            } else {
+                bool found = false;
+                for (size_t i = 0; i < N_CMDS; i++) {
+                    if (!strcmp(argv[0], s_cmds[i].name)) {
+                        s_cmds[i].fn(argc, argv);
+                        found = true;
+                        break;
+                    }
                 }
+                if (!found)
+                    printf("unknown command: %s (type 'help')\n", argv[0]);
             }
-            if (!found)
-                printf("unknown command: %s (type 'help')\n", argv[0]);
+            printf("plotter> "); fflush(stdout);
+        } else if (c == '\b' || c == 127) {
+            if (pos > 0) { pos--; printf("\b \b"); fflush(stdout); }
+        } else if (pos < (int)sizeof(line) - 1) {
+            line[pos++] = (char)c;
+            putchar(c); fflush(stdout);
         }
-        printf("plotter> "); fflush(stdout);
     }
 }
 
 /* ---- WiFi (Pico CYW43) ---- */
 
+static void wifi_watchdog_task(void *arg)
+{
+    (void)arg;
+    while (!s_cyw43_ready) vTaskDelay(pdMS_TO_TICKS(500));
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+        if (!s_wifi_connected) continue;
+        int link = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+        if (link == CYW43_LINK_JOIN) continue;
+        s_wifi_connected = false;
+        printf("[wifi] link lost (status %d), reconnecting...\n", link);
+        int r = cyw43_arch_wifi_connect_timeout_ms(
+                    WIFI_SSID, WIFI_PASS, CYW43_AUTH_WPA2_AES_PSK, 30000);
+        if (r == 0) {
+            s_wifi_connected = true;
+            printf("[wifi] reconnected: %s\n",
+                   ip4addr_ntoa(netif_ip4_addr(netif_default)));
+            web_log("WiFi reconnected: http://%s/",
+                    ip4addr_ntoa(netif_ip4_addr(netif_default)));
+        } else {
+            printf("[wifi] reconnect failed (%d), will retry\n", r);
+        }
+    }
+}
+
 static void wifi_init_sta(void)
 {
+    printf("[wifi] calling cyw43_arch_init...\n"); fflush(stdout);
     if (cyw43_arch_init()) {
-        printf("[wifi] cyw43_arch_init failed\n");
+        printf("[wifi] cyw43_arch_init failed\n"); fflush(stdout);
         return;
     }
+    printf("[wifi] cyw43_arch_init ok\n"); fflush(stdout);
     s_cyw43_ready = true;   /* LED now driveable */
     cyw43_arch_enable_sta_mode();
     printf("[wifi] connecting to '%s'...\n", WIFI_SSID);
@@ -1769,8 +1841,10 @@ static void main_task(void *arg)
 {
     (void)arg;
 
-    /* Brief delay so USB CDC stdio has time to enumerate. */
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    /* Wait for the USB CDC host to open the port (max 30 s), then print.
+     * A fixed delay drops output if screen opens after the window expires. */
+    for (int i = 0; i < 300 && !stdio_usb_connected(); i++)
+        vTaskDelay(pdMS_TO_TICKS(100));
 
     printf("\r\n====  Polar Plotter (Pico 2W)  ====\r\n");
 
@@ -1798,15 +1872,18 @@ static void main_task(void *arg)
 
     /* web_server_init creates queues/stream buffer — call before WiFi so web_log
      * works from here on.  web_server_listen opens the TCP port after WiFi up. */
+    printf("[main] web_server_init...\n"); fflush(stdout);
     web_server_init();
+    printf("[main] task creates...\n"); fflush(stdout);
     xTaskCreate(web_draw_task, "web_draw", 4096, NULL, 5, NULL);
     xTaskCreate(led_task,      "led",       512, NULL, 2, NULL);
-
+    printf("[main] wifi_init_sta...\n"); fflush(stdout);
     wifi_init_sta();   /* blocks until connected; sets s_cyw43_ready early inside */
 
     web_server_listen();
-    xTaskCreate(udp_listener_task,   "udp",     1024, NULL, 5, NULL);
-    xTaskCreate(pattern_stream_task, "pattern", 1024, NULL, 5, NULL);
+    xTaskCreate(udp_listener_task,   "udp",      1024, NULL, 5, NULL);
+    xTaskCreate(pattern_stream_task, "pattern",  1024, NULL, 5, NULL);
+    xTaskCreate(wifi_watchdog_task,  "wifi_wd",  512,  NULL, 2, NULL);
 
     console_loop();   /* runs forever; returns only if stdin closes */
     vTaskDelete(NULL);

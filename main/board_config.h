@@ -31,7 +31,7 @@
 
 /* SPI instance and clock */
 #define TMC_SPI_INST  spi0
-#define TMC_SPI_HZ    1000000   /* 1 MHz, safe start; can raise after comms confirmed */
+#define TMC_SPI_HZ    250000    /* 250 kHz for bring-up; raise to 1-4 MHz once comms confirmed */
 
 /* Pen lift servo */
 #define PEN_UP_DEG    180

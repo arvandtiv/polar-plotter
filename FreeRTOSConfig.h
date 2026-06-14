@@ -9,13 +9,14 @@
 #define configTICK_RATE_HZ                  1000
 
 /* ---- Scheduler ---- */
+#define configNUMBER_OF_CORES               1     /* single-core; SMP port requires this explicit */
 #define configUSE_PREEMPTION                1
 #define configUSE_IDLE_HOOK                 0
 #define configUSE_TICK_HOOK                 0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK  0
 #define configMAX_PRIORITIES                8
 #define configMINIMAL_STACK_SIZE            256   /* words */
-#define configTOTAL_HEAP_SIZE               (256 * 1024)
+#define configTOTAL_HEAP_SIZE               (128 * 1024)  /* 128 KB — leave room for USB+WiFi buffers */
 
 /* ---- Features ---- */
 #define configUSE_MUTEXES                   1
@@ -41,6 +42,11 @@
 #define configENABLE_FPU                    1   /* M33 has FPU */
 #define configENABLE_MPU                    0   /* MPU not used */
 #define configENABLE_TRUSTZONE              0   /* TrustZone not used */
+/* RP2350 NTZ port requirement: chip boots and stays in secure state, no TZ transition */
+#define configRUN_FREERTOS_SECURE_ONLY      1
+/* Disable pico-sdk time interop: sleep_ms() called before vTaskStartScheduler() would
+ * otherwise call vTaskDelay() via xPortSyncInternalYieldUntilBefore() → NULL deref crash */
+#define configSUPPORT_PICO_TIME_INTEROP     0
 
 /* ---- ARM Cortex-M33 interrupt priority ---- */
 #define configPRIO_BITS                     3

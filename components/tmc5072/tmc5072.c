@@ -18,11 +18,13 @@ static inline float vfs_of(bool vsense_high) { return vsense_high ? 0.180f : 0.3
 static void spi_xfer(tmc5072_t *dev, const uint8_t *tx, uint8_t *rx, size_t len)
 {
     gpio_put(dev->pin_csn, 0);
+    busy_wait_us_32(1);   /* CS setup time — TMC needs ~1 µs after CS↓ before first clock */
     if (rx)
         spi_write_read_blocking(dev->spi_inst, tx, rx, len);
     else
         spi_write_blocking(dev->spi_inst, tx, len);
     gpio_put(dev->pin_csn, 1);
+    busy_wait_us_32(2);   /* CS inter-frame hold: without this the two-phase read returns 0x00 on data bytes */
 }
 
 bool tmc5072_init(tmc5072_t *dev, const tmc5072_config_t *cfg)
@@ -44,6 +46,7 @@ bool tmc5072_init(tmc5072_t *dev, const tmc5072_config_t *cfg)
     gpio_set_function(cfg->pin_sck,  GPIO_FUNC_SPI);
     gpio_set_function(cfg->pin_mosi, GPIO_FUNC_SPI);
     gpio_set_function(cfg->pin_miso, GPIO_FUNC_SPI);
+    gpio_pull_up(cfg->pin_miso);   /* pull-up so MISO idles HIGH; TMC SDO overrides LOW */
 
     /* CS starts high (deselected). */
     gpio_init(cfg->pin_csn);
