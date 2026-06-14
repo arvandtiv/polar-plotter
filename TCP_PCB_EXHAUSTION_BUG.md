@@ -2,7 +2,36 @@
 
 **Date:** 2026-06-14  
 **Branch:** `pico2`  
-**Status as of writing:** Fix applied in commit `346a885`, UF2 built but **not yet confirmed on hardware**. The fix is unverified — the user has not flashed and tested this build.
+**Status as of writing:** Fix applied in commit `346a885`, fresh UF2 rebuilt and ready. **Not yet confirmed on hardware — the clean build appears to have never been flashed; the Pico is still running stale broken firmware.**
+
+---
+
+## ⚠️ UPDATE 2026-06-14 20:18 — Empirical re-diagnosis (corrects errors below)
+
+Two claims in the original writeup (preserved below for history) turned out to be **wrong** after live testing:
+
+1. **"High ping (60–100 ms) caused by tight accept-loop spin" — WRONG.**
+   - Live ping is now **3.7–7.5 ms** (normal). The high latency was **transient**, not a code defect.
+   - `accept()` in `http_server_task` is a **blocking** call — it cannot busy-spin. `console_loop` also yields correctly (`vTaskDelay(10ms)` when no USB input). There is **no busy-loop** anywhere in the firmware. The CPU-starvation theory is unfounded.
+
+2. **"Root cause is the inherent default lwIP config" — INCOMPLETE / partly self-contradictory.**
+   - The C firmware code at `HEAD` is **byte-identical** to `980b64c` (the commit the user confirmed worked): `git diff 980b64c HEAD -- main/ FreeRTOSConfig.h` returns **nothing**. The only firmware delta is the 2 lwIP defines in `346a885`.
+   - If the default config alone caused 6-second exhaustion, `980b64c` could never have worked — but it did. So the inherent-default theory can't be the whole story.
+
+**What is actually true (from live testing):**
+- Ping: normal (~4 ms).
+- HTTP: **fast RST (10–100 ms) on every request** — TCP handshake completes, then immediate reset.
+- That fast-RST-every-request signature matches **either** the `shutdown/drain` code from `f29128b` **or** PCB exhaustion. Both are eliminated by the `346a885` build.
+
+**Most likely explanation:** the clean build was **never successfully flashed**. The Pico is still running `f29128b` (the `shutdown(SHUT_WR)` + drain + `close()` with unread data → RST on every request). The serial log the user saw (`WiFi up... [net] link lost`) was timestamped 18:24, right after `f29128b` was committed at 18:23.
+
+**The fix (`346a885`) is robust to both hypotheses:**
+- If stale broken firmware is running → reflashing removes the `shutdown/drain`.
+- If PCB exhaustion is real → `TCP_MSL=500` (1 s TIME_WAIT) + 10 PCBs prevents it.
+
+**Action required: flash the fresh UF2 (built 20:18), then power-cycle.** See Flash Instructions. The firmware C code is identical to the version the user confirmed working — only safe lwIP robustness margins were added.
+
+---
 
 ---
 
