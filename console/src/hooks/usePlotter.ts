@@ -645,6 +645,11 @@ export function usePlotter() {
   // Reset when IP changes so a new plotter gets a fresh read.
   const boundsSeeded  = useRef(false);
   const motionSeeded  = useRef(false);
+  // Connectivity debounce: SSE uses sseWasOpen to log the drop only once (not on
+  // every retry burst). Status poll uses pollFails to require 3 consecutive misses
+  // before declaring the link down, so a single slow response doesn't flash the UI.
+  const sseWasOpen  = useRef(false);
+  const pollFails   = useRef(0);
 
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
@@ -676,7 +681,10 @@ export function usePlotter() {
     const url = sseUrl(ip);
     const es = new EventSource(url);
 
+    sseWasOpen.current = false;
+
     es.onopen = () => {
+      sseWasOpen.current = true;
       setConnected(true);
       pushLog('sys', `linked · http://${ip}/`);
     };
@@ -697,11 +705,16 @@ export function usePlotter() {
     });
 
     es.onerror = () => {
-      setConnected(false);
-      pushLog('err', '[net] stream disconnected (auto-retrying…)');
+      // onerror fires on every browser retry attempt — don't flip the link
+      // indicator here (the 1 Hz status poll is the authoritative source).
+      // Log the drop only once when the stream actually goes away.
+      if (sseWasOpen.current) {
+        sseWasOpen.current = false;
+        pushLog('sys', '[net] stream dropped — reconnecting…');
+      }
     };
 
-    return () => { es.close(); setConnected(false); };
+    return () => { es.close(); sseWasOpen.current = false; };
   }, [ip, pushLog]);
 
   // ---- status poll (Autonomous tab) ----------------------------
@@ -716,16 +729,26 @@ export function usePlotter() {
     if (!ip) { setStatus(null); setJobs([]); return; }
     boundsSeeded.current = false;   // new IP → re-read bounds + motion from that plotter
     motionSeeded.current = false;
+    pollFails.current = 0;
     let alive = true;
 
     const poll = async () => {
       let s: RawStatus;
       try { s = await getStatus(ip); } catch {
-        setConnected(false);
+        pollFails.current += 1;
+        // Require 3 consecutive misses before declaring the link down so a single
+        // slow response or brief WiFi hiccup doesn't flash the indicator.
+        if (pollFails.current === 3) {
+          setConnected(false);
+          pushLog('sys', '[net] link lost — retrying…');
+        }
         return;
       }
       if (!alive) return;
-      setConnected(true);   // HTTP reachable → link is up even if SSE hasn't opened yet
+      const wasDown = pollFails.current >= 3;
+      pollFails.current = 0;
+      setConnected(true);
+      if (wasDown) pushLog('sys', `[net] link restored · http://${ip}/`);
 
       // On first successful response, seed work-area and motion params from the firmware
       // so the console reflects what's actually configured rather than hard-coded defaults.
@@ -773,7 +796,7 @@ export function usePlotter() {
     poll();
     const timer = setInterval(poll, 1000);
     return () => { alive = false; clearInterval(timer); };
-  }, [ip]);
+  }, [ip, pushLog]);
 
   // ---- animation -----------------------------------------------
   // Runs a client-side visual simulation of the gondola path at ~60 fps.
@@ -851,7 +874,6 @@ export function usePlotter() {
       else pushLog('err', `[err] ${d.msg}`);
       return d;
     } catch (e) {
-      setConnected(false);
       pushLog('err', `[net] ${String(e)}`);
       return null;
     }
@@ -907,7 +929,6 @@ export function usePlotter() {
       const d = await apiGet(ipRef.current, endpoint);
       return d.status === 'ok';
     } catch {
-      setConnected(false);
       return false;
     }
   }, []);
