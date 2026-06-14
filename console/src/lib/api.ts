@@ -1,7 +1,7 @@
 // IP is persisted in localStorage so it survives page reloads.
 // Default is the plotter's typical DHCP address on the home network.
 const IP_KEY = 'plotterIp';
-const DEFAULT_IP = '192.168.1.53';
+const DEFAULT_IP = '192.168.1.71';
 
 export function getStoredIp(): string {
   if (typeof localStorage === 'undefined') return DEFAULT_IP;
