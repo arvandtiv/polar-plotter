@@ -46,9 +46,13 @@
 #define TCP_SND_QUEUELEN               ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
 #define LWIP_TCP_KEEPALIVE              1
 /* Short TIME_WAIT so status-poll connections don't exhaust the PCB pool.
- * Default MSL=60 s → TIME_WAIT=120 s is far too long for a LAN server with 5 PCBs. */
+ * Default MSL=60 s → TIME_WAIT=120 s is far too long for a LAN server with 5 PCBs.
+ * Headroom sizing: the MCP polls /api/status every 150 ms while a job runs, so up
+ * to ~7 closed sockets sit in the 1 s TIME_WAIT window at once; 16 PCBs leaves
+ * room for that plus the listen socket, the SSE stream, and the active request.
+ * Each tcp_pcb is ~200 B of static BSS — trivial against the RP2350's 520 KB. */
 #define TCP_MSL                         500    /* ms; TIME_WAIT = 2×MSL = 1 s */
-#define MEMP_NUM_TCP_PCB                10     /* listen + SSE + 8 for concurrent requests */
+#define MEMP_NUM_TCP_PCB                16
 
 /* UDP */
 #define LWIP_UDP                        1
