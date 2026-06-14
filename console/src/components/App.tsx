@@ -660,6 +660,67 @@ const TRUCHET_MOTIF_HELP = [
 ];
 
 // ================================================================
+//  Hardware / chip reference data
+// ================================================================
+
+const FW_VERSION = 'pico2 · v1.0';
+
+const TMC5072_SPECS = [
+  { label: 'Driver IC',      value: 'TMC5072',                    note: 'Trinamic / Analog Devices' },
+  { label: 'Interface',      value: 'SPI Mode 3 · 40-bit',        note: '2 MHz · manual CS · MSB-first' },
+  { label: 'Ramp engine',    value: '6-point integrated',         note: 'RAMPMODE 0 — write XTARGET, chip ramps' },
+  { label: 'Microsteps',     value: '256 (native)',               note: '200 steps/rev × 256 = 51 200 µsteps/rev' },
+  { label: 'Steps / mm',     value: '1 280',                      note: '51 200 µsteps / 40 mm per rev (GT2 20T)' },
+  { label: 'Motor 1',        value: 'THETA — left belt',          note: 'm=0 in firmware; right anchor' },
+  { label: 'Motor 2',        value: 'RHO — right belt',           note: 'm=1 in firmware; left anchor' },
+  { label: 'Current sense',  value: 'R_SENSE = 0.15 Ω',          note: 'Unverified — measure coil current to confirm' },
+  { label: 'VSENSE',         value: 'Low (0)',                    note: 'Full-scale ≈ 325 mA at R_SENSE = 0.15 Ω' },
+  { label: 'Chopper',        value: 'CHOPCONF 0x000100C3',        note: 'TOFF=3 · HSTRT=0 · HEND=1 · TBL=1' },
+  { label: 'MCU',            value: 'RP2350 · Pico 2W',          note: 'CYW43439 WiFi/BT · FreeRTOS ARM_CM33_NTZ' },
+  { label: 'Span',           value: '978 mm anchor-to-anchor',   note: 'Measure at belt take-off points, not shaft centres' },
+  { label: 'Home belt',      value: '715 mm each side',          note: 'Belt length motor→gondola at the midpoint origin' },
+];
+
+function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
+  const m = status?.motion;
+  const live = m ? [
+    { label: 'Run current',  value: `${m.run_ma} mA`,                    note: 'IRUN — active during motion' },
+    { label: 'Hold current', value: `${m.hold_ma} mA`,                   note: 'IHOLD — gondola must hold while idle' },
+    { label: 'VMAX',         value: m.vmax.toLocaleString(),              note: 'µsteps/s target velocity' },
+    { label: 'AMAX',         value: m.amax.toLocaleString(),             note: 'µsteps/s² peak acceleration' },
+  ] : null;
+  return (
+    <Card title="Hardware · TMC5072" icon="⚙" accent="#7c3aed">
+      <div className="space-y-1">
+        {TMC5072_SPECS.map(({ label, value, note }) => (
+          <div key={label} className="grid grid-cols-[130px_1fr] gap-2 py-1 border-b border-ink-800/60 last:border-0">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-500 pt-px">{label}</span>
+            <div>
+              <span className="font-mono text-[12.5px] text-ink-200">{value}</span>
+              <span className="ml-2 text-[11px] text-ink-600">{note}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {live && (
+        <>
+          <div className="mt-4 mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-500">Live motion state</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {live.map(({ label, value, note }) => (
+              <div key={label} className="rounded-lg border border-ink-800 bg-ink-950 px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-600">{label}</div>
+                <div className="font-mono text-[14px] text-cyanx">{value}</div>
+                <div className="text-[10px] text-ink-700 mt-0.5">{note}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ================================================================
 //  Main App
 // ================================================================
 // ScriptTab — bulk CSV command entry
@@ -817,15 +878,22 @@ export default function App() {
       <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink-700 bg-ink-850 text-cyanx">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-                <line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyanx/30 bg-cyanx/10 text-cyanx shadow-[0_0_12px_rgba(6,182,212,0.15)]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="9"/>
+                <circle cx="12" cy="12" r="3"/>
+                <line x1="12" y1="3" x2="12" y2="6"/>
+                <line x1="12" y1="18" x2="12" y2="21"/>
+                <line x1="3" y1="12" x2="6" y2="12"/>
+                <line x1="18" y1="12" x2="21" y2="12"/>
               </svg>
             </div>
             <div>
-              <h1 className="text-[15px] font-bold tracking-tight text-ink-100">Polar Plotter</h1>
-              <p className="hidden font-mono text-[11px] text-ink-500 sm:block">console</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-[15px] font-bold tracking-tight text-ink-100">Polar Plotter</h1>
+                <span className="hidden sm:inline-flex items-center rounded-md border border-cyanx/30 bg-cyanx/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyanx tracking-wide">{FW_VERSION}</span>
+              </div>
+              <p className="hidden font-mono text-[11px] text-ink-500 sm:block">console · RP2350 · TMC5072</p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -1102,6 +1170,8 @@ export default function App() {
                     (over-temp, coil short). Fix the cause, then <span className="text-ink-300">Clear fault</span> to resume.
                   </p>
                 </Card>
+
+                <ChipInfoCard status={status} />
 
                 <LogCard title="Job queue" icon="▦" accent="#0284c7">
                   <div className="flex flex-col h-full gap-4">
