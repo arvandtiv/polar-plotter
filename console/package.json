@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "astro dev --port 4321",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "start": "astro build && astro preview --port 4321"
   },
   "dependencies": {
     "@astrojs/react": "^3.6.2",
