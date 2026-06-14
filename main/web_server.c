@@ -711,6 +711,15 @@ static void http_server_task(void *arg)
         if (!found)
             send_response(client_sock, 404, "application/json",
                           "{\"status\":\"error\",\"msg\":\"not found\"}\n");
+
+        /* Active close: send FIN first, wait briefly for client's FIN, then
+         * close.  This moves TIME_WAIT to the client side so the server PCB is
+         * freed immediately — prevents PCB exhaustion from the 1 Hz status poll. */
+        shutdown(client_sock, SHUT_WR);
+        struct timeval drain_tv = { .tv_sec = 0, .tv_usec = 50000 }; /* 50 ms */
+        setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &drain_tv, sizeof(drain_tv));
+        char drain[8];
+        recv(client_sock, drain, sizeof(drain), 0);
         close(client_sock);
     }
 }

@@ -45,11 +45,6 @@
 #define TCP_SND_BUF                     (8 * TCP_MSS)
 #define TCP_SND_QUEUELEN               ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
 #define LWIP_TCP_KEEPALIVE              1
-/* Default MEMP_NUM_TCP_PCB=5 and TCP_MSL=60000ms (TIME_WAIT=2min) combine to exhaust
- * all PCBs within seconds when the console polls /api/status at 1 Hz.  Fix: more PCBs
- * and much shorter TIME_WAIT so closed poll sockets don't linger for 2 minutes. */
-#define MEMP_NUM_TCP_PCB               32
-#define TCP_MSL                        2000   /* TIME_WAIT = 2×MSL = 4 s (was 2 min) */
 
 /* UDP */
 #define LWIP_UDP                        1
