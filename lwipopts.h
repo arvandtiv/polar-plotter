@@ -53,6 +53,13 @@
  * Each tcp_pcb is ~200 B of static BSS — trivial against the RP2350's 520 KB. */
 #define TCP_MSL                         500    /* ms; TIME_WAIT = 2×MSL = 1 s */
 #define MEMP_NUM_TCP_PCB                16
+/* With LWIP_SOCKET=1 every socket() consumes one netconn. The firmware holds
+ * three permanently (HTTP listen, UDP listener, pattern listener); the default
+ * MEMP_NUM_NETCONN=4 then leaves just ONE — which the browser's SSE EventSource
+ * takes, so the very next accept() has no netconn and lwIP RSTs the connection
+ * at the accept layer (every endpoint, incl. the static page, fails). Size this
+ * to match the PCB pool so concurrent poll + SSE + draw calls all get served. */
+#define MEMP_NUM_NETCONN                16
 
 /* UDP */
 #define LWIP_UDP                        1

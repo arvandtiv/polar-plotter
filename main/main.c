@@ -1748,6 +1748,10 @@ static void wifi_init_sta(void)
     printf("[wifi] cyw43_arch_init ok\n"); fflush(stdout);
     s_cyw43_ready = true;   /* LED now driveable */
     cyw43_arch_enable_sta_mode();
+    /* Disable WiFi power-save: the CYW43 default (PM2) sleeps between beacons,
+     * which pushes ping latency to ~100 ms and adds jitter to every TCP exchange.
+     * For a LAN-controlled plotter we want responsiveness over battery life. */
+    cyw43_wifi_pm(&cyw43_state, CYW43_NONE_PM);
     printf("[wifi] connecting to '%s'...\n", WIFI_SSID);
     for (;;) {
         int r = cyw43_arch_wifi_connect_timeout_ms(
@@ -1847,6 +1851,8 @@ static void main_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(100));
 
     printf("\r\n====  Polar Plotter (Pico 2W)  ====\r\n");
+    printf("[build] %s %s  (netconn=%d tcp_pcb=%d msl=%dms)\r\n",
+           __DATE__, __TIME__, MEMP_NUM_NETCONN, MEMP_NUM_TCP_PCB, TCP_MSL);
 
     init_geometry();
 
