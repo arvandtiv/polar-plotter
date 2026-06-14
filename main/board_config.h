@@ -31,7 +31,7 @@
 
 /* SPI instance and clock */
 #define TMC_SPI_INST  spi0
-#define TMC_SPI_HZ    250000    /* 250 kHz for bring-up; raise to 1-4 MHz once comms confirmed */
+#define TMC_SPI_HZ    2000000   /* 2 MHz — fast enough for streaming segments, well within TMC5072 spec */
 
 /* Pen lift servo */
 #define PEN_UP_DEG    180
@@ -77,7 +77,7 @@
 #define PATTERN_LISTEN_PORT 8889
 
 /* Motion defaults */
-#define TEST_RUN_MA      400.0f
+#define TEST_RUN_MA      600.0f   /* raised from 400: gondola load needs more torque than bench test */
 #define TEST_HOLD_MA     200.0f
-#define TEST_VMAX        200000
+#define TEST_VMAX        200000   /* matches ESP32 default; reduces to drawing speed via 'speed' command */
 #define MOVE_TIMEOUT_MS  8000

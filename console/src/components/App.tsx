@@ -60,6 +60,47 @@ function Card({ title, icon, accent = '#0284c7', right, children, className = ''
   );
 }
 
+type LogSize = 'collapsed' | 'minimized' | 'expanded';
+const LOG_SIZE_BTNS: { key: LogSize; label: string; hint: string }[] = [
+  { key: 'collapsed', label: '×', hint: 'Collapse' },
+  { key: 'minimized', label: '▬', hint: 'Minimized (100 px)' },
+  { key: 'expanded', label: '⤢', hint: 'Expanded (500 px)' },
+];
+
+function LogCard({ title, icon, accent = '#0284c7', right, children }: {
+  title: string; icon?: string; accent?: string; right?: React.ReactNode; children: React.ReactNode;
+}) {
+  const [size, setSize] = useState<LogSize>('minimized');
+  const contentH = size === 'minimized' ? 'h-[100px]' : 'h-[500px]';
+  return (
+    <section className="rounded-xl border border-ink-750 bg-ink-900 shadow-card">
+      <header className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800 shrink-0">
+        <div className="flex items-center gap-2">
+          {icon && <span style={{ color: accent }} className="text-[13px]">{icon}</span>}
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {right}
+          <div className="flex gap-0.5 ml-1 border-l border-ink-800 pl-2">
+            {LOG_SIZE_BTNS.map(({ key, label, hint }) => (
+              <button key={key} onClick={() => setSize(key)} title={hint}
+                className={`w-5 h-5 rounded text-[10px] font-mono transition-colors
+                  ${size === key ? 'bg-ink-700 text-ink-200' : 'text-ink-600 hover:text-ink-300 hover:bg-ink-800'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+      {size !== 'collapsed' && (
+        <div className={`${contentH} p-4 overflow-hidden flex flex-col`}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 type BtnVariant = 'default' | 'primary' | 'go' | 'ghost' | 'danger';
 function Btn({ children, onClick, variant = 'default', disabled, className = '', title }: {
   children: React.ReactNode; onClick?: () => void; variant?: BtnVariant;
@@ -436,7 +477,7 @@ function LogView({ log }: { log: LogEntry[] }) {
   }[kind]);
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
   return (
-    <div ref={ref} className="h-[100px] overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
+    <div ref={ref} className="h-full overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
       {log.map((l) => (
         <div key={l.id} className={`log-line flex gap-2.5 ${color(l.kind)}`}>
           <span className="shrink-0 text-ink-700 tabular-nums" suppressHydrationWarning>{fmtTime(l.t)}</span>
@@ -557,7 +598,7 @@ function JobList({ jobs }: { jobs: JobEntry[] }) {
   const dot = (s: JobEntry['state']) => (s === 'done' ? '✓' : s === 'doing' ? '▶' : '○');
   const cls = (s: JobEntry['state']) => (s === 'done' ? 'text-go' : s === 'doing' ? 'text-warn' : 'text-ink-600');
   return (
-    <div ref={ref} className="h-[100px] space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
+    <div ref={ref} className="h-full space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
       {jobs.map((j) => (
         <div key={j.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
           <span className={`${cls(j.state)} ${j.state === 'doing' ? 'blink' : ''}`}>{dot(j.state)}</span>
@@ -581,7 +622,7 @@ function ErrorsPanel({ log }: { log: LogEntry[] }) {
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [errs.length]);
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString('en-GB', { hour12: false });
   return (
-    <div ref={ref} className="h-[100px] overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
+    <div ref={ref} className="h-full overflow-y-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[12.5px] leading-relaxed">
       {errs.length === 0 ? (
         <div className="text-ink-600">No errors. Driver faults and command errors will appear here.</div>
       ) : (
@@ -1062,32 +1103,34 @@ export default function App() {
                   </p>
                 </Card>
 
-                <Card title="Job queue" icon="▦" accent="#0284c7" collapsible>
-                  <div className="space-y-4">
-                    <JobProgress status={status} />
-                    <div className="h-px bg-ink-800" />
-                    <JobList jobs={jobs} />
+                <LogCard title="Job queue" icon="▦" accent="#0284c7">
+                  <div className="flex flex-col h-full gap-4">
+                    <div className="shrink-0">
+                      <JobProgress status={status} />
+                    </div>
+                    <div className="h-px bg-ink-800 shrink-0" />
+                    <div className="flex-1 min-h-0">
+                      <JobList jobs={jobs} />
+                    </div>
                   </div>
-                </Card>
+                </LogCard>
 
-                <Card title="Errors" icon="⚠" accent="#dc2626" collapsible>
+                <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />
-                </Card>
+                </LogCard>
               </>
             )}
 
             </div>{/* end tab panels */}
 
-            {/* Log — sits directly after the method cards, flex-1 to fill any
-                leftover height. Collapses to just its header. */}
-            <Card title="Log" icon="❯" accent="#059669" className=""
-              collapsible
+            {/* Log — sits directly after the method cards */}
+            <LogCard title="Log" icon="❯" accent="#059669"
               right={
                 <button onClick={() => P.pushLog('sys', '— cleared —')}
                   className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
               }>
               <LogView log={log} />
-            </Card>
+            </LogCard>
             </div>{/* end methods + log scroll region */}
           </div>
         </div>
