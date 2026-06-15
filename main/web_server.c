@@ -47,35 +47,55 @@ char              g_drv_flags[96] = "ok";
 #define LOG_STREAM_BYTES 2048
 static StreamBufferHandle_t s_log_stream = NULL;
 static SemaphoreHandle_t    s_log_mutex  = NULL;
-/* Depth-1 queue: xQueueOverwrite replaces any pending fd when a new browser
- * connects, which also kills the stale connection cleanly. */
+/* Handoff queue: http_server_task pushes accepted /events fds here; sse_task
+ * adopts them. Sized to hold a burst of new connections without dropping any. */
+#define MAX_SSE_CLIENTS 4
 static QueueHandle_t s_sse_fd_q = NULL;
 
 /* ---- SSE task ---- */
 
+static void sse_close(int *fd)
+{
+    if (*fd >= 0) { shutdown(*fd, SHUT_RDWR); close(*fd); *fd = -1; }
+}
+
+/* Holds up to MAX_SSE_CLIENTS live EventSource connections and broadcasts every
+ * log line / heartbeat to all of them. Multiple clients (a reconnecting tab, a
+ * second browser, the embedded page + the Astro console, a dev StrictMode double
+ * mount) each get their own slot instead of evicting one another — which is what
+ * caused the endless drop/reconnect loop with the old single-fd design. Dead
+ * connections are reaped when a send() fails (within one heartbeat interval). */
 static void sse_task(void *arg)
 {
     (void)arg;
-    int fd = -1;
+    int fds[MAX_SSE_CLIENTS];
+    int count = 0;
+    for (int i = 0; i < MAX_SSE_CLIENTS; i++) fds[i] = -1;
+
     for (;;) {
-        /* Non-blocking check for a new incoming connection first. */
+        /* Drain all pending new connections. Block up to 1 s only when idle. */
         int new_fd;
-        TickType_t wait = (fd < 0) ? pdMS_TO_TICKS(1000) : 0;
-        if (xQueueReceive(s_sse_fd_q, &new_fd, wait) == pdTRUE) {
-            if (fd >= 0) { shutdown(fd, SHUT_RDWR); close(fd); }
-            fd = new_fd;
+        TickType_t wait = (count == 0) ? pdMS_TO_TICKS(1000) : 0;
+        while (xQueueReceive(s_sse_fd_q, &new_fd, wait) == pdTRUE) {
+            wait = 0;
+            int slot = -1;
+            for (int i = 0; i < MAX_SSE_CLIENTS; i++) if (fds[i] < 0) { slot = i; break; }
+            if (slot < 0) { sse_close(&fds[0]); slot = 0; count--; }  /* full: drop oldest */
+            fds[slot] = new_fd; count++;
         }
-        if (fd < 0) continue;
+        if (count == 0) continue;
 
         char buf[300];
         /* Block up to 2 s for log data; send a heartbeat comment if none arrives. */
         size_t n = xStreamBufferReceive(s_log_stream, buf, sizeof(buf) - 1,
                                         pdMS_TO_TICKS(2000));
-        int ret;
-        if (n > 0) ret = send(fd, buf, (int)n, 0);
-        else       ret = send(fd, ": hb\n\n", 6, 0);
+        const char *out = (n > 0) ? buf : ": hb\n\n";
+        int outlen      = (n > 0) ? (int)n : 6;
 
-        if (ret < 0) { close(fd); fd = -1; }
+        for (int i = 0; i < MAX_SSE_CLIENTS; i++) {
+            if (fds[i] < 0) continue;
+            if (send(fds[i], out, outlen, 0) < 0) { sse_close(&fds[i]); count--; }
+        }
     }
 }
 
@@ -477,7 +497,12 @@ static void handle_events(int sock)
         "Connection: keep-alive\r\n"
         "Access-Control-Allow-Origin: *\r\n\r\n";
     send(sock, hdr, strlen(hdr), 0);
-    xQueueOverwrite(s_sse_fd_q, &sock);
+    /* Bound send() so one stalled client can't freeze the broadcast to the rest. */
+    struct timeval snd = { .tv_sec = 2, .tv_usec = 0 };
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof(snd));
+    if (xQueueSend(s_sse_fd_q, &sock, pdMS_TO_TICKS(100)) != pdTRUE) {
+        shutdown(sock, SHUT_RDWR); close(sock);   /* handoff queue full — reject */
+    }
 }
 
 /* ---- Embedded web UI ---- */
@@ -722,7 +747,7 @@ void web_server_init(void)
     s_log_stream = xStreamBufferCreate(LOG_STREAM_BYTES, 1);
     s_log_mutex  = xSemaphoreCreateMutex();
     g_draw_queue = xQueueCreate(256, sizeof(wcmd_t));
-    s_sse_fd_q   = xQueueCreate(1, sizeof(int));
+    s_sse_fd_q   = xQueueCreate(MAX_SSE_CLIENTS, sizeof(int));
     if (!s_log_stream || !s_log_mutex || !g_draw_queue || !s_sse_fd_q) {
         printf("[web] OOM\n"); return;
     }
