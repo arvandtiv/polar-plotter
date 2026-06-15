@@ -12,9 +12,11 @@ draw deliberately, and stay inside the work area.**
 
 - **Coordinates are millimeters.** Origin `(0,0)` is the **midpoint between the two
   top motor anchors**.
-- **Axes:** `X+` is **right**, `Y+` is **DOWN** (toward the floor). This is screen
-  convention, not math convention — a larger `y` is *lower* on the wall. A house roof
-  is at *smaller* `y` than its floor.
+- **Axes:** `X+` is **right**, `X-` is **left**. `Y+` is **DOWN** (toward the floor),
+  `Y-` is **UP** (toward the anchors). This is screen convention, not math convention —
+  a larger `y` is *lower* on the wall, a smaller/more‑negative `y` is *higher*. A house
+  roof is at *smaller* `y` than its floor. **To move the pen up, DECREASE `y`; to move
+  down, INCREASE `y`.**
 - **The machine is slow and physical.** Moves take real time. There is no undo. Ink
   is permanent. Favor getting it right over getting it fast.
 - **One job at a time, in order.** Commands run sequentially; each finishes before the

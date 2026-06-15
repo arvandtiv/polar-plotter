@@ -89,6 +89,31 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
 const server = new McpServer({
   name:    'polar-plotter',
   version: '1.0.0',
+}, {
+  instructions: [
+    'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
+    '',
+    'COORDINATE SYSTEM:',
+    '• Origin (0,0) is the midpoint between the two motor anchors, near the TOP.',
+    '• X+ = RIGHT, X- = LEFT.',
+    '• Y+ = DOWN (toward the floor), Y- = UP (toward the anchors/ceiling).',
+    '  So a SMALLER (more negative) y is HIGHER on the wall; a LARGER (more',
+    '  positive) y is LOWER. To move the pen up, DECREASE y; to move down,',
+    '  INCREASE y. This is screen-style Y, not math-style.',
+    '',
+    'WORK AREA / STAYING IN BOUNDS:',
+    '• The drawable area is the rectangle x:[xn..xp], y:[yn..yp] reported by',
+    '  plot_status. It is configured on the device and is usually NOT symmetric',
+    '  (e.g. y often spans far more downward than upward, like -110..+300).',
+    '• If bounds.ellipse is true, the usable area is the ELLIPSE inscribed in that',
+    '  box, not the full rectangle — keep well inside the corners.',
+    '• ALWAYS call plot_status FIRST to read the live bounds before planning any',
+    '  coordinates, and keep every point AND every shape extent inside them:',
+    '  a circle needs cx±r and cy±r in range; a square needs cx±size/2, cy±size/2.',
+    '• The firmware rejects out-of-area targets and clamps strays back onto the',
+    '  boundary, which silently distorts art — so plan within bounds yourself.',
+    '• plot_border traces the active boundary; useful to confirm the usable area.',
+  ].join('\n'),
 });
 
 // ── Tools ────────────────────────────────────────────────────────────────────
@@ -421,20 +446,24 @@ server.tool(
 server.tool(
   'plot_status',
   'Report the plotter state: the work-area bounds (the dimension limits set on ' +
-  'the device — check these before planning coordinates), the live pen position, ' +
-  'and the job queue cursor (enqueued / current / done / pending, idle flag). ' +
-  'Poll this to confirm limits or to see how far a batch has progressed.',
+  'the device — ALWAYS check these before planning coordinates and keep every ' +
+  'point/shape inside them), the live pen position, and the job queue cursor ' +
+  '(enqueued / current / done / pending, idle flag). Remember Y+ is DOWN and ' +
+  'Y- is UP, so y=yn is the TOP edge and y=yp is the BOTTOM edge.',
   {},
   async () => {
     const s = await api('status');
     const b = s.bounds ?? {};
+    const shape = b.ellipse ? 'ELLIPSE inscribed in this box (stay inside the corners)' : 'rectangle';
     const lines = [
       `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}`,
       s.drv_ok === false
         ? `driver: ⛔ FAULT — ${s.drv_flags} (call plot_clear_fault after resolving)`
         : `driver: ok`,
       `position: x=${s.x} y=${s.y} mm`,
-      `work area: x [${b.xn} .. ${b.xp}]  y [${b.yn} .. ${b.yp}] mm`,
+      `work area (${shape}):`,
+      `  x: ${b.xn} (left) .. ${b.xp} (right) mm`,
+      `  y: ${b.yn} (top/up) .. ${b.yp} (bottom/down) mm   [Y+ = DOWN, Y- = UP]`,
       `jobs: enqueued=${s.enqueued} current=${s.current} done=${s.done} pending=${s.pending}`,
       s.job ? `current job: ${s.job}` : null,
     ].filter(Boolean);
