@@ -367,16 +367,39 @@ static bool link_check(void)
     return true;
 }
 
-static void run_bringup(void)
+/* Re-apply the full per-motor config (CHOPCONF/ramp) + current/speed/accel.
+ * Used at boot and to recover after the TMC has been power-cycled while the
+ * MCU kept running (Pico 2 has no RESET button — see ensure_configured()). */
+static void reconfigure_drivers(void)
 {
-    ESP_LOGI(TAG, "================ BRING-UP ================");
-    bool link_ok = link_check();
-
     tmc5072_config_motor(&tmc, MOTOR_THETA);
     tmc5072_config_motor(&tmc, MOTOR_RHO);
     apply_current(g_run_ma, g_hold_ma);
     apply_speed(g_vmax);
     apply_accel(g_accel);
+}
+
+/* Self-heal: if the TMC was reset (CHOPCONF back to 0 / TOFF=0 = output
+ * disabled) the chip answers SPI and the ramp generator runs, but the coils
+ * carry no current and the motors won't move. Detect that and re-push config
+ * before a job runs, so a 12 V glitch no longer needs a reflash. Motion-task
+ * only (keeps SPI single-owner). Returns true if a reconfigure happened. */
+static bool ensure_configured(void)
+{
+    uint32_t chop = tmc5072_read(&tmc, TMC5072_CHOPCONF(MOTOR_THETA), NULL);
+    if ((chop & 0x0F) != 0) return false;   /* TOFF != 0 -> already configured */
+    ESP_LOGW(TAG, "TMC CHOPCONF=0 (driver reset?) — re-applying config");
+    web_log("driver was reset — re-applying config");
+    reconfigure_drivers();
+    return true;
+}
+
+static void run_bringup(void)
+{
+    ESP_LOGI(TAG, "================ BRING-UP ================");
+    bool link_ok = link_check();
+
+    reconfigure_drivers();
 
     print_global_status();
     print_full_status(MOTOR_THETA);
@@ -1224,6 +1247,7 @@ static void web_draw_task(void *arg)
     for (;;) {
         if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
         g_job_abort = false;
+        ensure_configured();   /* self-heal if the TMC was power-cycled under us */
         if (cmd.id) {
             g_job_current = cmd.id;
             switch (cmd.type) {
@@ -1385,6 +1409,14 @@ static int cmd_spiraw(int argc, char **argv)
 static int cmd_home(int argc, char **argv)   { (void)argc;(void)argv; home_gondola(); return 0; }
 static int cmd_stat(int argc, char **argv)   { (void)argc;(void)argv; print_status(MOTOR_THETA); print_status(MOTOR_RHO); return 0; }
 static int cmd_status(int argc, char **argv) { (void)argc;(void)argv; print_global_status(); print_full_status(MOTOR_THETA); print_full_status(MOTOR_RHO); return 0; }
+static int cmd_reinit(int argc, char **argv)
+{
+    (void)argc;(void)argv;
+    printf("re-applying TMC config (CHOPCONF/ramp/current/speed/accel)...\n");
+    reconfigure_drivers();
+    print_full_status(MOTOR_THETA); print_full_status(MOTOR_RHO);
+    return 0;
+}
 
 static int cmd_cur(int argc, char **argv)
 {
@@ -1652,6 +1684,7 @@ static const cmd_entry_t s_cmds[] = {
     { "sethome",   "Set origin: sethome | sethome sg <m> <vel> [sgt]",cmd_sethome   },
     { "stat",      "Brief DRV_STATUS + positions",                     cmd_stat      },
     { "status",    "Full register readback (both motors)",             cmd_status    },
+    { "reinit",    "Re-apply TMC config after a driver power-cycle",     cmd_reinit    },
     { "aimode",    "Toggle job-progress printing: aimode [on|off]",    cmd_aimode    },
     { "jobs",      "Show job queue snapshot",                          cmd_jobs      },
     { "estop",     "ESCAPE: stop motion, flush queue, lift pen",       cmd_estop     },
