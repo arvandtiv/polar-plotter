@@ -7,7 +7,7 @@
  * without constructing raw URLs.
  *
  * Configuration (environment variables):
- *   PLOTTER_IP   — IP address of the plotter (default: 192.168.1.53)
+ *   PLOTTER_IP   — IP address of the plotter (default: 192.168.1.71)
  *   PLOTTER_PORT — HTTP port (default: 80)
  *
  * Start: node index.js
@@ -18,7 +18,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-const PLOTTER_IP   = process.env.PLOTTER_IP   ?? '192.168.1.53';
+const PLOTTER_IP   = process.env.PLOTTER_IP   ?? '192.168.1.71';
 const PLOTTER_PORT = process.env.PLOTTER_PORT ?? '80';
 const BASE = `http://${PLOTTER_IP}:${PLOTTER_PORT}`;
 
