@@ -1,301 +1,131 @@
-# TCP PCB Exhaustion Bug — Polar Plotter (Pico 2W)
+# HTTP RST-on-every-request — Polar Plotter (Pico 2W) — RESOLVED
 
-**Date:** 2026-06-14  
-**Branch:** `pico2`  
-**Status as of writing:** Fix applied in commit `346a885`, fresh UF2 rebuilt and ready. **Not yet confirmed on hardware — the clean build appears to have never been flashed; the Pico is still running stale broken firmware.**
+**Date opened:** 2026-06-14 · **Resolved:** 2026-06-14 (commit `34065af`)
+**Branch:** `pico2`
+**Status:** ✅ **FIXED & confirmed working on hardware.** The web console, status polling, MCP, and the SSE log stream all work over WiFi.
 
----
-
-## ⚠️ UPDATE 2026-06-14 20:18 — Empirical re-diagnosis (corrects errors below)
-
-Two claims in the original writeup (preserved below for history) turned out to be **wrong** after live testing:
-
-1. **"High ping (60–100 ms) caused by tight accept-loop spin" — WRONG.**
-   - Live ping is now **3.7–7.5 ms** (normal). The high latency was **transient**, not a code defect.
-   - `accept()` in `http_server_task` is a **blocking** call — it cannot busy-spin. `console_loop` also yields correctly (`vTaskDelay(10ms)` when no USB input). There is **no busy-loop** anywhere in the firmware. The CPU-starvation theory is unfounded.
-
-2. **"Root cause is the inherent default lwIP config" — INCOMPLETE / partly self-contradictory.**
-   - The C firmware code at `HEAD` is **byte-identical** to `980b64c` (the commit the user confirmed worked): `git diff 980b64c HEAD -- main/ FreeRTOSConfig.h` returns **nothing**. The only firmware delta is the 2 lwIP defines in `346a885`.
-   - If the default config alone caused 6-second exhaustion, `980b64c` could never have worked — but it did. So the inherent-default theory can't be the whole story.
-
-**What is actually true (from live testing):**
-- Ping: normal (~4 ms).
-- HTTP: **fast RST (10–100 ms) on every request** — TCP handshake completes, then immediate reset.
-- That fast-RST-every-request signature matches **either** the `shutdown/drain` code from `f29128b` **or** PCB exhaustion. Both are eliminated by the `346a885` build.
-
-**Most likely explanation:** the clean build was **never successfully flashed**. The Pico is still running `f29128b` (the `shutdown(SHUT_WR)` + drain + `close()` with unread data → RST on every request). The serial log the user saw (`WiFi up... [net] link lost`) was timestamped 18:24, right after `f29128b` was committed at 18:23.
-
-**The fix (`346a885`) is robust to both hypotheses:**
-- If stale broken firmware is running → reflashing removes the `shutdown/drain`.
-- If PCB exhaustion is real → `TCP_MSL=500` (1 s TIME_WAIT) + 10 PCBs prevents it.
-
-**Action required: flash the fresh UF2 (built 20:18), then power-cycle.** See Flash Instructions. The firmware C code is identical to the version the user confirmed working — only safe lwIP robustness margins were added.
+> ⚠️ The original title ("TCP PCB exhaustion") was a **misdiagnosis**. The real
+> root cause was **netconn-pool starvation** (`MEMP_NUM_NETCONN=4`). The
+> PCB/TIME_WAIT changes made along the way were harmless safety margins, not the
+> cure. The full (partly wrong) investigation is kept below for posterity — read
+> the "Real Root Cause" section first; treat everything under "Investigation
+> Timeline" as history.
 
 ---
 
----
+## Real Root Cause (the one that was actually true)
 
-## Context
-
-Firmware: Raspberry Pi Pico 2W (RP2350), pico-sdk, FreeRTOS (ARM_CM33_NTZ port).  
-Networking: CYW43439 WiFi via `cyw43_arch_freertos`, lwIP BSD sockets (`LWIP_SOCKET=1`).  
-HTTP server: hand-rolled TCP accept loop in `main/web_server.c`.  
-Web console: Astro 4 + React 18 in `console/` — polls `/api/status` every 2 s and holds one long-lived SSE connection to `/events`.
-
----
-
-## The Bug
-
-### Symptoms
-
-- HTTP requests from the console return `curl: (56) Recv failure: Connection reset by peer` — connection is established (TCP handshake succeeds) but RST is sent as soon as data arrives.
-- Ping works but with very high latency: **60–100 ms** on a LAN that normally shows **3–5 ms**.
-- The failure starts within **5–10 seconds** of the console page being open.
-- First few requests after a cold Pico boot succeed; the system degrades quickly.
-
-### What the user reported
-
-> "the connection drops out as soon as I send a job from console"
-
-> "can you test the ip connection I think you are spiriling out into a bad territory everything was fine now all broken"
-
-> "this commit had non of these issues happening just fyi: `980b64c`"
-
-Commit `980b64c` was a console-only change (no firmware); the firmware was last changed in `3998afd`.
-
----
-
-## Root Cause
-
-### lwIP TCP PCB pool exhaustion
-
-lwIP manages TCP connections using a fixed pool of `tcp_pcb` structs.
-
-**Key defaults (no overrides in `lwipopts.h` at the time):**
-
-| lwIP option | Default value |
-|---|---|
-| `MEMP_NUM_TCP_PCB` | **5** |
-| `TCP_MSL` | **60 000 ms** (1 minute) |
-| TIME_WAIT duration | `2 × TCP_MSL` = **120 seconds** |
-
-When a short-lived HTTP connection closes, lwIP keeps the PCB allocated in `TIME_WAIT` state for 120 seconds (the standard RFC 793 guard against old duplicate packets). With only 5 PCBs total:
+With `LWIP_SOCKET=1`, **every `socket()` consumes one lwIP *netconn***, and the
+default pool is `MEMP_NUM_NETCONN = 4`. The firmware permanently holds **three**:
 
 ```
-1 PCB  — listen socket (permanent, never freed)
-1 PCB  — SSE /events connection (long-lived, browser holds it open)
-─────────────────────────────────────────────
-3 PCBs — available for HTTP API requests
+1 netconn — HTTP listen socket
+1 netconn — UDP listener
+1 netconn — pattern listener
+──────────
+1 netconn — left over
 ```
 
-The console polls `/api/status` every **2 seconds**. Each poll creates a new connection, serves one response, then closes — leaving the PCB in TIME_WAIT for 120 s.
+The browser's SSE `EventSource` grabs that last one. From then on the **next
+`accept()` has no netconn to allocate, so lwIP sends RST at the accept layer —
+before any request handler runs.** That's why *every* endpoint failed, including
+the static page, even on a fresh boot with plenty of free TCP PCBs. The earlier
+"PCB exhaustion after ~6 s of polling" theory never fit that symptom (failure was
+immediate and total once SSE connected, not gradual).
 
-After **3 polls = 6 seconds**, all 3 remaining PCBs are in TIME_WAIT. From that point:
+A secondary annoyance — intermittent **70–110 ms ping latency** — was the CYW43
+default power-save mode (PM2) sleeping between beacons, unrelated to TCP.
 
-- Any new TCP connection arrives, lwIP tries to allocate a PCB, fails, sends **RST**.
-- The TIME_WAIT slots don't recover because new polls keep them renewed (or the 120-s timer simply hasn't run yet).
-- The CYW43 WiFi task (priority 4) and lwIP TCPIP_THREAD (priority 4) are starved by the hard-looping application tasks (all priority 5), adding the observed **high ping latency** on top.
+## The Fix (commit `34065af`)
 
-### Why the high-latency ping?
+```c
+/* lwipopts.h */
+#define MEMP_NUM_NETCONN   16   /* was default 4 — the actual fix */
 
-Once PCBs are exhausted, `accept()` in `http_server_task` returns immediately with `-1` for every pending (rejected) connection, causing a tight loop at priority 5 that starves the CYW43 WiFi task (priority 4) and lwIP thread (priority 4). This manifests as 60–100 ms ICMP round-trip instead of the normal 3–5 ms.
+/* main/main.c, in wifi_init_sta() */
+cyw43_wifi_pm(&cyw43_state, CYW43_NONE_PM);   /* kill the ~100 ms PM jitter */
+```
+
+A boot build-marker was also added so the running firmware can be positively
+identified (this matters — several earlier "still broken" rounds were actually
+**stale firmware that was never successfully flashed**):
+
+```
+[build] <date> <time>  (netconn=16 tcp_pcb=16 msl=500ms)
+```
+
+## Current lwIP config (`lwipopts.h`, all confirmed good)
+
+| Option | Value | Why |
+|---|---|---|
+| `MEMP_NUM_NETCONN` | **16** | the fix — one per concurrent socket |
+| `MEMP_NUM_TCP_PCB` | **16** | poll + SSE + draw headroom (`7f41ded`) |
+| `TCP_MSL` | **500 ms** | TIME_WAIT = 1 s, safety margin vs the 2 s poll |
+| `MEMP_NUM_TCP_SEG` | 32 | |
+| `PBUF_POOL_SIZE` | 24 | |
+| `LWIP_NETCONN` | 0 | (sequential netconn API off; sockets layer used) |
+
+`web_server.c` uses a plain `close()` per request (the `shutdown`/drain
+experiments from the broken rounds were reverted — they *caused* RSTs).
 
 ---
 
-## Fix Attempts — Timeline of Commits
+## SSE log stream — current behaviour
 
-### Commit `a2d5d9d` — **BROKE EVERYTHING**
+The log stream is already about as robust as it sensibly gets:
+- **Server heartbeat:** `sse_task` sends `: hb\n\n` every 2 s when idle
+  (`web_server.c:76`), so the socket never goes silent through NAT/idle timeouts.
+- **Client auto-reconnect:** the browser `EventSource` reconnects automatically
+  if the stream drops.
+- **Single-slot by design:** `s_sse_fd_q` is a depth-1 queue (`xQueueOverwrite`),
+  so a new browser tab/reload takes over the one SSE slot and the previous fd is
+  dropped. Occasional reconnects you see are usually this (a reload/refocus), not
+  a fault.
 
-**Hypothesis at the time:** Increase `MEMP_NUM_TCP_PCB` to 32 and reduce `TCP_MSL` to 2000 ms. Also added active-close (shutdown/drain) to `web_server.c` to push TIME_WAIT to the client side.
-
-**What changed:**
-
-```diff
---- a/lwipopts.h
-+++ b/lwipopts.h
-+#define MEMP_NUM_TCP_PCB               32
-+#define TCP_MSL                        2000   /* TIME_WAIT = 2×MSL = 4 s (was 2 min) */
-```
-
-(web_server.c also received the shutdown/drain change — see commit `f29128b` which shows it explicitly.)
-
-**Result:** 30× ping latency increase (3 ms → 80–120 ms). HTTP RST on every request. **Worse than before.**
-
-**Why it failed:** The commit message blamed FreeRTOS heap exhaustion from 32 large PCBs. That analysis was incorrect — `MEMP_NUM_TCP_PCB` is a static BSS allocation in lwIP, not a FreeRTOS heap allocation. The actual culprit was the **shutdown/drain logic added to `web_server.c`** (see next commit), which was bundled in the same attempt. With `shutdown(SHUT_WR)` followed by a 50 ms drain `recv()`, the server sent FIN + received a few bytes but then called `close()` with unread data still in the receive buffer, causing lwIP to send RST instead of the expected graceful close.
+No outstanding fix is needed here. If a *grand* improvement is ever wanted, the
+only real lever would be supporting more than one concurrent SSE client — but
+that costs a netconn per client and complicates the single-owner `sse_task`, so
+it's not worth it for a single-operator machine.
 
 ---
 
-### Commit `f29128b` — **Still broken**
+## Investigation Timeline (history — contains superseded/wrong conclusions)
 
-**Hypothesis:** Revert only `lwipopts.h`; keep the shutdown/drain in `web_server.c` to avoid TIME_WAIT on the server side.
+| Commit | Attempt | Result |
+|---|---|---|
+| `a2d5d9d` | `MEMP_NUM_TCP_PCB=32`, `TCP_MSL=2000` **+ shutdown/drain in web_server.c** | **Broke everything** — the shutdown/drain `close()`-with-unread-data caused RST; also blamed (incorrectly) on FreeRTOS heap |
+| `f29128b` | Reverted lwipopts; **kept** shutdown/drain | Still RST — 50 ms drain too short on loaded WiFi → `close()` with pending data → RST |
+| `c7126eb` | Reverted everything to known-good `980b64c` | Still RST — root cause (netconn) never touched |
+| `346a885` | `TCP_MSL=500`, `MEMP_NUM_TCP_PCB=10` | Helpful margin, **not the cure** (PCB theory was wrong) |
+| `7f41ded` | `MEMP_NUM_TCP_PCB` 10→16 | More headroom for MCP polling |
+| `faa9471` | docs: empirical re-diagnosis | Noted PCB theory didn't fit the evidence |
+| **`34065af`** | **`MEMP_NUM_NETCONN=16` + `CYW43_NONE_PM`** | ✅ **Actual fix** |
 
-**What changed:**
-
-```diff
---- a/lwipopts.h
-+++ b/lwipopts.h
--#define MEMP_NUM_TCP_PCB               32
--#define TCP_MSL                        2000
-```
-
-```diff
---- a/main/web_server.c
-+++ b/main/web_server.c
-@@ -711,6 +711,15 @@ static void http_server_task(void *arg)
-         if (!found)
-             send_response(client_sock, 404, ...);
-+
-+        /* Active close: send FIN first, wait briefly for client's FIN */
-+        shutdown(client_sock, SHUT_WR);
-+        struct timeval drain_tv = { .tv_sec = 0, .tv_usec = 50000 }; /* 50 ms */
-+        setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &drain_tv, sizeof(drain_tv));
-+        char drain[8];
-+        recv(client_sock, drain, sizeof(drain), 0);
-         close(client_sock);
-     }
- }
-```
-
-**Result:** HTTP still RST on every request.
-
-**Why it failed:** The active-close sequence is theoretically correct (server sends FIN → TIME_WAIT moves to client), but the 50 ms drain window is too short in practice on a loaded WiFi stack. The `recv()` call times out and returns `-1` or `0`, then `close()` is called while there is still unread data in the TCP receive buffer (HTTP request data that was read by the app but not consumed from the kernel buffer). lwIP interprets a `close()` on a socket with pending receive data as an abortive close → **RST**.
+**Lessons:**
+1. With `LWIP_SOCKET=1`, size `MEMP_NUM_NETCONN` to your socket count — it's a
+   separate, easily-forgotten pool from `MEMP_NUM_TCP_PCB`.
+2. "RST immediately on *every* endpoint, including static, with free PCBs" points
+   at the **accept/netconn layer**, not TIME_WAIT exhaustion (which degrades
+   gradually).
+3. Always confirm the firmware actually flashed — the build-marker print exists
+   for exactly this reason; several "still broken" rounds were stale binaries.
+4. Never `close()` a socket with unread RX data on lwIP — it sends RST.
 
 ---
 
-### Commit `c7126eb` — **Reverted to known-good, still broken**
-
-**Hypothesis:** Both the lwipopts.h changes and the shutdown/drain were wrong. Revert everything to `980b64c` firmware state.
-
-**What changed:**
-
-```diff
---- a/main/web_server.c
-+++ b/main/web_server.c
--        shutdown(client_sock, SHUT_WR);
--        struct timeval drain_tv = { ... };
--        setsockopt(...);
--        char drain[8];
--        recv(client_sock, drain, sizeof(drain), 0);
-         close(client_sock);
-```
-
-**Result:** Still RST. Ping still 60–100 ms.
-
-**Why it was still broken:** The root cause (TIME_WAIT PCB exhaustion) was never addressed. Reverting to `980b64c` firmware code restores the same defaults that caused the original bug. The console was still open in the browser, still polling every 2 seconds, still filling PCBs with 120-second TIME_WAIT entries. The firmware was correct but the lwIP defaults are wrong for this workload.
-
----
-
-### Commit `346a885` — **Current proposed fix (UNVERIFIED)**
-
-**Correct diagnosis:** PCB exhaustion from default `TCP_MSL=60000 ms`. MEMP pools are in **static BSS** — not FreeRTOS heap — so both `TCP_MSL` and `MEMP_NUM_TCP_PCB` can be changed freely without affecting heap.
-
-**What changed:**
-
-```diff
---- a/lwipopts.h
-+++ b/lwipopts.h
-+/* Short TIME_WAIT so status-poll connections don't exhaust the PCB pool.
-+ * Default MSL=60 s → TIME_WAIT=120 s is far too long for a LAN server with 5 PCBs. */
-+#define TCP_MSL                         500    /* ms; TIME_WAIT = 2×MSL = 1 s */
-+#define MEMP_NUM_TCP_PCB                10     /* listen + SSE + 8 for concurrent requests */
-```
-
-No changes to `web_server.c` — the plain `close()` is fine as long as we drain the request before closing (which `http_server_task` already does in its recv loop).
-
-**Why this should work:**
-
-```
-PCB budget with fix:
-  1  — listen socket
-  1  — SSE /events (long-lived)
-  1  — active HTTP request being served
-  1  — most recent poll in TIME_WAIT (expires in 1 s)
-─────
-  4  — peak usage, well within the 10-slot pool
-
-Poll rate = 1 per 2 s
-TIME_WAIT = 1 s (< poll interval)
-→ at most 1 PCB ever in TIME_WAIT at once
-```
-
-**Build:** `build/main/polar_plotter.uf2` built **2026-06-14 18:39** — ready to flash.
-
----
-
-## Flash Instructions
+## Flash / verify reference
 
 ```bash
-# Put Pico in BOOTSEL mode: hold BOOTSEL, tap RESET, release BOOTSEL
+# BOOTSEL mode: hold BOOTSEL, tap RESET, release BOOTSEL — Pico 2 has only BOOTSEL.
 picotool load -fx build/main/polar_plotter.uf2
-# Press RESET to boot
+# Power-cycle to boot. Confirm the [build] marker timestamp on the serial log
+# matches your build, then: curl -s http://<ip>/api/status  → JSON.
 ```
-
-## Verification Steps
-
-After flashing:
-
-1. Open serial monitor: `idf.py monitor` or `minicom` / `screen`
-2. Wait for `WiFi up: http://192.168.1.71/`
-3. Immediately run: `curl -s http://192.168.1.71/api/status` — should return JSON
-4. Open the React console at `http://localhost:4321` with IP set to `192.168.1.71`
-5. Let it run for 30 seconds with status polling active
-6. Run curl again — should still return JSON (not RST)
-7. Send a draw command from the console — connection should not drop
-
-If step 6 still fails (RST after 30 s of polling), check `MEMP_NUM_TCP_PCB` is actually being picked up by the build (clean build: `rm -rf build && cmake -B build ... && cmake --build build`).
-
----
-
-## Key Facts for Debugging
-
-### Memory layout
-
-- **FreeRTOS heap** (`configTOTAL_HEAP_SIZE = 128 KB`): task stacks, TCBs, FreeRTOS queues/semaphores/stream buffers. Already ~97 KB consumed by existing tasks.
-- **lwIP MEMP pools**: **statically allocated in BSS** when `MEMP_MEM_MALLOC=0` (default). Changing `MEMP_NUM_TCP_PCB` does NOT affect FreeRTOS heap.
-- **lwIP MEM heap** (`MEM_SIZE = 20 KB`): also static BSS. Used for pbuf payload data.
-
-### Task priorities
-
-| Task | Priority |
-|---|---|
-| Application tasks (main, web_draw, http, sse, udp, pattern) | 5 |
-| CYW43 WiFi task (pico-sdk internal) | 4 |
-| `TCPIP_THREAD` (lwIP) | 4 |
-| Timer task | 7 (max-1) |
-| Idle | 0 |
-
-WiFi and lwIP run at **lower priority** than application tasks. Any tight-spinning application task at priority 5 will starve them, causing high ping latency and TCP failures. This is the secondary symptom of PCB exhaustion (tight accept-loop spin → WiFi starvation → high ping).
 
 ### Relevant files
-
 | File | Role |
 |---|---|
-| `lwipopts.h` | lwIP compile-time configuration — where `TCP_MSL` and `MEMP_NUM_TCP_PCB` live |
-| `main/web_server.c` | Hand-rolled HTTP server; `http_server_task` is the accept loop; `sse_task` owns the SSE connection |
-| `FreeRTOSConfig.h` | `configTOTAL_HEAP_SIZE=128KB`, `configMINIMAL_STACK_SIZE=256 words` |
-| `main/board_config.h` | Pin map, TMC5072 tuning, WiFi credentials |
-
-### lwIP defaults to know
-
-```
-MEMP_NUM_TCP_PCB   = 5        (pool of TCP PCB structs)
-TCP_MSL            = 60000    (ms; TIME_WAIT = 2×MSL = 120 s)
-MEMP_NUM_TCP_SEG   = 16       (TCP segment pool)
-PBUF_POOL_SIZE     = 16       (packet buffer pool)
-```
-
-Our `lwipopts.h` overrides `MEMP_NUM_TCP_SEG=32` and `PBUF_POOL_SIZE=24` but did NOT override `MEMP_NUM_TCP_PCB` or `TCP_MSL` until commit `346a885`.
-
----
-
-## Alternative Approaches (not tried)
-
-If `346a885` still doesn't work after flashing, consider:
-
-1. **HTTP/1.1 keep-alive** — Instead of `Connection: close` on every response, support persistent connections. The browser reuses one TCP connection for multiple status polls → only 1 active PCB, 0 TIME_WAIT from polls. Requires adding a keep-alive loop in `http_server_task` and proper `Content-Length` headers (already present).
-
-2. **Reduce poll frequency in the console** — Change the 2-second poll in `usePlotter.ts` to 5 or 10 seconds. Gives TIME_WAIT entries time to expire even at default MSL.
-
-3. **SO_LINGER with timeout=0 (RST close)** — `setsockopt(sock, SOL_SOCKET, SO_LINGER, {1, 0})` before `close()` sends RST immediately, skipping TIME_WAIT entirely. Brutal but effective for local LAN. Tried indirectly (the shutdown/drain approach) but the explicit `SO_LINGER(0)` was never tested cleanly.
-
-4. **Increase MEMP_NUM_TCP_PCB without changing TCP_MSL** — At 120-second TIME_WAIT and 2-second polling, you'd need `MEMP_NUM_TCP_PCB ≥ 1 (listen) + 1 (SSE) + 60 (TIME_WAIT slots) = 62`. Static BSS is fine but 62 × ~400 B = ~25 KB extra BSS — feasible on RP2350 (520 KB SRAM).
+| `lwipopts.h` | lwIP config — `MEMP_NUM_NETCONN`, `MEMP_NUM_TCP_PCB`, `TCP_MSL` |
+| `main/web_server.c` | HTTP accept loop + `sse_task` (SSE heartbeat at `:76`) |
+| `main/main.c` | `wifi_init_sta()` (power-save off), boot build-marker |
+| `FreeRTOSConfig.h` | `configTOTAL_HEAP_SIZE=128KB` |
