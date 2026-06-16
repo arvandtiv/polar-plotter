@@ -32,13 +32,17 @@
 #include "task.h"
 
 #define HTTP_PORT 80
+#define DRAW_QUEUE_DEPTH 256   /* max jobs that can be PENDING at once */
 
 QueueHandle_t g_draw_queue = NULL;
 
 volatile uint32_t g_job_enqueued = 0;
 volatile uint32_t g_job_current  = 0;
 volatile uint32_t g_job_done     = 0;
+volatile uint32_t g_job_rejected = 0;   /* cumulative enqueues refused (queue full) */
+volatile uint32_t g_pending_peak = 0;   /* high-water mark of pending depth */
 volatile bool     g_job_abort    = false;
+volatile bool     g_paused       = false;
 char              g_job_desc[128] = "idle";
 
 volatile uint32_t g_drv_fault    = 0;
@@ -233,8 +237,11 @@ static uint32_t enqueue(wcmd_t *cmd)
     cmd->id = id;
     if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200)) != pdTRUE) {
         --g_job_enqueued;
+        ++g_job_rejected;   /* queue full — the exact firmware-side rejection */
         return 0;
     }
+    uint32_t pend = g_job_enqueued - g_job_done;
+    if (pend > g_pending_peak) g_pending_peak = pend;
     return id;
 }
 
@@ -328,10 +335,8 @@ static void handle_home(int sock, const char *qs)
 static void handle_stop(int sock, const char *qs)
 {
     (void)qs;
-    wcmd_t c = { .type = WCMD_STOP };
-    if (g_draw_queue)
-        xQueueSendToFront(g_draw_queue, &c, pdMS_TO_TICKS(200));
-    resp_json(sock, "ok", "stop sent");
+    plotter_stop_hold();   /* halt now, but KEEP the queue (resume to continue) */
+    resp_json(sock, "ok", "STOP — motion halted, queue HELD (resume to continue)");
 }
 
 static void handle_pen(int sock, const char *qs)
@@ -457,14 +462,17 @@ static void handle_status(int sock, const char *qs)
     char buf[800];
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
-        "\"pending\":%d,\"idle\":%s,\"aborting\":%s,\"job\":\"%s\","
+        "\"pending\":%d,\"qcap\":%d,\"rejected\":%lu,\"peak\":%lu,"
+        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"job\":\"%s\","
         "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
         "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s},"
         "\"motion\":{\"vmax\":%lu,\"amax\":%lu,\"run_ma\":%.1f,\"hold_ma\":%.1f}}\n",
         (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
-        (unsigned long)g_job_done, pending, idle ? "true" : "false",
-        g_job_abort ? "true" : "false", g_job_desc,
+        (unsigned long)g_job_done, pending, DRAW_QUEUE_DEPTH,
+        (unsigned long)g_job_rejected, (unsigned long)g_pending_peak,
+        idle ? "true" : "false",
+        g_job_abort ? "true" : "false", g_paused ? "true" : "false", g_job_desc,
         g_drv_fault ? "false" : "true", g_drv_flags,
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
         plotter_bounds_ellipse() ? "true" : "false",
@@ -477,6 +485,22 @@ static void handle_abort(int sock, const char *qs)
     (void)qs;
     plotter_abort_now();
     resp_json(sock, "ok", "ABORT: motion stopped, queue flushed, pen up");
+}
+
+/* Pause/resume preserve the queue. The draw task parks (pen up) at the next job
+ * boundary while paused, then continues with the rest of the stack on resume. */
+static void handle_pause(int sock, const char *qs)
+{
+    (void)qs;
+    g_paused = true;
+    resp_json(sock, "ok", "paused — queue preserved; parks pen-up after the current job");
+}
+
+static void handle_resume(int sock, const char *qs)
+{
+    (void)qs;
+    g_paused = false;
+    resp_json(sock, "ok", "resumed");
 }
 
 static void handle_clearfault(int sock, const char *qs)
@@ -646,6 +670,8 @@ static const route_t s_routes[] = {
     { "/api/cur",        handle_cur        },
     { "/api/status",     handle_status     },
     { "/api/abort",      handle_abort      },
+    { "/api/pause",      handle_pause      },
+    { "/api/resume",     handle_resume     },
     { "/api/clearfault", handle_clearfault },
 };
 #define N_ROUTES (sizeof(s_routes) / sizeof(s_routes[0]))
@@ -746,7 +772,7 @@ void web_server_init(void)
 {
     s_log_stream = xStreamBufferCreate(LOG_STREAM_BYTES, 1);
     s_log_mutex  = xSemaphoreCreateMutex();
-    g_draw_queue = xQueueCreate(256, sizeof(wcmd_t));
+    g_draw_queue = xQueueCreate(DRAW_QUEUE_DEPTH, sizeof(wcmd_t));
     s_sse_fd_q   = xQueueCreate(MAX_SSE_CLIENTS, sizeof(int));
     if (!s_log_stream || !s_log_mutex || !g_draw_queue || !s_sse_fd_q) {
         printf("[web] OOM\n"); return;

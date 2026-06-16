@@ -1212,6 +1212,19 @@ void plotter_abort_now(void)
     pen_lift();
 }
 
+/* STOP that PRESERVES the queue: preempt the current stroke immediately, halt the
+ * motors, lift the pen, and enter the paused state so every still-pending job is
+ * KEPT (call resume to continue). The ONLY thing lost is the stroke in progress.
+ * Unlike plotter_abort_now() this never flushes the queue. */
+void plotter_stop_hold(void)
+{
+    g_job_abort = true;
+    tmc5072_stop(&tmc, MOTOR_THETA);
+    tmc5072_stop(&tmc, MOTOR_RHO);
+    g_paused = true;
+    pen_lift();
+}
+
 /* ---- web_draw_task — verbatim from ESP32 build ---- */
 
 static const char *wcmd_name(wcmd_type_t t)
@@ -1245,6 +1258,17 @@ static void web_draw_task(void *arg)
     (void)arg;
     wcmd_t cmd;
     for (;;) {
+        /* Pause: park between jobs with the pen up so the operator can swap pens /
+         * fix ink. The queue is NOT touched — pending jobs wait and resume in order.
+         * Takes effect at the next job boundary (no mid-stroke pen lift / ink blob). */
+        if (g_paused) {
+            pen_lift();
+            web_log("paused — %lu job(s) held in queue",
+                    (unsigned long)(g_job_enqueued - g_job_done));
+            while (g_paused) vTaskDelay(pdMS_TO_TICKS(100));
+            web_log("resumed");
+        }
+
         if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
         g_job_abort = false;
         ensure_configured();   /* self-heal if the TMC was power-cycled under us */
