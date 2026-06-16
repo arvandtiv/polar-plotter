@@ -417,13 +417,9 @@ function PlotterCanvas({ bounds, pen, moving }: {
 // an explicit "Apply bounds" button instead of updating on every keystroke.
 // The previous keystroke-driven approach caused the canvas to repaint and the
 // firmware to receive a new /api/bounds on every character typed ("too noisy").
-// Work-area presets: X is fixed at ±240mm; Y grows through 5 sizes.
+// Work-area presets, one per paper size — add more as new papers are introduced.
 const BOUNDS_PRESETS = [
-  { label: '±100', up: 100, down: 100, left: 240, right: 240 },
-  { label: '±200', up: 200, down: 200, left: 240, right: 240 },
-  { label: '±300', up: 300, down: 300, left: 240, right: 240 },
-  { label: '±350', up: 350, down: 350, left: 240, right: 240 },
-  { label: '±400', up: 400, down: 400, left: 240, right: 240 },
+  { label: 'Water - paper', up: 274, down: 105, left: 260, right: 260 },
 ] as const;
 
 function BoundsControl({ bounds, setBounds, commitBounds }: {

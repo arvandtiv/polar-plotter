@@ -51,7 +51,7 @@ export const DEFAULTS = {
   // run de-rated 600→400 mA to match the firmware default (board_config.h) — a pen
   // gondola needs little torque and run current is the multi-hour-plot heat source.
   motion: { vmax: 350000, amax: 1690, run: 940, hold: 440 },
-  bounds: { left: 240, right: 240, up: 200, down: 200, shape: 'rect' as BoundsShape },
+  bounds: { left: 260, right: 260, up: 274, down: 105, shape: 'rect' as BoundsShape },
 };
 
 // Light-theme stroke palette (deepened for contrast on white) — Claude Design tokens.
