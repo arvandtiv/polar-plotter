@@ -117,9 +117,11 @@ Set the plotter's IP in the header. The console opens `GET /events` (SSE) for li
 log + pen position and sends draw commands to `GET /api/<cmd>?<params>`.
 
 Tabs: **Draw** · **Move** (goto + jog pad) · **Work Area** (bounds + rect/ellipse) ·
-**Calibrate** (walk‑limits, bullseye/grid) · **Autonomous** (job progress, driver
+**Calibrate** (walk‑limits, bullseye) · **Autonomous** (job progress, driver
 health, errors) · **Script** (paste a JSON command list, sent flow‑controlled).
-A header **PAUSE/RESUME** and **STOP** drive the whole queue regardless of tab.
+A header **PAUSE/RESUME** (hold), **STOP** (halt, keep queue), and **CLEAR**
+(flush the queue) drive the machine regardless of tab; STOP/CLEAR also halt the
+in-flight script batch.
 
 ---
 

@@ -125,6 +125,6 @@ With the TMC live: `status` (expect `CHOPCONF 0x000100C3`) → `cur 300` → `jo
 
 ## MCP servers (`.mcp.json`)
 
-- **polar-plotter** (`plotter-mcp/index.js`) — the plotter's own HTTP API as tools: `plot_goto/line/circle/square/wobbly/bullseye/grid/border`, `plot_pen/home/sethome/stop/abort`, `plot_set_speed/accel/current`, `plot_clear_fault`, `plot_status`, and `plot_script` (ordered, wait-till-done batch). Talks over WiFi (`PLOTTER_IP`/`PLOTTER_PORT` env). See `plotter-mcp/AGENT_GUIDE.md`.
+- **polar-plotter** (`plotter-mcp/index.js`) — the plotter's own HTTP API as tools: `plot_goto/line/circle/square/wobbly/truchet/bullseye/grid/border`, `plot_pen/home/sethome/stop/abort`, `plot_pause/resume` (queue-preserving hold vs the flush of stop/abort), `plot_set_speed/accel/current`, `plot_clear_fault`, `plot_status` (bounds + position + queue health: pending/qcap/rejected/peak + paused), and `plot_script` (ordered, wait-till-done, flow-controlled batch). Talks over WiFi (`PLOTTER_IP`/`PLOTTER_PORT` env, default `192.168.1.71`). See `plotter-mcp/AGENT_GUIDE.md`.
 - **context7** — pull current docs for ESP-IDF / Trinamic APIs (the 5072 has thin third-party library coverage).
 - **playwright** — for testing the WiFi web console.

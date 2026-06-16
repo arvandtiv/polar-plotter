@@ -62,7 +62,8 @@ Rules:
 | `plot_pen` | Lift or lower the pen. | `position: "up" \| "down"` |
 | `plot_home` | Return to origin (lifts pen first). | — |
 | `plot_sethome` | Define the current spot as `(0,0)`. Operator/setup only. | — |
-| `plot_stop` / `plot_abort` | **Emergency stop / escape**: preempt the running job *mid-stroke*, flush the queue, stop motors, lift the pen. Use the instant anything looks wrong. | — |
+| `plot_stop` / `plot_abort` | **Emergency stop / escape**: preempt the running job *mid-stroke*, **flush** the queue, stop motors, lift the pen. Use the instant anything looks wrong. **Discards queued work.** | — |
+| `plot_pause` / `plot_resume` | **Hold without losing the queue**: finishes the current job, parks pen-up, and keeps all pending jobs. `plot_resume` continues in order. Use for pen swaps / ink fixes mid-run. (`plot_script` waits through a pause without timing out.) | — |
 
 ### Drawing primitives (these manage the pen for you)
 | Tool | Draws | Key params |
@@ -77,9 +78,13 @@ Rules:
 | `plot_border` | Trace the work-area boundary once (pen down). Draws exactly what the firmware thinks is the edge — useful for confirming the canvas limits before a plot. | — |
 
 ### Status & settings
-- `plot_status` — reports the **work-area bounds**, live pen position, and the job
-  queue (enqueued / current / done / pending, idle flag). Call it to confirm the
-  dimension limits before planning, or to see how far a batch has progressed.
+- `plot_status` — reports the **work-area bounds**, live pen position, the job
+  queue (enqueued / current / done / pending, idle, paused), and **queue health**
+  (`pending/qcap`, cumulative `rejected`, `peak`). Call it to confirm the dimension
+  limits before planning, or to see how far a batch has progressed. The board's
+  queue holds **256** pending jobs — `plot_script` paces itself so it never
+  overflows; if you fire commands manually, watch `pending` so you don't get
+  `rejected` ("queue full") responses.
 - `plot_set_speed(vmax)`, `plot_set_accel(amax)`, `plot_set_current(run_ma, hold_ma)`.
 
 > **Every tool waits for completion.** A drawing call does not return until the
