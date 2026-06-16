@@ -25,6 +25,30 @@ import {
 // module-scoped store persists across those remounts for the session).
 const cardCollapse = new Map<string, boolean>();
 
+// Crisp accordion chevron: points right when closed, smoothly rotates down when open.
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      className={`shrink-0 text-ink-500 transition-transform duration-200 ease-out ${open ? 'rotate-90' : ''}`}>
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  );
+}
+
+// "Queue this drawing" — icon-only play button with a soft green tint.
+function DrawBtn({ onClick, title }: { onClick: () => void; title?: string }) {
+  return (
+    <button onClick={onClick} title={title ?? 'Queue this drawing'} aria-label="Draw"
+      className="inline-flex items-center justify-center rounded-lg border border-go/25 bg-go/10 px-2.5 py-1.5
+        text-go/90 transition-colors hover:bg-go/20 hover:text-go active:scale-[.97]">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M7 4.5v15l13-7.5z" />
+      </svg>
+    </button>
+  );
+}
+
 function Card({ title, icon, accent = '#0284c7', right, children, className = '',
   collapsible = true, defaultCollapsed = true, collapsed: collapsedProp, onToggle }: {
   title?: string; icon?: string; accent?: string; right?: React.ReactNode;
@@ -45,18 +69,41 @@ function Card({ title, icon, accent = '#0284c7', right, children, className = ''
     return next;
   });
   const isCollapsed = collapsible && collapsed;
+
+  // Keep Tab inside the panel you're working in: cycle through the body fields and
+  // the header action (the ▶ Draw button), wrapping around instead of escaping to
+  // other panels. The collapse toggle is excluded; header actions come last so the
+  // order reads fields → Draw → (wrap).
+  const trapTab = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Tab') return;
+    const root = e.currentTarget;
+    const sel = 'a[href],button:not([disabled]):not([data-card-toggle]),input:not([disabled]),'
+      + 'select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    let nodes = Array.from(root.querySelectorAll<HTMLElement>(sel)).filter((el) => el.offsetParent !== null);
+    const head = root.querySelector('header');
+    if (head) nodes = [...nodes.filter((el) => !head.contains(el)), ...nodes.filter((el) => head.contains(el))];
+    if (nodes.length < 2) return;
+    const idx = nodes.indexOf(document.activeElement as HTMLElement);
+    if (idx === -1) return;   // focus isn't inside this panel yet — let it tab in normally
+    e.preventDefault();
+    const dir = e.shiftKey ? -1 : 1;
+    nodes[(idx + dir + nodes.length) % nodes.length].focus();
+  };
+
   return (
-    <section className={`rounded-xl border border-ink-750 bg-ink-900 shadow-card ${isCollapsed ? '!flex-none' : ''} ${className}`}>
+    <section onKeyDown={trapTab}
+      className={`rounded-xl border border-ink-750 bg-ink-900 shadow-card ${isCollapsed ? '!flex-none' : ''} ${className}`}>
       {title && (
         <header className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800 shrink-0">
           <button
             type="button"
+            data-card-toggle
             onClick={collapsible ? toggle : undefined}
             disabled={!collapsible}
             className={`flex items-center gap-2 -mx-1 px-1 rounded ${collapsible ? 'cursor-pointer hover:text-ink-200' : 'cursor-default'}`}
           >
             {collapsible && (
-              <span className={`text-ink-600 text-[10px] transition-transform ${isCollapsed ? '-rotate-90' : ''}`}>▾</span>
+              <Chevron open={!isCollapsed} />
             )}
             {icon && <span style={{ color: accent }} className="text-[13px]">{icon}</span>}
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
@@ -78,10 +125,11 @@ const LOG_SIZE_BTNS: { key: LogSize; label: string; hint: string }[] = [
   { key: 'expanded', label: '⤢', hint: 'Expanded (500 px)' },
 ];
 
-function LogCard({ title, icon, accent = '#0284c7', right, children }: {
+function LogCard({ title, icon, accent = '#0284c7', right, children, defaultSize = 'minimized' }: {
   title: string; icon?: string; accent?: string; right?: React.ReactNode; children: React.ReactNode;
+  defaultSize?: LogSize;
 }) {
-  const [size, setSize] = useState<LogSize>('minimized');
+  const [size, setSize] = useState<LogSize>(defaultSize);
   const contentH = size === 'minimized' ? 'h-[100px]' : 'h-[500px]';
   return (
     <section className="rounded-xl border border-ink-750 bg-ink-900 shadow-card">
@@ -91,7 +139,7 @@ function LogCard({ title, icon, accent = '#0284c7', right, children }: {
           onClick={() => setSize((s) => (s === 'collapsed' ? 'minimized' : 'collapsed'))}
           className="flex items-center gap-2 -mx-1 px-1 rounded cursor-pointer hover:text-ink-200"
         >
-          <span className={`text-ink-600 text-[10px] transition-transform ${size === 'collapsed' ? '-rotate-90' : ''}`}>▾</span>
+          <Chevron open={size !== 'collapsed'} />
           {icon && <span style={{ color: accent }} className="text-[13px]">{icon}</span>}
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
         </button>
@@ -841,7 +889,7 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
   const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
 
   return (
-    <Card title="Script" icon="≡" accent="#0891b2">
+    <Card title="Script" icon="≡" accent="#0891b2" defaultCollapsed={false}>
       <textarea
         className="w-full h-56 resize-y rounded bg-ink-900 border border-ink-700 p-2 font-mono text-[12px] text-ink-300 placeholder-ink-600 focus:outline-none focus:border-cyan-600"
         placeholder={SCRIPT_HINT}
@@ -1041,7 +1089,7 @@ export default function App() {
             <div className="space-y-4">
             {/* ---- Move tab ---- */}
             {tab === 'jog' && (
-              <Card title="Move to point" icon="↗" accent="#0284c7">
+              <Card title="Move to point" icon="↗" accent="#0284c7" defaultCollapsed={false}>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                   <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
                   <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
@@ -1063,7 +1111,7 @@ export default function App() {
             {tab === 'draw' && (
               <>
                 <Card title="Circle" icon="○" accent="#0284c7" collapsible
-                  right={<Btn variant="go" onClick={() => P.enqueue({ type: 'circle', ...circle })}>Draw ○</Btn>}>
+                  right={<DrawBtn onClick={() => P.enqueue({ type: 'circle', ...circle })} />}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <FieldInline label="Center X" unit="mm" value={circle.cx} onChange={fc('cx') as (v: number) => void} />
                     <FieldInline label="Center Y" unit="mm" value={circle.cy} onChange={fc('cy') as (v: number) => void} />
@@ -1079,7 +1127,7 @@ export default function App() {
                 </Card>
 
                 <Card title="Square" icon="□" accent="#059669" collapsible
-                  right={<Btn variant="go" onClick={() => P.enqueue({ type: 'square', ...square })}>Draw □</Btn>}>
+                  right={<DrawBtn onClick={() => P.enqueue({ type: 'square', ...square })} />}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <FieldInline label="Center X" unit="mm" value={square.cx} onChange={fs('cx') as (v: number) => void} />
                     <FieldInline label="Center Y" unit="mm" value={square.cy} onChange={fs('cy') as (v: number) => void} />
@@ -1095,7 +1143,7 @@ export default function App() {
                 </Card>
 
                 <Card title="Line" icon="／" accent="#d97706" collapsible
-                  right={<Btn variant="go" onClick={() => P.enqueue({ type: 'line', ...lineF })}>Draw ／</Btn>}>
+                  right={<DrawBtn onClick={() => P.enqueue({ type: 'line', ...lineF })} />}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <FieldInline label="X0" unit="mm" value={lineF.x0} onChange={fl('x0') as (v: number) => void} />
                     <FieldInline label="Y0" unit="mm" value={lineF.y0} onChange={fl('y0') as (v: number) => void} />
@@ -1108,7 +1156,7 @@ export default function App() {
                 </Card>
 
                 <Card title="Wobbly" icon="∿" accent="#7c3aed" collapsible
-                  right={<Btn variant="go" onClick={() => P.enqueue({ type: 'wobbly', ...wobbly })}>Draw ∿</Btn>}>
+                  right={<DrawBtn onClick={() => P.enqueue({ type: 'wobbly', ...wobbly })} />}>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <FieldInline label="Center X" unit="mm" value={wobbly.cx} onChange={fw('cx') as (v: number) => void} />
                     <FieldInline label="Center Y" unit="mm" value={wobbly.cy} onChange={fw('cy') as (v: number) => void} />
@@ -1135,12 +1183,12 @@ export default function App() {
 
                 {/* Truchet */}
                 <Card title="Truchet" icon="◔" accent="#0891b2" collapsible
-                  right={<Btn variant="go"
+                  right={<DrawBtn
                     title={'Queue the full Truchet plot. The work area is split into a grid of square cells; each cell gets a random motif (from the enabled chips below). The white ribbons connect cell-to-cell because every motif meets the cell edges at the same 1/3 and 2/3 points; everything that is NOT ribbon gets hatched. Slow job — try Hatch spacing 0 first for a quick outlines-only proof on paper.'}
                     onClick={() => P.enqueue({
                       type: 'truchet', ...truchet,
                       left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down, shape: bounds.shape,
-                    })}>Draw ◔</Btn>}>
+                    })} />}>
                   <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
                     Carlson winged-motif tiling over the whole work area: the motif ribbons stay
                     white, the background is hatched. Hatching is slow — wider spacing plots faster;
@@ -1186,7 +1234,7 @@ export default function App() {
 
             {/* ---- Work Area tab ---- */}
             {tab === 'area' && (
-              <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
+              <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible defaultCollapsed={false}>
                 <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
                   Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
                   Updates the canvas and sends to firmware.
@@ -1200,7 +1248,7 @@ export default function App() {
 
             {/* ---- Calibrate tab ---- */}
             {tab === 'calib' && (
-              <Card title="Calibration" icon="✛" accent="#db2777" collapsible>
+              <Card title="Calibration" icon="✛" accent="#db2777" collapsible defaultCollapsed={false}>
                 {/* Limit path: walk the active work-area boundary once (pen down) so you
                     can compare the firmware's reachable edge against the physical machine. */}
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Limit path</p>
@@ -1213,8 +1261,8 @@ export default function App() {
                   </span>
                 </div>
                 <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
-                  Traces the boundary set under <span className="text-ink-300">Work Area</span>. Walk it once,
-                  then hatch with Grid on top if you want to verify the whole area — both can run pen-down.
+                  Traces the boundary set under <span className="text-ink-300">Work Area</span> once (pen down)
+                  so you can compare the firmware's reachable edge against the physical machine.
                 </p>
 
                 <div className="my-4 h-px bg-ink-800" />
@@ -1226,7 +1274,6 @@ export default function App() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Btn variant="primary" onClick={() => P.enqueue({ type: 'bullseye', ...calib })}>◎ Bullseye</Btn>
-                  <Btn variant="primary" onClick={() => P.enqueue({ type: 'grid', ...calib })}>▦ Grid</Btn>
                 </div>
               </Card>
             )}
@@ -1244,7 +1291,7 @@ export default function App() {
 
                 <ChipInfoCard status={status} />
 
-                <LogCard title="Job queue" icon="▦" accent="#0284c7">
+                <LogCard title="Job queue" icon="▦" accent="#0284c7" defaultSize="expanded">
                   <div className="flex flex-col h-full gap-4">
                     <div className="shrink-0">
                       <JobProgress status={status} />
