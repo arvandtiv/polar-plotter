@@ -460,9 +460,10 @@ server.tool(
 // fault persists, the next move will simply trip it again.
 server.tool(
   'plot_clear_fault',
-  'Clear a latched TMC5072 driver fault and re-enable the drivers so a paused ' +
-  'script can resume. Use after a driver fault (see plot_status) once the ' +
-  'hardware cause is resolved. Then re-run the remaining commands.',
+  'Clear a latched TMC5072 driver fault OR the hardware E-STOP latch, and ' +
+  're-enable the drivers so work can resume. Use after a driver fault or an ' +
+  'E-STOP button press (see plot_status) once the cause is resolved. Note: the ' +
+  'hardware E-STOP physically cut motor power, so re-home before relying on position.',
   {},
   async () => ({
     content: [{ type: 'text', text: ok(await api('clearfault')) }],
@@ -483,7 +484,7 @@ server.tool(
     const b = s.bounds ?? {};
     const shape = b.ellipse ? 'ELLIPSE inscribed in this box (stay inside the corners)' : 'rectangle';
     const lines = [
-      `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}${s.paused ? '  (PAUSED — queue held; call plot_resume)' : ''}`,
+      `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}${s.paused ? '  (PAUSED — queue held; call plot_resume)' : ''}${s.estop ? '  ⛔ HARDWARE E-STOP — motors cut; call plot_clear_fault' : ''}`,
       s.drv_ok === false
         ? `driver: ⛔ FAULT — ${s.drv_flags} (call plot_clear_fault after resolving)`
         : `driver: ok`,
