@@ -75,6 +75,9 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
         return { status: 'driver_fault', msg: `DRIVER FAULT during job ${id}: ${s.drv_flags || 'unknown'}` };
       }
       if (s.aborting) return { status: 'aborted', msg: `job ${id} aborted (escape)` };
+      // Don't count the timeout while the operator has paused (pen swap / ink fix):
+      // the queue is held, so push the deadline out and keep waiting for resume.
+      if (s.paused) deadline = Date.now() + timeoutMs;
       if ((s.done ?? 0) >= id)
         return { status: 'ok', msg: `job ${id} done (at x=${s.x}, y=${s.y})` };
     }
@@ -240,6 +243,29 @@ server.tool(
   {},
   async () => ({
     content: [{ type: 'text', text: ok(await api('abort')) }],
+  }),
+);
+
+// plot_pause ─────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_pause',
+  'Pause WITHOUT losing the queue. The plotter finishes the current job, then ' +
+  'parks with the pen UP and holds — all pending jobs stay queued in order. Use ' +
+  'this to swap pens or fix ink mid-run, then plot_resume to continue exactly ' +
+  'where it left off. (Unlike plot_stop/plot_abort, which flush the queue.)',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: ok(await api('pause')) }],
+  }),
+);
+
+// plot_resume ────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_resume',
+  'Resume after plot_pause — the held queue continues from the next job.',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: ok(await api('resume')) }],
   }),
 );
 
@@ -456,7 +482,7 @@ server.tool(
     const b = s.bounds ?? {};
     const shape = b.ellipse ? 'ELLIPSE inscribed in this box (stay inside the corners)' : 'rectangle';
     const lines = [
-      `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}`,
+      `idle: ${s.idle}${s.aborting ? '  (ABORTING)' : ''}${s.paused ? '  (PAUSED — queue held; call plot_resume)' : ''}`,
       s.drv_ok === false
         ? `driver: ⛔ FAULT — ${s.drv_flags} (call plot_clear_fault after resolving)`
         : `driver: ok`,
@@ -465,6 +491,13 @@ server.tool(
       `  x: ${b.xn} (left) .. ${b.xp} (right) mm`,
       `  y: ${b.yn} (top/up) .. ${b.yp} (bottom/down) mm   [Y+ = DOWN, Y- = UP]`,
       `jobs: enqueued=${s.enqueued} current=${s.current} done=${s.done} pending=${s.pending}`,
+      // Queue health — the firmware draw queue is fixed-depth; a full queue REJECTS
+      // new jobs. rejected/peak are cumulative since boot (diagnose flooding here).
+      s.qcap != null
+        ? `queue: ${s.pending}/${s.qcap} used${s.pending >= s.qcap ? '  ⚠ FULL (new jobs rejected)' : ''}` +
+          (s.rejected ? `  · rejected(total)=${s.rejected}` : '') +
+          (s.peak != null ? `  · peak=${s.peak}` : '')
+        : null,
       s.job ? `current job: ${s.job}` : null,
     ].filter(Boolean);
     return { content: [{ type: 'text', text: lines.join('\n') }] };
