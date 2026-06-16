@@ -33,6 +33,7 @@ Drive it three ways, all feeding the same draw queue:
 - ⏸️ **Pause / resume** — parks pen‑up at the next job boundary and **holds the whole queue** for pen swaps / ink fixes, then continues in order.
 - ⏹️ **STOP that keeps the queue** — halts motion immediately but *preserves* pending jobs (resume to continue); only an explicit abort flushes.
 - 🚦 **Flow‑controlled batches** — the web console paces large scripts against the board's live queue depth so a 400‑command stack never overflows the 256‑job queue.
+- 🛑 **Hardware E‑STOP** — a physical GPIO button (`GP14`→GND) whose interrupt cuts motor power in hardware (~µs, no SPI/firmware dependency) and latches off; cleared from the console/MCP `clear fault`. See `CLAUDE.md` "Hardware E‑STOP".
 - 🛟 **Self‑healing drivers** — if the TMC is power‑cycled out from under the MCU (no RESET button!), the draw task detects the wiped config and re‑applies it before the next job (`reinit` also does it on demand).
 
 **Health & observability**
