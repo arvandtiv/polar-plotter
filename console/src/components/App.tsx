@@ -7,7 +7,6 @@ import {
   type MotionParams,
   type FillMode,
   type PlotCmd,
-  type Stroke,
   type PenState,
   type LogEntry,
   type PlotterStatus,
@@ -21,18 +20,30 @@ import {
 //  Primitives
 // ================================================================
 
+// Remembers each card's collapsed state by title so a card you expanded stays
+// expanded across tab switches (cards unmount when their tab is hidden; this
+// module-scoped store persists across those remounts for the session).
+const cardCollapse = new Map<string, boolean>();
+
 function Card({ title, icon, accent = '#0284c7', right, children, className = '',
-  collapsible = false, defaultCollapsed = false, collapsed: collapsedProp, onToggle }: {
+  collapsible = true, defaultCollapsed = true, collapsed: collapsedProp, onToggle }: {
   title?: string; icon?: string; accent?: string; right?: React.ReactNode;
   children: React.ReactNode; className?: string;
   collapsible?: boolean; defaultCollapsed?: boolean;
   collapsed?: boolean; onToggle?: () => void;
 }) {
   const isFlexCol = className.includes('flex-col');
-  const [collapsedState, setCollapsedState] = useState(defaultCollapsed);
+  const key = title ?? '';
+  const [collapsedState, setCollapsedState] = useState(
+    () => (key && cardCollapse.has(key) ? cardCollapse.get(key)! : defaultCollapsed),
+  );
   const controlled = collapsedProp !== undefined;
   const collapsed = controlled ? collapsedProp : collapsedState;
-  const toggle = controlled ? onToggle : () => setCollapsedState((c) => !c);
+  const toggle = controlled ? onToggle : () => setCollapsedState((c) => {
+    const next = !c;
+    if (key) cardCollapse.set(key, next);   // remember across tab switches / remounts
+    return next;
+  });
   const isCollapsed = collapsible && collapsed;
   return (
     <section className={`rounded-xl border border-ink-750 bg-ink-900 shadow-card ${isCollapsed ? '!flex-none' : ''} ${className}`}>
@@ -75,10 +86,15 @@ function LogCard({ title, icon, accent = '#0284c7', right, children }: {
   return (
     <section className="rounded-xl border border-ink-750 bg-ink-900 shadow-card">
       <header className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800 shrink-0">
-        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSize((s) => (s === 'collapsed' ? 'minimized' : 'collapsed'))}
+          className="flex items-center gap-2 -mx-1 px-1 rounded cursor-pointer hover:text-ink-200"
+        >
+          <span className={`text-ink-600 text-[10px] transition-transform ${size === 'collapsed' ? '-rotate-90' : ''}`}>▾</span>
           {icon && <span style={{ color: accent }} className="text-[13px]">{icon}</span>}
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">{title}</h2>
-        </div>
+        </button>
         <div className="flex items-center gap-2">
           {right}
           <div className="flex gap-0.5 ml-1 border-l border-ink-800 pl-2">
@@ -291,8 +307,8 @@ function Readout({ label, value, unit }: { label: string; value: string | number
 //  Canvas
 // ================================================================
 
-function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
-  bounds: PlotterBounds; pen: PenState; paths: Stroke[]; activePath: Stroke | null; moving: boolean;
+function PlotterCanvas({ bounds, pen, moving }: {
+  bounds: PlotterBounds; pen: PenState; moving: boolean;
 }) {
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
@@ -305,7 +321,6 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
   for (let x = Math.ceil(-left / gridStep) * gridStep; x <= right; x += gridStep) gx.push(x);
   for (let y = Math.ceil(-down / gridStep) * gridStep; y <= up; y += gridStep) gy.push(y);
 
-  const toPoly = (pts: { x: number; y: number }[]) => pts.map((p) => `${p.x},${py(p.y)}`).join(' ');
   const sw = vbW / 400;
 
   return (
@@ -328,14 +343,6 @@ function PlotterCanvas({ bounds, pen, paths, activePath, moving }: {
         {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={py(y)} x2={right} y2={py(y)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
         <line x1={-left} y1={0} x2={right} y2={0} stroke="#cbd5e1" strokeWidth={sw} />
         <line x1={0} y1={py(up)} x2={0} y2={py(-down)} stroke="#cbd5e1" strokeWidth={sw} />
-        {paths.map((pa, i) => (
-          <polyline key={i} points={toPoly(pa.points)} fill="none" stroke={pa.color}
-            strokeWidth={sw * 1.4} strokeLinejoin="round" strokeLinecap="round" opacity="0.92" />
-        ))}
-        {activePath && (
-          <polyline points={toPoly(activePath.points)} fill="none" stroke={activePath.color}
-            strokeWidth={sw * 1.8} strokeLinejoin="round" strokeLinecap="round" />
-        )}
         <circle cx={0} cy={0} r={sw * 3} fill="none" stroke="#94a3b8" strokeWidth={sw} />
         <g>
           {moving && <circle cx={pen.x} cy={py(pen.y)} r={sw * 9} fill={pen.down ? '#059669' : '#0284c7'} opacity="0.18" />}
@@ -691,7 +698,7 @@ const TRUCHET_MOTIF_HELP = [
 //  Hardware / chip reference data
 // ================================================================
 
-const FW_VERSION = 'pico2 · v1.0';
+const FW_VERSION = 'pico2 · v1.1';
 
 const TMC5072_SPECS = [
   { label: 'Driver IC',      value: 'TMC5072',                    note: 'Trinamic / Analog Devices' },
@@ -914,7 +921,7 @@ const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>
 
 export default function App() {
   const P = usePlotter();
-  const { pen, moving, connected, motion, bounds, paths, activePath, queue, log, status, jobs } = P;
+  const { pen, moving, connected, motion, bounds, log, status, jobs } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
@@ -940,13 +947,15 @@ export default function App() {
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyanx/30 bg-cyanx/10 text-cyanx shadow-[0_0_12px_rgba(6,182,212,0.15)]">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <circle cx="12" cy="12" r="9"/>
-                <circle cx="12" cy="12" r="3"/>
-                <line x1="12" y1="3" x2="12" y2="6"/>
-                <line x1="12" y1="18" x2="12" y2="21"/>
-                <line x1="3" y1="12" x2="6" y2="12"/>
-                <line x1="18" y1="12" x2="21" y2="12"/>
+              {/* V-plotter glyph: top rail + two motor pulleys, belts converging to the gondola/pen */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3.5" y1="5" x2="20.5" y2="5"/>
+                <circle cx="5" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+                <circle cx="19" cy="5" r="1.5" fill="currentColor" stroke="none"/>
+                <line x1="5" y1="5" x2="12" y2="14.5"/>
+                <line x1="19" y1="5" x2="12" y2="14.5"/>
+                <circle cx="12" cy="15" r="2.3" fill="currentColor" stroke="none"/>
+                <line x1="12" y1="17.3" x2="12" y2="20.5"/>
               </svg>
             </div>
             <div>
@@ -954,7 +963,7 @@ export default function App() {
                 <h1 className="text-[15px] font-bold tracking-tight text-ink-100">Polar Plotter</h1>
                 <span className="hidden sm:inline-flex items-center rounded-md border border-cyanx/30 bg-cyanx/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyanx tracking-wide">{FW_VERSION}</span>
               </div>
-              <p className="hidden font-mono text-[11px] text-ink-500 sm:block">console · RP2350 · TMC5072</p>
+              <p className="hidden font-mono text-[11px] text-ink-500 sm:block">V-plotter console · Pico 2 W · TMC5072</p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -979,33 +988,32 @@ export default function App() {
                 <span className={pen.down ? 'text-go' : 'text-ink-500'}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
               </div>
             }>
-              <PlotterCanvas bounds={bounds} pen={pen} paths={paths} activePath={activePath} moving={moving} />
+              <PlotterCanvas bounds={bounds} pen={pen} moving={moving} />
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Readout label="X" value={pen.x.toFixed(1)} unit="mm" />
                 <Readout label="Y" value={pen.y.toFixed(1)} unit="mm" />
-                <Readout label="Queue" value={queue.length} unit="cmd" />
-                <Readout label="Strokes" value={paths.length} unit="" />
+                <Readout label="Pending" value={status?.pending ?? 0} unit="job" />
+                <Readout label="Done" value={status?.done ?? 0} unit="" />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
                 <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
                 <Btn variant={pen.down ? 'default' : 'go'} onClick={() => P.enqueue({ type: 'pen', pos: 'up' })}>Pen Up</Btn>
                 <Btn variant={pen.down ? 'go' : 'default'} onClick={() => P.enqueue({ type: 'pen', pos: 'down' })}>Pen Down</Btn>
-                <Btn variant="ghost" onClick={P.clearPaths} className="ml-auto">Clear canvas</Btn>
               </div>
             </Card>
 
             {/* Motion */}
             <Card title="Motion" icon="⚡" accent="#d97706" collapsible>
               <div className="space-y-5">
-                <ParamSlider label="Speed" unit="µstep/t" value={motion.vmax} min={10000} max={400000} step={5000} def={DEFAULTS.motion.vmax} accent="#0284c7"
+                <ParamSlider label="Speed" unit="µstep/t" value={motion.vmax} min={260000} max={440000} step={5000} def={DEFAULTS.motion.vmax} accent="#0284c7"
                   onInput={(v) => P.setMotion('vmax', v)} onCommit={(v) => { P.setMotion('vmax', v); P.commitMotion('vmax', v); }} />
-                <ParamSlider label="Acceleration" unit="AMAX=DMAX" value={motion.amax} min={50} max={2000} step={10} def={DEFAULTS.motion.amax} accent="#059669"
+                <ParamSlider label="Acceleration" unit="AMAX=DMAX" value={motion.amax} min={1270} max={2110} step={10} def={DEFAULTS.motion.amax} accent="#059669"
                   onInput={(v) => P.setMotion('amax', v)} onCommit={(v) => { P.setMotion('amax', v); P.commitMotion('amax', v); }} />
                 <div className="h-px bg-ink-800" />
-                <ParamSlider label="Run current" unit="mA" value={motion.run} min={100} max={1200} step={20} def={DEFAULTS.motion.run} accent="#d97706"
+                <ParamSlider label="Run current" unit="mA" value={motion.run} min={700} max={1180} step={20} def={DEFAULTS.motion.run} accent="#d97706"
                   onInput={(v) => P.setMotion('run', v)} onCommit={(v) => { P.setMotion('run', v); P.commitMotion('run', v); }} />
-                <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={0} max={800} step={20} def={DEFAULTS.motion.hold} accent="#ea580c"
+                <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={320} max={560} step={20} def={DEFAULTS.motion.hold} accent="#ea580c"
                   onInput={(v) => P.setMotion('hold', v)} onCommit={(v) => { P.setMotion('hold', v); P.commitMotion('hold', v); }} />
               </div>
             </Card>

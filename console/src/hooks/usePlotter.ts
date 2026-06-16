@@ -50,7 +50,7 @@ export interface JobEntry { id: number; label: string; state: 'done' | 'doing' |
 export const DEFAULTS = {
   // run de-rated 600→400 mA to match the firmware default (board_config.h) — a pen
   // gondola needs little torque and run current is the multi-hour-plot heat source.
-  motion: { vmax: 200000, amax: 500, run: 400, hold: 200 },
+  motion: { vmax: 350000, amax: 1690, run: 940, hold: 440 },
   bounds: { left: 240, right: 240, up: 200, down: 200, shape: 'rect' as BoundsShape },
 };
 
@@ -642,8 +642,6 @@ export function usePlotter() {
   const [connected, setConnected]  = useState(false);
   const [motion, setMotionState]   = useState<MotionParams>({ ...DEFAULTS.motion });
   const [bounds, setBoundsState]   = useState<PlotterBounds>({ ...DEFAULTS.bounds });
-  const [paths, setPaths]          = useState<Stroke[]>([]);
-  const [activePath, setActivePath] = useState<Stroke | null>(null);
   const [queue, setQueue]          = useState<string[]>([]);
   const [log, setLog]              = useState<LogEntry[]>([mkLog('sys', 'console ready')]);
   const [status, setStatus]        = useState<PlotterStatus | null>(null);
@@ -666,12 +664,10 @@ export function usePlotter() {
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
   // The ref is updated every render so the callback always reads the current value.
-  const penRef    = useRef(pen);       penRef.current    = pen;
   const motionRef = useRef(motion);    motionRef.current = motion;
   const ipRef     = useRef(ip);        ipRef.current     = ip;
-  const cancelRef = useRef(false);     // set true by stop() to abort an in-flight animation
+  const cancelRef = useRef(false);     // set true by stop()/clearQueue() to cancel client-side work
   const runCancelRef = useRef(false);  // set true by stop()/clearQueue() to halt a running script batch
-  const colorRef  = useRef(0);         // cycles through PALETTE for each new command
 
   const pushLog = useCallback((kind: LogEntry['kind'], text: string) => {
     setLog((l) => [...l.slice(-199), mkLog(kind, text)]);
@@ -763,6 +759,12 @@ export function usePlotter() {
       setConnected(true);
       if (wasDown) pushLog('sys', `[net] link restored · http://${ip}/`);
 
+      // Pen position + MOVING come straight from the board — no client animation.
+      // The dot tracks the real XACTUAL→mm position, and MOVING reflects true
+      // execution: on while a job runs, off the instant the board is idle (or paused).
+      setPen((p) => ({ ...p, x: s.x, y: s.y }));
+      setMoving(!s.idle && !s.paused);
+
       // On first successful response, seed work-area and motion params from the firmware
       // so the console reflects what's actually configured rather than hard-coded defaults.
       if (!boundsSeeded.current && s.bounds) {
@@ -811,73 +813,6 @@ export function usePlotter() {
     return () => { alive = false; clearInterval(timer); };
   }, [ip, pushLog]);
 
-  // ---- animation -----------------------------------------------
-  // Runs a client-side visual simulation of the gondola path at ~60 fps.
-  // It does NOT wait for real motor feedback — it's purely cosmetic so the
-  // canvas shows something while the firmware is executing the move.
-  // Speed is scaled from the current vmax so faster settings look faster.
-  //
-  // Each entry in pts is { x, y, pen:bool }:
-  //   pen=false → travel move (no ink); pen=true → drawing stroke
-  // The loop linearly interpolates between consecutive points over a duration
-  // proportional to the distance, then advances to the next point.
-  const animatePath = useCallback((pts: ReturnType<typeof buildPath>, penColor: string) =>
-    new Promise<void>((resolve) => {
-      if (!pts.length) return resolve();
-      let idx = 0;
-      let cur = { x: penRef.current.x, y: penRef.current.y };
-      let from = { ...cur };
-      const drawn: Stroke[] = [];
-      let curStroke: Stroke | null = null;
-      let segStart = performance.now();
-      let segDur = 0;
-
-      // Rough mm/s estimate from the current VMAX setting (used only for animation timing).
-      const mmPerSec = () => 30 + (motionRef.current.vmax / 200000) * 220;
-
-      const beginSeg = () => {
-        const target = pts[idx];
-        from = { ...cur };
-        const dist = Math.hypot(target.x - cur.x, target.y - cur.y);
-        segDur = Math.max(40, (dist / mmPerSec()) * 1000);
-        segStart = performance.now();
-        if (target.pen) {
-          if (!curStroke) curStroke = { color: penColor, points: [{ x: from.x, y: from.y }] };
-        } else {
-          if (curStroke && curStroke.points.length > 1) drawn.push(curStroke);
-          curStroke = null;
-        }
-      };
-
-      const finish = () => {
-        clearInterval(timer);
-        if (curStroke && curStroke.points.length > 1) drawn.push(curStroke);
-        if (drawn.length && !cancelRef.current) setPaths((p) => [...p, ...drawn]);
-        setActivePath(null);
-        resolve();
-      };
-
-      beginSeg();
-      const timer = setInterval(() => {
-        if (cancelRef.current) { clearInterval(timer); setActivePath(null); return resolve(); }
-        const target = pts[idx];
-        const k = Math.min(1, (performance.now() - segStart) / segDur);
-        const nx = from.x + (target.x - from.x) * k;
-        const ny = from.y + (target.y - from.y) * k;
-        setPen((p) => ({ ...p, x: nx, y: ny, down: target.pen }));
-        if (target.pen && curStroke) {
-          setActivePath({ color: penColor, points: [...curStroke.points, { x: nx, y: ny }] });
-        }
-        if (k >= 1) {
-          cur = { x: target.x, y: target.y };
-          if (target.pen && curStroke) curStroke.points.push(cur);
-          idx++;
-          if (idx >= pts.length) return finish();
-          beginSeg();
-        }
-      }, 16) as unknown as number;
-    }), []);
-
   // ---- API send ------------------------------------------------
   const send = useCallback(async (endpoint: string): Promise<import('../lib/api').ApiResult | null> => {
     if (!ipRef.current) { pushLog('warn', `> ${endpoint} → no IP set`); return null; }
@@ -892,47 +827,24 @@ export function usePlotter() {
     }
   }, [pushLog]);
 
-  // ---- enqueue (animate + send) --------------------------------
-  // Fires BOTH the HTTP request to the firmware AND the canvas animation in
-  // parallel (Promise.all). They are independent: the animation is cosmetic
-  // and doesn't wait for the motor to finish; the HTTP call doesn't wait for
-  // the animation either. setMoving(true/false) wraps the whole thing so
-  // the UI shows "● MOVING" while either is still in flight.
+  // ---- enqueue (send only) -------------------------------------
+  // Just submits the command to the firmware. There is NO client-side animation:
+  // the canvas pen dot and the MOVING indicator are driven solely by the 1 Hz
+  // status poll, so they always reflect the board's true physical state.
   const enqueue = useCallback(async (cmd: PlotCmd) => {
     cancelRef.current = false;
     const ep = cmdToQuery(cmd);
     pushLog('cmd', `> ${ep}`);
-
-    if (cmd.type === 'pen') {
-      setMoving(true);
-      await Promise.all([
-        send(ep),
-        new Promise<void>((r) => setTimeout(r, 160)).then(() =>
-          setPen((p) => ({ ...p, down: cmd.pos === 'down' }))
-        ),
-      ]);
-      setMoving(false);
-      return;
-    }
-    if (cmd.type === 'home' || cmd.type === 'sethome') {
-      setMoving(true);
-      const pts = cmd.type === 'home' ? [{ x: 0, y: 0, pen: false }] : [];
-      await Promise.all([send(ep), animatePath(pts, '#0284c7')]);
-      setMoving(false);
-      return;
-    }
-
-    const color = PALETTE[colorRef.current++ % PALETTE.length];
-    const pts = buildPath(cmd);
+    // Pen up/down is the one bit of state the firmware doesn't report back, so
+    // reflect it locally for the indicator.
+    if (cmd.type === 'pen') setPen((p) => ({ ...p, down: cmd.pos === 'down' }));
     setQueue((q) => [...q, cmd.type]);
-    setMoving(true);
-    const [d] = await Promise.all([send(ep), animatePath(pts, color)]);
+    const d = await send(ep);
     /* Register the job label at submit time so pending entries in the job list
      * show their type (e.g. "line — pending") instead of a blank "pending…". */
     if (d?.id) jobLabels.current.set(d.id, cmdLabel(cmd));
-    setMoving(false);
     setQueue((q) => q.slice(1));
-  }, [send, animatePath, pushLog]);
+  }, [send, pushLog]);
 
   // Quiet raw send for bulk script execution — no individual log lines,
   // returns true on ok, false on error/network failure.
@@ -949,8 +861,6 @@ export function usePlotter() {
   const stop = useCallback(() => {
     cancelRef.current = true;
     runCancelRef.current = true;   // also halt any running script batch so it stops feeding jobs
-    setMoving(false);
-    setActivePath(null);
     setPen((p) => ({ ...p, down: false }));
     if (ipRef.current) send('stop');
     // STOP now HOLDS the queue firmware-side (does not flush) — resume to continue.
@@ -969,9 +879,7 @@ export function usePlotter() {
   const clearQueue = useCallback(() => {
     cancelRef.current = true;
     runCancelRef.current = true;   // stop the script runner so it can't refill the queue
-    setMoving(false);
     setQueue([]);
-    setActivePath(null);
     setPen((p) => ({ ...p, down: false }));
     if (ipRef.current) send('abort');
     pushLog('warn', '!! CLEAR — queue flushed, pen up');
@@ -1007,8 +915,6 @@ export function usePlotter() {
     if (ipRef.current) send(ep);
   }, [send, pushLog]);
 
-  const clearPaths = useCallback(() => { setPaths([]); setActivePath(null); }, []);
-
   // Clear a latched TMC5072 driver fault (re-enables the drivers firmware-side).
   const clearFault = useCallback(() => {
     pushLog('cmd', '> clearfault');
@@ -1019,12 +925,11 @@ export function usePlotter() {
     ip, setIp,
     pen, moving, connected,
     motion, bounds,
-    paths, activePath,
     queue, log,
     status, jobs,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearPaths, clearFault, pushLog,
+    enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
     DEFAULTS,
   };
 }
