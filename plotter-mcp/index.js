@@ -91,7 +91,7 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.0.0',
+  version: '1.1.0',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
@@ -237,9 +237,10 @@ server.tool(
 // plot_stop ──────────────────────────────────────────────────────────────────
 server.tool(
   'plot_stop',
-  'Emergency stop / escape — immediately preempt the job in progress (even ' +
-  'mid-stroke), flush the pending queue, decelerate both motors, and lift the ' +
-  'pen. Call this the moment anything looks wrong. Alias of plot_abort.',
+  'Emergency stop — immediately preempt the job in progress (even mid-stroke), ' +
+  'FLUSH the pending queue, decelerate both motors, and lift the pen. This ' +
+  'DISCARDS all queued work; to halt but KEEP the queue (e.g. for a pen swap) ' +
+  'use plot_pause instead. Call this the moment anything looks wrong. Alias of plot_abort.',
   {},
   async () => ({
     content: [{ type: 'text', text: ok(await api('abort')) }],
