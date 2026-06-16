@@ -184,42 +184,42 @@ function Btn({ children, onClick, variant = 'default', disabled, className = '',
   );
 }
 
+// Compact icon-only run controls (live in the Job queue panel header).
 function StopButton({ onClick, moving }: { onClick: () => void; moving: boolean }) {
   return (
-    <button onClick={onClick}
-      className="group relative flex items-center gap-2.5 px-5 py-2.5 rounded-xl border-2 border-stop/60 bg-stop/15 hover:bg-stop/25 text-stop font-bold tracking-wide transition-all active:scale-95"
-    >
-      {moving && <span className="absolute left-4 h-3 w-3 rounded-full bg-stop blink" />}
-      <span className={`inline-block h-3 w-3 ${moving ? 'opacity-0' : ''} bg-stop`} style={{ borderRadius: 2 }} />
-      <span className="text-[15px]">STOP</span>
+    <button onClick={onClick} aria-label="Stop" title="Stop — halt now, keep the queue"
+      className="relative flex h-7 w-7 items-center justify-center rounded-md border border-stop/55 bg-stop/15 text-stop hover:bg-stop/25 transition-colors active:scale-95">
+      {moving && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-stop blink" />}
+      <span className="h-2.5 w-2.5 bg-stop" style={{ borderRadius: 2 }} />
     </button>
   );
 }
 
 function ClearButton({ onClick, pending }: { onClick: () => void; pending: number }) {
   return (
-    <button onClick={onClick}
-      title="Flush the whole queue (discard all pending jobs) — unlike STOP, this throws them away"
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-stop/40 bg-ink-850 hover:bg-stop/15 text-ink-300 hover:text-stop font-bold tracking-wide transition-all active:scale-95"
-    >
-      <span className="text-[13px]">🗑</span>
-      <span className="text-[14px]">CLEAR{pending > 0 ? ` (${pending})` : ''}</span>
+    <button onClick={onClick} aria-label="Clear queue"
+      title={`Clear the queue${pending > 0 ? ` (${pending} pending)` : ''} — discard all pending jobs`}
+      className="flex h-7 w-7 items-center justify-center rounded-md border border-ink-700 bg-ink-850 text-ink-400 hover:text-stop hover:bg-stop/15 transition-colors active:scale-95">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
     </button>
   );
 }
 
 function PauseButton({ paused, onPause, onResume }: { paused: boolean; onPause: () => void; onResume: () => void }) {
   return (
-    <button onClick={paused ? onResume : onPause}
+    <button onClick={paused ? onResume : onPause} aria-label={paused ? 'Resume' : 'Pause'}
       title={paused ? 'Resume the held queue' : 'Pause after current job (keeps the queue) — swap pen / fix ink'}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-bold tracking-wide transition-all active:scale-95 ${
-        paused
-          ? 'border-go/60 bg-go/15 hover:bg-go/25 text-go'
-          : 'border-warn/60 bg-warn/15 hover:bg-warn/25 text-warn'}`}
-    >
+      className={`flex h-7 w-7 items-center justify-center rounded-md border transition-colors active:scale-95 ${
+        paused ? 'border-go/55 bg-go/15 text-go hover:bg-go/25'
+               : 'border-warn/55 bg-warn/15 text-warn hover:bg-warn/25'}`}>
       {paused
-        ? (<><span className="text-[13px]">▶</span><span className="text-[14px]">RESUME</span></>)
-        : (<><span className="text-[12px]">❚❚</span><span className="text-[14px]">PAUSE</span></>)}
+        ? <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z" /></svg>
+        : <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4.2" height="14" rx="1" /><rect x="13.8" y="5" width="4.2" height="14" rx="1" /></svg>}
     </button>
   );
 }
@@ -1017,9 +1017,6 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <IpInput ip={P.ip} onSave={P.setIp} />
             <StatusChip connected={connected} />
-            <PauseButton paused={!!P.status?.paused} onPause={P.pause} onResume={P.resume} />
-            <StopButton onClick={P.stop} moving={moving} />
-            <ClearButton onClick={P.clearQueue} pending={P.status?.pending ?? 0} />
           </div>
         </div>
       </header>
@@ -1291,7 +1288,14 @@ export default function App() {
 
                 <ChipInfoCard status={status} />
 
-                <LogCard title="Job queue" icon="▦" accent="#0284c7" defaultSize="expanded">
+                <LogCard title="Job queue" icon="▦" accent="#0284c7" defaultSize="expanded"
+                  right={
+                    <div className="flex items-center gap-1">
+                      <PauseButton paused={!!status?.paused} onPause={P.pause} onResume={P.resume} />
+                      <StopButton onClick={P.stop} moving={moving} />
+                      <ClearButton onClick={P.clearQueue} pending={status?.pending ?? 0} />
+                    </div>
+                  }>
                   <div className="flex flex-col h-full gap-4">
                     <div className="shrink-0">
                       <JobProgress status={status} />
