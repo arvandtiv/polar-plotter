@@ -37,7 +37,7 @@ export interface Stroke    { color: string; points: { x: number; y: number }[]; 
 // Live firmware job/driver state, polled from /api/status for the Autonomous tab.
 export interface PlotterStatus {
   enqueued: number; current: number; done: number; pending: number;
-  idle: boolean; aborting: boolean; paused: boolean; job: string;
+  idle: boolean; aborting: boolean; paused: boolean; estop: boolean; job: string;
   drvOk: boolean; drvFlags: string;
 }
 // One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
@@ -79,6 +79,27 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
     case 'pen':      return `pen?pos=${cmd.pos}`;
+  }
+}
+
+// ---- Copy-paste JSON form ----------------------------------------
+// Emits the command as a JSON object using the SAME field names parseJsonScript
+// accepts (fill_mode, hatch_angle, bound_r, position …), so a logged line drops
+// straight into the Script tab (wrap in [ ] or { "commands": [ ] }).
+export function cmdToJson(cmd: PlotCmd): string {
+  switch (cmd.type) {
+    case 'goto':     return JSON.stringify({ type: 'goto', x: cmd.x, y: cmd.y });
+    case 'line':     return JSON.stringify({ type: 'line', x0: cmd.x0, y0: cmd.y0, x1: cmd.x1, y1: cmd.y1, cycles: cmd.cycles });
+    case 'circle':   return JSON.stringify({ type: 'circle', cx: cmd.cx, cy: cmd.cy, r: cmd.r, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
+    case 'square':   return JSON.stringify({ type: 'square', cx: cmd.cx, cy: cmd.cy, size: cmd.size, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
+    case 'wobbly':   return JSON.stringify({ type: 'wobbly', cx: cmd.cx, cy: cmd.cy, r: cmd.r, bound_r: cmd.boundR, wobble: cmd.wobble, harmonics: cmd.harmonics, seed: cmd.seed, cycles: cmd.cycles });
+    case 'truchet':  return JSON.stringify({ type: 'truchet', n: cmd.n, spacing: cmd.spacing, angle: cmd.angle, seed: cmd.seed, motifs: cmd.motifs });
+    case 'bullseye': return JSON.stringify({ type: 'bullseye', cx: cmd.cx, cy: cmd.cy });
+    case 'grid':     return JSON.stringify({ type: 'grid', cx: cmd.cx, cy: cmd.cy });
+    case 'pen':      return JSON.stringify({ type: 'pen', position: cmd.pos });
+    case 'home':     return JSON.stringify({ type: 'home' });
+    case 'sethome':  return JSON.stringify({ type: 'sethome' });
+    case 'border':   return JSON.stringify({ type: 'border' });
   }
 }
 
@@ -791,7 +812,7 @@ export function usePlotter() {
 
       setStatus({
         enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
-        idle: s.idle, aborting: s.aborting, paused: s.paused, job: s.job,
+        idle: s.idle, aborting: s.aborting, paused: s.paused, estop: !!s.estop, job: s.job,
         drvOk: s.drv_ok, drvFlags: s.drv_flags,
       });
 
@@ -834,7 +855,7 @@ export function usePlotter() {
   const enqueue = useCallback(async (cmd: PlotCmd) => {
     cancelRef.current = false;
     const ep = cmdToQuery(cmd);
-    pushLog('cmd', `> ${ep}`);
+    pushLog('cmd', `> ${cmdToJson(cmd)}`);   // copy-paste-ready JSON (not the raw query)
     // Pen up/down is the one bit of state the firmware doesn't report back, so
     // reflect it locally for the indicator.
     if (cmd.type === 'pen') setPen((p) => ({ ...p, down: cmd.pos === 'down' }));

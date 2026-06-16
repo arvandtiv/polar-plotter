@@ -1015,6 +1015,13 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            {status?.estop && (
+              <button onClick={P.clearFault}
+                title="Hardware E-STOP latched — motors cut. Click to clear & re-enable, then re-home."
+                className="flex items-center gap-1.5 rounded-lg border border-stop/60 bg-stop/15 px-3 py-1.5 text-[12px] font-bold text-stop animate-pulse">
+                ⛔ E-STOP — clear
+              </button>
+            )}
             <IpInput ip={P.ip} onSave={P.setIp} />
             <StatusChip connected={connected} />
           </div>
