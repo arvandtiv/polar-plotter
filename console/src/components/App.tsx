@@ -132,6 +132,34 @@ function StopButton({ onClick, moving }: { onClick: () => void; moving: boolean 
   );
 }
 
+function ClearButton({ onClick, pending }: { onClick: () => void; pending: number }) {
+  return (
+    <button onClick={onClick}
+      title="Flush the whole queue (discard all pending jobs) — unlike STOP, this throws them away"
+      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-stop/40 bg-ink-850 hover:bg-stop/15 text-ink-300 hover:text-stop font-bold tracking-wide transition-all active:scale-95"
+    >
+      <span className="text-[13px]">🗑</span>
+      <span className="text-[14px]">CLEAR{pending > 0 ? ` (${pending})` : ''}</span>
+    </button>
+  );
+}
+
+function PauseButton({ paused, onPause, onResume }: { paused: boolean; onPause: () => void; onResume: () => void }) {
+  return (
+    <button onClick={paused ? onResume : onPause}
+      title={paused ? 'Resume the held queue' : 'Pause after current job (keeps the queue) — swap pen / fix ink'}
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 font-bold tracking-wide transition-all active:scale-95 ${
+        paused
+          ? 'border-go/60 bg-go/15 hover:bg-go/25 text-go'
+          : 'border-warn/60 bg-warn/15 hover:bg-warn/25 text-warn'}`}
+    >
+      {paused
+        ? (<><span className="text-[13px]">▶</span><span className="text-[14px]">RESUME</span></>)
+        : (<><span className="text-[12px]">❚❚</span><span className="text-[14px]">PAUSE</span></>)}
+    </button>
+  );
+}
+
 function StatusChip({ connected }: { connected: boolean }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-ink-750 bg-ink-850 pl-3 pr-3 py-1.5">
@@ -738,8 +766,10 @@ const SCRIPT_HINT = `[
   { "type": "home" }
 ]`;
 
-function ScriptTab({ sendRaw, pushLog }: {
+function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
   sendRaw: (ep: string) => Promise<boolean>;
+  getPending: () => Promise<number | null>;
+  runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -755,18 +785,49 @@ function ScriptTab({ sendRaw, pushLog }: {
   const start = useCallback(async () => {
     if (!good.length) return;
     abortRef.current = false;
+    runCancelRef.current = false;   // clear any prior STOP/CLEAR signal before a fresh run
     setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
-    pushLog('cmd', `> script: queuing ${good.length} commands`);
+    pushLog('cmd', `> script: queuing ${good.length} commands (flow-controlled)`);
     let errors = 0;
-    for (let i = 0; i < good.length; i++) {
-      if (abortRef.current) break;
-      const ok = await sendRaw(good[i].query!);
-      if (!ok) errors++;
-      setRun(r => ({ ...r, sent: i + 1, errors }));
+    // The board's draw queue holds 256 jobs and sendRaw returns on ENQUEUE (not on
+    // draw-completion). To never overflow — even when the machine is already busy
+    // with an EARLIER stack — gate every burst on the board's REAL pending count.
+    // Crucially: if the status read fails, or the queue is full, we WAIT rather
+    // than send (a rejection must never look like "room available").
+    const CAP = 256, HIGH = 220;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const cancelled = () => abortRef.current || runCancelRef.current;  // STOP/CLEAR halt the feed
+    let i = 0;
+    let warned = false;
+    while (i < good.length && !cancelled()) {
+      const pend = await getPending();
+      if (pend === null || pend >= HIGH) {
+        if (pend !== null && !warned) {
+          pushLog('sys', `[script] board busy (${pend}/${CAP} queued) — waiting for room…`);
+          warned = true;
+        }
+        await sleep(400);
+        continue;          // do NOT send while full / unknown
+      }
+      warned = false;
+      // Room for (HIGH - pend) jobs. Assume the board doesn't drain during the
+      // burst (conservative → can't overflow), then re-read pending next loop.
+      let budget = HIGH - pend;
+      while (budget-- > 0 && i < good.length && !cancelled()) {
+        const ok = await sendRaw(good[i].query!);
+        if (!ok) errors++;   // real rejection (e.g. out of bounds) — skip, don't retry
+        i++;
+        setRun(r => ({ ...r, sent: i, errors }));
+      }
     }
-    pushLog(errors === 0 ? 'ok' : 'warn', `[script] queued ${good.length} commands, ${errors} errors`);
+    const stopped = cancelled() && i < good.length;
+    pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
+            stopped
+              ? `[script] halted by STOP/CLEAR — ${i}/${good.length} sent, ${good.length - i} not queued`
+              : `[script] done — ${i - errors} queued` +
+                (errors ? `, ${errors} rejected (NOT queue-full — check bounds/syntax)` : ', no rejections'));
     setRun(r => ({ ...r, status: 'done' }));
-  }, [good, sendRaw, pushLog]);
+  }, [good, sendRaw, getPending, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
 
@@ -899,7 +960,9 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <IpInput ip={P.ip} onSave={P.setIp} />
             <StatusChip connected={connected} />
+            <PauseButton paused={!!P.status?.paused} onPause={P.pause} onResume={P.resume} />
             <StopButton onClick={P.stop} moving={moving} />
+            <ClearButton onClick={P.clearQueue} pending={P.status?.pending ?? 0} />
           </div>
         </div>
       </header>
@@ -1111,7 +1174,7 @@ export default function App() {
             )}
 
             {/* ---- Script tab ---- */}
-            {tab === 'script' && <ScriptTab sendRaw={P.sendRaw} pushLog={P.pushLog} />}
+            {tab === 'script' && <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />}
 
             {/* ---- Work Area tab ---- */}
             {tab === 'area' && (

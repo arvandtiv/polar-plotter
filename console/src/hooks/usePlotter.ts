@@ -37,7 +37,7 @@ export interface Stroke    { color: string; points: { x: number; y: number }[]; 
 // Live firmware job/driver state, polled from /api/status for the Autonomous tab.
 export interface PlotterStatus {
   enqueued: number; current: number; done: number; pending: number;
-  idle: boolean; aborting: boolean; job: string;
+  idle: boolean; aborting: boolean; paused: boolean; job: string;
   drvOk: boolean; drvFlags: string;
 }
 // One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
@@ -106,9 +106,10 @@ export function cmdLabel(cmd: PlotCmd): string {
 }
 
 // ---- JSON script parser ------------------------------------------
-// Accepts a JSON array of command objects and converts each to an API
-// query string. Same object shape as plot_script in the MCP, so scripts
-// are copy-pasteable between Claude Desktop and this console.
+// Accepts EITHER a bare JSON array of command objects, OR an object that wraps
+// them under a "commands" (or "script") key — e.g. { "commands": [ … ] } — and
+// converts each to an API query string. Same object shape as plot_script in the
+// MCP, so scripts are copy-pasteable between Claude Desktop and this console.
 export interface ParsedLine {
   idx: number;      // 0-based index in the JSON array (-1 = top-level error)
   raw: string;      // compact JSON of the item (for display)
@@ -123,9 +124,20 @@ export function parseJsonScript(text: string): ParsedLine[] {
   let arr: unknown[];
   try {
     const parsed = JSON.parse(t);
-    if (!Array.isArray(parsed))
-      return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ]' }];
-    arr = parsed;
+    if (Array.isArray(parsed)) {
+      arr = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      // Unwrap { commands: [ … ] } or { script: [ … ] }.
+      const wrap = parsed as Record<string, unknown>;
+      const inner = Array.isArray(wrap.commands) ? wrap.commands
+                  : Array.isArray(wrap.script)   ? wrap.script
+                  : null;
+      if (!inner)
+        return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ] or an object with a "commands" array' }];
+      arr = inner as unknown[];
+    } else {
+      return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ] or an object with a "commands" array' }];
+    }
   } catch (e) {
     return [{ idx: -1, raw: '', error: `JSON syntax: ${(e as Error).message}` }];
   }
@@ -658,6 +670,7 @@ export function usePlotter() {
   const motionRef = useRef(motion);    motionRef.current = motion;
   const ipRef     = useRef(ip);        ipRef.current     = ip;
   const cancelRef = useRef(false);     // set true by stop() to abort an in-flight animation
+  const runCancelRef = useRef(false);  // set true by stop()/clearQueue() to halt a running script batch
   const colorRef  = useRef(0);         // cycles through PALETTE for each new command
 
   const pushLog = useCallback((kind: LogEntry['kind'], text: string) => {
@@ -776,7 +789,7 @@ export function usePlotter() {
 
       setStatus({
         enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
-        idle: s.idle, aborting: s.aborting, job: s.job,
+        idle: s.idle, aborting: s.aborting, paused: s.paused, job: s.job,
         drvOk: s.drv_ok, drvFlags: s.drv_flags,
       });
 
@@ -935,13 +948,42 @@ export function usePlotter() {
 
   const stop = useCallback(() => {
     cancelRef.current = true;
+    runCancelRef.current = true;   // also halt any running script batch so it stops feeding jobs
+    setMoving(false);
+    setActivePath(null);
+    setPen((p) => ({ ...p, down: false }));
+    if (ipRef.current) send('stop');
+    // STOP now HOLDS the queue firmware-side (does not flush) — resume to continue.
+    pushLog('warn', '!! STOP — motion halted, queue held (press Resume to continue)');
+  }, [send, pushLog]);
+
+  // Pause / resume — firmware-side, queue-preserving. Unlike stop() these do NOT
+  // flush the queue: the board parks pen-up after the current job and holds the
+  // rest until resume. Use for pen swaps / ink fixes mid-run.
+  const pause  = useCallback(() => { if (ipRef.current) send('pause'); }, [send]);
+  const resume = useCallback(() => { if (ipRef.current) send('resume'); }, [send]);
+
+  // Clear/flush the whole queue (firmware /api/abort → xQueueReset, motion stop,
+  // pen up, pending→0). This is the deliberate "throw it all away" action that
+  // STOP intentionally does NOT do.
+  const clearQueue = useCallback(() => {
+    cancelRef.current = true;
+    runCancelRef.current = true;   // stop the script runner so it can't refill the queue
     setMoving(false);
     setQueue([]);
     setActivePath(null);
     setPen((p) => ({ ...p, down: false }));
-    if (ipRef.current) send('stop');
-    pushLog('warn', '!! STOP — queue flushed');
+    if (ipRef.current) send('abort');
+    pushLog('warn', '!! CLEAR — queue flushed, pen up');
   }, [send, pushLog]);
+
+  // Live pending-job count for flow control (the board's draw queue is 256 deep,
+  // so a fire-and-forget batch larger than that overflows). Returns null if the
+  // status can't be read so callers can decide how to handle it.
+  const getPending = useCallback(async (): Promise<number | null> => {
+    if (!ipRef.current) return null;
+    try { return (await getStatus(ipRef.current)).pending; } catch { return null; }
+  }, []);
 
   // Motion setters
   const setMotion = useCallback((key: keyof MotionParams, val: number) => {
@@ -982,7 +1024,7 @@ export function usePlotter() {
     status, jobs,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, stop, clearPaths, clearFault, pushLog,
+    enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearPaths, clearFault, pushLog,
     DEFAULTS,
   };
 }

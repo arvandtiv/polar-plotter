@@ -33,7 +33,8 @@ export async function apiGet(ip: string, endpoint: string): Promise<ApiResult> {
 export interface RawStatus {
   status: string;
   enqueued: number; current: number; done: number; pending: number;
-  idle: boolean; aborting: boolean; job: string;
+  qcap?: number; rejected?: number; peak?: number;
+  idle: boolean; aborting: boolean; paused: boolean; job: string;
   drv_ok: boolean; drv_flags: string;
   x: number; y: number;
   bounds: { xn: number; xp: number; yn: number; yp: number; ellipse: boolean };
