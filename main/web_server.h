@@ -41,6 +41,7 @@ extern volatile uint32_t g_job_current;
 extern volatile uint32_t g_job_done;
 extern volatile bool     g_job_abort;
 extern volatile bool     g_paused;
+extern volatile bool     g_estop;   /* hardware E-STOP latch (set in the GPIO ISR) */
 extern char              g_job_desc[128];
 
 extern volatile uint32_t g_drv_fault;
@@ -55,6 +56,7 @@ void plotter_get_motion(uint32_t *vmax, uint32_t *amax, float *run_ma, float *ho
 void plotter_abort_now(void);
 void plotter_stop_hold(void);
 void plotter_clear_fault(void);
+int  plotter_estop_level(void);   /* live GP14 level: 1=HIGH/idle, 0=LOW/pressed */
 
 /* Two-phase init: init() sets up queues/streams (call early so web_log works
  * from bring-up); listen() opens the TCP socket (call after WiFi is connected). */

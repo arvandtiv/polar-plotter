@@ -43,6 +43,7 @@ volatile uint32_t g_job_rejected = 0;   /* cumulative enqueues refused (queue fu
 volatile uint32_t g_pending_peak = 0;   /* high-water mark of pending depth */
 volatile bool     g_job_abort    = false;
 volatile bool     g_paused       = false;
+volatile bool     g_estop        = false;
 char              g_job_desc[128] = "idle";
 
 volatile uint32_t g_drv_fault    = 0;
@@ -463,7 +464,7 @@ static void handle_status(int sock, const char *qs)
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
         "\"pending\":%d,\"qcap\":%d,\"rejected\":%lu,\"peak\":%lu,"
-        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"job\":\"%s\","
+        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"estop\":%s,\"estop_pin\":%d,\"job\":\"%s\","
         "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
         "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s},"
@@ -472,7 +473,8 @@ static void handle_status(int sock, const char *qs)
         (unsigned long)g_job_done, pending, DRAW_QUEUE_DEPTH,
         (unsigned long)g_job_rejected, (unsigned long)g_pending_peak,
         idle ? "true" : "false",
-        g_job_abort ? "true" : "false", g_paused ? "true" : "false", g_job_desc,
+        g_job_abort ? "true" : "false", g_paused ? "true" : "false",
+        g_estop ? "true" : "false", plotter_estop_level(), g_job_desc,
         g_drv_fault ? "false" : "true", g_drv_flags,
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
         plotter_bounds_ellipse() ? "true" : "false",

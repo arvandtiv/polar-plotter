@@ -25,6 +25,7 @@
 #define PIN_CSN    5    /* GP5  chip-select (active-LOW)     */
 #define PIN_ENN    6    /* GP6  enable (active-LOW to enable)*/
 #define PIN_SERVO  7    /* GP7  SG90 PWM                     */
+#define PIN_ESTOP  14   /* GP14 hardware E-STOP button → GND (internal pull-up, active-LOW) */
 
 /* ENN is direct-wired, active-LOW: drive LOW to enable the TMC. */
 #define ENN_ON_LEVEL  0

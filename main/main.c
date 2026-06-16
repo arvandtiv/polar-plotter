@@ -185,6 +185,7 @@ static uint32_t driver_fault_scan(void)
 
 static bool motion_should_abort(void)
 {
+    if (g_estop) return true;     /* hardware E-STOP: bail the move (drivers already cut in the ISR) */
     if (g_job_abort) return true;
     static uint64_t last_us = 0;
     uint64_t now = time_us_64();
@@ -202,13 +203,31 @@ static bool motion_should_abort(void)
 
 void plotter_clear_fault(void)
 {
+    g_estop = false;            /* release the hardware E-STOP latch (if set)... */
+    tmc.hard_off = false;       /* ...so the driver can be re-enabled below */
+    g_job_abort = false;
     tmc5072_enable(&tmc, false);
     vTaskDelay(pdMS_TO_TICKS(5));
     tmc5072_enable(&tmc, true);
     g_drv_fault = 0;
     snprintf(g_drv_flags, sizeof(g_drv_flags), "ok");
-    web_log("driver fault cleared — drivers re-enabled");
+    web_log("fault / E-STOP cleared — drivers re-enabled");
 }
+
+/* Hardware E-STOP ISR (GPIO falling edge, button → GND, internal pull-up). Cuts the
+ * TMC output stage in hardware right here — no SPI, no motion task, ~µs — then
+ * latches it off (so the next move can't silently re-enable) and flags the motion
+ * loop to bail at its next poll. Kept tiny: only register writes + volatile flags. */
+static void estop_isr(uint gpio, uint32_t events)
+{
+    (void)gpio; (void)events;
+    gpio_put(PIN_ENN, !ENN_ON_LEVEL);   /* drivers OFF immediately */
+    tmc.hard_off = true;                 /* block any re-enable from the motion task */
+    g_estop = true;                      /* motion_should_abort() bails the in-flight move */
+}
+
+/* Live E-STOP button level: 1 = HIGH (idle, pull-up holding it), 0 = LOW (pressed). */
+int plotter_estop_level(void) { return gpio_get(PIN_ESTOP); }
 
 static bool wait_reached(int m, int timeout_ms)
 {
@@ -1258,14 +1277,17 @@ static void web_draw_task(void *arg)
     (void)arg;
     wcmd_t cmd;
     for (;;) {
-        /* Pause: park between jobs with the pen up so the operator can swap pens /
-         * fix ink. The queue is NOT touched — pending jobs wait and resume in order.
-         * Takes effect at the next job boundary (no mid-stroke pen lift / ink blob). */
-        if (g_paused) {
+        /* Hold (pause OR hardware E-STOP): park between jobs with the pen up and keep
+         * the queue intact — pending jobs wait and resume in order. Without holding on
+         * g_estop the task would pull-and-instantly-bail every queued job in a burst,
+         * draining the queue faster than the 1 Hz console can show it. The E-STOP latch
+         * stays set (drivers cut in the ISR) until an explicit clear. */
+        if (g_paused || g_estop) {
             pen_lift();
-            web_log("paused — %lu job(s) held in queue",
+            web_log(g_estop ? "!! E-STOP — motors cut, %lu job(s) held"
+                            : "paused — %lu job(s) held in queue",
                     (unsigned long)(g_job_enqueued - g_job_done));
-            while (g_paused) vTaskDelay(pdMS_TO_TICKS(100));
+            while (g_paused || g_estop) vTaskDelay(pdMS_TO_TICKS(100));
             web_log("resumed");
         }
 
@@ -1656,6 +1678,12 @@ static int cmd_estop(int argc, char **argv)
     plotter_abort_now();
     printf("ESTOP: motion stopped, queue flushed, pen up.\n"); return 0;
 }
+static int cmd_estopclr(int argc, char **argv)
+{
+    (void)argc;(void)argv;
+    plotter_clear_fault();   /* releases the hardware E-STOP latch + re-enables drivers */
+    printf("E-STOP latch cleared, drivers re-enabled.\n"); return 0;
+}
 static int cmd_sethome(int argc, char **argv)
 {
     if (argc >= 2 && !strcmp(argv[1],"sg")) {
@@ -1712,6 +1740,7 @@ static const cmd_entry_t s_cmds[] = {
     { "aimode",    "Toggle job-progress printing: aimode [on|off]",    cmd_aimode    },
     { "jobs",      "Show job queue snapshot",                          cmd_jobs      },
     { "estop",     "ESCAPE: stop motion, flush queue, lift pen",       cmd_estop     },
+    { "estopclr",  "Clear the hardware E-STOP latch + re-enable drivers", cmd_estopclr },
 };
 #define N_CMDS (sizeof(s_cmds)/sizeof(s_cmds[0]))
 
@@ -1930,6 +1959,14 @@ static void main_task(void *arg)
     };
     if (!tmc5072_init(&tmc, &cfg))
         printf("[main] WARNING: tmc5072_init failed — check wiring\n");
+
+    /* Arm the hardware E-STOP button (GP14 → GND, active-LOW). On press the ISR
+     * cuts driver power in hardware and latches it off until a fault/e-stop clear. */
+    gpio_init(PIN_ESTOP);
+    gpio_set_dir(PIN_ESTOP, GPIO_IN);
+    gpio_pull_up(PIN_ESTOP);
+    gpio_set_irq_enabled_with_callback(PIN_ESTOP, GPIO_IRQ_EDGE_FALL, true, &estop_isr);
+    printf("[main] E-STOP armed on GP%d (button to GND)\n", PIN_ESTOP);
 
     run_bringup();
 

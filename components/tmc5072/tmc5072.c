@@ -101,6 +101,7 @@ uint32_t tmc5072_read(tmc5072_t *dev, uint8_t reg, uint8_t *status)
 
 void tmc5072_enable(tmc5072_t *dev, bool en)
 {
+    if (dev->hard_off) en = false;   /* hardware E-STOP latch overrides any enable request */
     gpio_put(dev->pin_enn, en ? dev->enn_on_level : !dev->enn_on_level);
 }
 

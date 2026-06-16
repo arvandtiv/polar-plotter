@@ -100,6 +100,7 @@ typedef struct {
     tmc5072_ramp_t base_ramp;
     float    applied_scale[2];
     SemaphoreHandle_t lock;
+    volatile bool hard_off;   /* hardware E-STOP latch: when set, enable() is forced off */
 } tmc5072_t;
 
 /* ---- API (same logic as ESP32 port, Pico SPI layer underneath) ---- */
