@@ -46,6 +46,7 @@ int main(void)
         .span_mm = span, .drop_mm = drop, .steps_per_mm = spm,
         .left_sign = +1, .right_sign = +1,
     };
+    plt_affine_identity(&g);   /* default warp = passthrough (else zero-init = degenerate) */
 
     printf("== TMC5072 polargraph kinematics dry run ==\n");
     printf("span=%.1f home_belt=%.1f -> drop=%.4f steps/mm=%.1f\n\n",
@@ -146,6 +147,37 @@ int main(void)
         chk_true("100mm/2mm -> 50 segs", n == 50);
         chk_true("7mm/2mm -> 4 segs (rounds up)", plt_line_segments(7.0f, 2.0f) == 4);
         chk_true("piece length <= max", (100.0f / (float)n) <= 2.0f + 1e-4f);
+    }
+
+    /* 9. Affine warp: identity is a no-op, and a non-trivial warp round-trips
+     *    (forward through plt_xy_to_steps, inverse through plt_steps_to_xy
+     *    recovers the LOGICAL coordinate the caller commanded). */
+    printf("\n[9] affine warp round-trip\n");
+    {
+        /* identity must equal the no-affine result for an arbitrary point */
+        int32_t il, ir;
+        plt_xy_to_steps(&g, 73.0f, -41.0f, &il, &ir);
+        plotter_geom_t gn = g; gn.aff_a = gn.aff_d = 1; gn.aff_b = gn.aff_c = gn.aff_tx = gn.aff_ty = 0;
+        int32_t nl, nr; plt_xy_to_steps(&gn, 73.0f, -41.0f, &nl, &nr);
+        chk_true("identity == passthrough", il == nl && ir == nr);
+
+        /* a rotate+scale+shift warp: command logical p, recover it after warp */
+        plotter_geom_t gw = g;
+        gw.aff_a = 0.97f; gw.aff_b = 0.10f; gw.aff_tx = 12.0f;
+        gw.aff_c = -0.08f; gw.aff_d = 1.04f; gw.aff_ty = -7.0f;
+        float worst = 0.0f;
+        for (float x = -150; x <= 150; x += 50) {
+            for (float y = -150; y <= 200; y += 50) {
+                int32_t sl, sr;
+                plt_xy_to_steps(&gw, x, y, &sl, &sr);
+                float rx, ry;
+                plt_steps_to_xy(&gw, sl, sr, &rx, &ry);
+                float e = fabsf(rx - x), f2 = fabsf(ry - y);
+                if (e > worst) worst = e;
+                if (f2 > worst) worst = f2;
+            }
+        }
+        chk("warp forward->inverse recovers logical (mm)", worst, 0.0, 0.05);
     }
 
     printf("\n%s (%d failure%s)\n", g_fail ? "TESTS FAILED" : "ALL TESTS PASSED",

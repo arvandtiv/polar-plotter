@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiGet, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
 import { loadPapers, savePapers, type Paper } from '../lib/papers';
 export type { Paper } from '../lib/papers';
+import { loadMatrices, saveMatrices, type Matrix } from '../lib/matrices';
+export type { Matrix } from '../lib/matrices';
 
 // ---- types -------------------------------------------------------
 
@@ -10,6 +12,8 @@ export type FillMode = 0 | 1 | 2;   // 0=none  1=hatch  2=concentric
 export type BoundsShape = 'rect' | 'ellipse';
 export interface PlotterBounds { left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface MotionParams  { vmax: number; amax: number; run: number; hold: number; }
+export interface MatrixParams  { a: number; b: number; c: number; d: number; tx: number; ty: number; }
+export const IDENTITY_PARAMS: MatrixParams = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 
 export interface CircleCmd   { type: 'circle';   cx: number; cy: number; r: number;    cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
 export interface SquareCmd   { type: 'square';   cx: number; cy: number; size: number; cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
@@ -43,6 +47,7 @@ export interface PlotterStatus {
   idle: boolean; aborting: boolean; paused: boolean; estop: boolean; job: string;
   drvOk: boolean; drvFlags: string;
   motion?: { vmax: number; amax: number; run_ma: number; hold_ma: number };
+  matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number };
 }
 // One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
 // MCP's full plan), so labels are captured as `current` advances; not-yet-run jobs
@@ -250,6 +255,10 @@ export function parseJsonScript(text: string): ParsedLine[] {
 export function boundsToQuery(b: PlotterBounds): string {
   // Firmware params: xn = X−, xp = X+, yn = Y−, yp = Y+, shape 0=rect 1=ellipse
   return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.down}&yp=${b.up}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
+}
+
+export function matrixToQuery(m: MatrixParams): string {
+  return `matrix?a=${m.a}&b=${m.b}&c=${m.c}&d=${m.d}&tx=${m.tx}&ty=${m.ty}`;
 }
 
 export function motionToQuery(key: keyof MotionParams, val: number, m: MotionParams): string {
@@ -674,6 +683,11 @@ export function usePlotter() {
   const [status, setStatus]        = useState<PlotterStatus | null>(null);
   const [jobs, setJobs]            = useState<JobEntry[]>([]);
   const [papers, setPapers]        = useState<Paper[]>(() => loadPapers());
+  // Affine matrix: `matrix` = the live 6 values being edited; `matrices` = saved
+  // presets (localStorage). Firmware default is identity and is NEVER auto-applied
+  // on connect — the user explicitly applies a warp.
+  const [matrix, setMatrixState]   = useState<MatrixParams>({ ...IDENTITY_PARAMS });
+  const [matrices, setMatrices]    = useState<Matrix[]>(() => loadMatrices());
 
   // Labels captured per job id as `current` advances (firmware only reports the
   // CURRENT job's label, so we remember each one to render the done-job history).
@@ -686,6 +700,7 @@ export function usePlotter() {
   // Reset when IP changes so a new plotter gets a fresh read.
   const boundsSeeded  = useRef(false);
   const motionSeeded  = useRef(false);
+  const matrixSeeded  = useRef(false);
   // Connectivity debounce: SSE uses sseWasOpen to log the drop only once (not on
   // every retry burst). Status poll uses pollFails to require 3 consecutive misses
   // before declaring the link down, so a single slow response doesn't flash the UI.
@@ -698,6 +713,8 @@ export function usePlotter() {
   const motionRef = useRef(motion);    motionRef.current = motion;
   const boundsRef = useRef(bounds);    boundsRef.current = bounds;
   const papersRef = useRef(papers);    papersRef.current = papers;
+  const matrixRef = useRef(matrix);    matrixRef.current = matrix;
+  const matricesRef = useRef(matrices); matricesRef.current = matrices;
   const ipRef     = useRef(ip);        ipRef.current     = ip;
   const cancelRef = useRef(false);     // set true by stop()/clearQueue() to cancel client-side work
   const runCancelRef = useRef(false);  // set true by stop()/clearQueue() to halt a running script batch
@@ -771,6 +788,7 @@ export function usePlotter() {
     if (!ip) { setStatus(null); setJobs([]); return; }
     boundsSeeded.current = false;   // new IP → re-read bounds + motion from that plotter
     motionSeeded.current = false;
+    matrixSeeded.current = false;
     pollFails.current = 0;
     let alive = true;
 
@@ -818,13 +836,19 @@ export function usePlotter() {
           hold: s.motion.hold_ma,
         });
       }
+      // Reflect the firmware's ACTIVE matrix into the editor (identity at startup) —
+      // read-only seeding, never an apply.
+      if (!matrixSeeded.current && s.matrix) {
+        matrixSeeded.current = true;
+        setMatrixState({ ...s.matrix });
+      }
 
       if (s.job && s.current > 0) jobLabels.current.set(s.current, s.job);
 
       setStatus({
         enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
         idle: s.idle, aborting: s.aborting, paused: s.paused, estop: !!s.estop, job: s.job,
-        drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion,
+        drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion, matrix: s.matrix,
       });
 
       // Build the job rows. Cap to a trailing window so a long session doesn't
@@ -981,6 +1005,53 @@ export function usePlotter() {
     setPapers(next); savePapers(next);
   }, []);
 
+  // ---- affine matrix (live editor + presets) -------------------
+  // Edit one of the 6 live values (does NOT push to firmware until applyMatrixVals).
+  const setMatrixVal = useCallback((key: keyof MatrixParams, val: number) => {
+    setMatrixState((m) => ({ ...m, [key]: val }));
+  }, []);
+
+  // Push the current live values to the firmware session.
+  const applyMatrixVals = useCallback(() => {
+    const ep = matrixToQuery(matrixRef.current);
+    pushLog('cmd', `> ${ep}`);
+    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
+  }, [pushLog]);
+
+  // Reset to identity (passthrough) in both the editor and the firmware.
+  const resetMatrix = useCallback(() => {
+    setMatrixState({ ...IDENTITY_PARAMS });
+    pushLog('cmd', '> matrix identity');
+    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+  }, [pushLog]);
+
+  // Apply a saved preset: load into the editor AND push to the firmware.
+  const applyMatrix = useCallback((m: Matrix) => {
+    const vals: MatrixParams = { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty };
+    setMatrixState(vals);
+    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(vals)).catch(() => {});
+    pushLog('ok', `[matrix] ${m.name}`);
+  }, [pushLog]);
+
+  const saveMatrix = useCallback((name: string) => {
+    const v = matrixRef.current;
+    const m: Matrix = { name, a: v.a, b: v.b, c: v.c, d: v.d, tx: v.tx, ty: v.ty };
+    const next = [...matricesRef.current.filter((x) => x.name !== name), m];
+    setMatrices(next); saveMatrices(next);
+    pushLog('ok', `[matrix] saved "${name}"`);
+  }, [pushLog]);
+
+  const renameMatrix = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    const next = matricesRef.current.map((x) => (x.name === oldName ? { ...x, name: newName.trim() } : x));
+    setMatrices(next); saveMatrices(next);
+  }, []);
+
+  const deleteMatrix = useCallback((name: string) => {
+    const next = matricesRef.current.filter((x) => x.name !== name);
+    setMatrices(next); saveMatrices(next);
+  }, []);
+
   // Running job for the Position panel: its JSON if we submitted it (console or
   // Script tab), else the firmware's text description; '' when nothing is running.
   const currentJob = (status && !status.idle && status.current > 0)
@@ -994,6 +1065,8 @@ export function usePlotter() {
     queue, log,
     status, jobs, currentJob,
     papers, applyPaper, savePaper, renamePaper, deletePaper,
+    matrix, matrices, setMatrixVal, applyMatrixVals, resetMatrix,
+    applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,
     enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,

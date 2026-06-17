@@ -39,6 +39,7 @@ export interface RawStatus {
   x: number; y: number;
   bounds: { xn: number; xp: number; yn: number; yp: number; ellipse: boolean };
   motion: { vmax: number; amax: number; run_ma: number; hold_ma: number };
+  matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number };
 }
 
 export async function getStatus(ip: string): Promise<RawStatus> {

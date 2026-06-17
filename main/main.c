@@ -68,6 +68,8 @@ static plotter_geom_t g_geom = {
     .steps_per_mm = STEPS_PER_MM,
     .left_sign    = LEFT_DIR_SIGN,
     .right_sign   = RIGHT_DIR_SIGN,
+    .aff_a = 1.0f, .aff_b = 0.0f, .aff_tx = 0.0f,   /* affine warp = identity at boot */
+    .aff_c = 0.0f, .aff_d = 1.0f, .aff_ty = 0.0f,
 };
 
 /* ---- Onboard LED (CYW43439 GPIO, Pico 2W) ----
@@ -1341,6 +1343,18 @@ void plotter_get_motion(uint32_t *vmax, uint32_t *amax, float *run_ma, float *ho
     if (run_ma)  *run_ma  = g_run_ma;
     if (hold_ma) *hold_ma = g_hold_ma;
 }
+/* Affine warp on the logical (x,y) before the belt math (session-only; identity
+ * by default). Exploratory: rotate/shear/scale/offset the whole drawing space. */
+void plotter_set_matrix(float a, float b, float c, float d, float tx, float ty)
+{
+    g_geom.aff_a = a; g_geom.aff_b = b; g_geom.aff_tx = tx;
+    g_geom.aff_c = c; g_geom.aff_d = d; g_geom.aff_ty = ty;
+}
+void plotter_get_matrix(float *a, float *b, float *c, float *d, float *tx, float *ty)
+{
+    if (a) *a = g_geom.aff_a; if (b) *b = g_geom.aff_b; if (tx) *tx = g_geom.aff_tx;
+    if (c) *c = g_geom.aff_c; if (d) *d = g_geom.aff_d; if (ty) *ty = g_geom.aff_ty;
+}
 void plotter_abort_now(void)
 {
     g_job_abort = true;
@@ -1633,6 +1647,30 @@ static int cmd_setbounds(int argc, char **argv)
            g_bounds_ellipse?"ellipse":"rect");
     return 0;
 }
+static int cmd_setmatrix(int argc, char **argv)
+{
+    /* Affine warp of the logical command space (session-only, identity default).
+     *   x' = a*x + b*y + tx ;  y' = c*x + d*y + ty
+     * `setmatrix` (no args) prints; `setmatrix identity` resets to passthrough. */
+    if (argc < 2) {
+        float a,b,c,d,tx,ty; plotter_get_matrix(&a,&b,&c,&d,&tx,&ty);
+        printf("  matrix: a=%.5f b=%.5f tx=%.3f\n          c=%.5f d=%.5f ty=%.3f\n",
+               (double)a,(double)b,(double)tx,(double)c,(double)d,(double)ty);
+        printf("usage: setmatrix <a> <b> <c> <d> <tx> <ty>   |   setmatrix identity\n");
+        return 0;
+    }
+    if (strcmp(argv[1], "identity") == 0 || strcmp(argv[1], "off") == 0) {
+        plotter_set_matrix(1,0,0,1,0,0);
+        printf("matrix reset to identity (passthrough)\n");
+        return 0;
+    }
+    if (argc < 7) { printf("usage: setmatrix <a> <b> <c> <d> <tx> <ty>\n"); return 0; }
+    plotter_set_matrix(atof(argv[1]),atof(argv[2]),atof(argv[3]),
+                       atof(argv[4]),atof(argv[5]),atof(argv[6]));
+    printf("matrix set: a=%s b=%s c=%s d=%s tx=%s ty=%s\n",
+           argv[1],argv[2],argv[3],argv[4],argv[5],argv[6]);
+    return 0;
+}
 static int cmd_belt(int argc, char **argv)
 {
     if (argc < 3) { printf("usage: belt <x_mm> <y_mm>\n"); return 0; }
@@ -1842,6 +1880,7 @@ static const cmd_entry_t s_cmds[] = {
     { "setspan",   "Set motor span (mm)",                               cmd_setspan   },
     { "setsteps",  "Set steps/mm",                                      cmd_setsteps  },
     { "setbounds", "Set drawable bounds (mm)",                          cmd_setbounds },
+    { "setmatrix", "Affine warp: setmatrix <a b c d tx ty> | identity", cmd_setmatrix },
     { "belt",      "DRY RUN: belt lengths for (x,y) mm",               cmd_belt      },
     { "goto",      "Move gondola to (x,y) mm",                         cmd_goto      },
     { "line",      "Draw line: line <x0> <y0> <x1> <y1> [cycles]",    cmd_line      },

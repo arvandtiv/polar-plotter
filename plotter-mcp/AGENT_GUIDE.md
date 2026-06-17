@@ -86,6 +86,7 @@ Rules:
   overflows; if you fire commands manually, watch `pending` so you don't get
   `rejected` ("queue full") responses.
 - `plot_set_speed(vmax)`, `plot_set_accel(amax)`, `plot_set_current(run_ma, hold_ma)`.
+- `plot_set_matrix(a, b, c, d, tx, ty)` — affine warp of the drawing space (session-only; identity = no warp).
 
 > **Every tool waits for completion.** A drawing call does not return until the
 > plotter has *physically finished* that move (it polls the job status internally).
@@ -324,6 +325,7 @@ the axes are square across the work area. Not an artistic tool.
 | `plot_set_accel` | `amax` | 50–2000 | 500 | Acceleration (microsteps/s²). Lower = smoother starts/stops, longer ramps. |
 | `plot_set_current` | `run_ma` | 100–800 (**keep ≤ 600**) | 600 | Coil current while moving. Too low = skipped steps; too high = heat. |
 | `plot_set_current` | `hold_ma` | 0–400 | 200 | Coil current at standstill. |
+| `plot_set_matrix` | `a,b,c,d,tx,ty` | any float | identity (1,0,0,1,0,0) | Affine warp of the logical space (`x'=a·x+b·y+tx`, `y'=c·x+d·y+ty`). **Session-only, exploratory** — it can't fix the line bow (an affine is linear). Pass identity to reset. |
 
 ### Cross‑cutting variable notes
 - **`cycles`** exists on every stroke/shape: it retraces *in place* to darken. It does

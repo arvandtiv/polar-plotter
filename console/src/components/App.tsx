@@ -961,7 +961,7 @@ const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>
 
 export default function App() {
   const P = usePlotter();
-  const { pen, moving, connected, motion, bounds, log, status, jobs, papers } = P;
+  const { pen, moving, connected, motion, bounds, log, status, jobs, papers, matrix, matrices } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
@@ -972,6 +972,7 @@ export default function App() {
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
   const [paperModal, setPaperModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
+  const [matrixModal, setMatrixModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
 
   const fg = f(gotoF, setGoto);
   const fc = f(circle, setCircle);
@@ -1312,6 +1313,53 @@ export default function App() {
                   </div>
                 </Card>
 
+                <Card title="Affine matrix" icon="⧉" accent="#7c3aed" collapsible>
+                  <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
+                    Warps the logical drawing space before the belt math:
+                    <span className="font-mono text-ink-300"> x′ = a·x + b·y + tx</span>,
+                    <span className="font-mono text-ink-300"> y′ = c·x + d·y + ty</span>.
+                    Session-only (never saved to the board); resets to identity on power-up.
+                    For exploring rotation/shear/scale/offset — it can't fix the line bow.
+                  </p>
+                  {/* 2×3 grid: [a b tx] / [c d ty]. Keyed by value so applying a preset
+                      remounts the uncontrolled inputs with the new numbers. */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <FieldInline key={`a-${matrix.a}`}  label="a"  value={matrix.a}  step={0.01} onChange={(v) => P.setMatrixVal('a', v)} />
+                    <FieldInline key={`b-${matrix.b}`}  label="b"  value={matrix.b}  step={0.01} onChange={(v) => P.setMatrixVal('b', v)} />
+                    <FieldInline key={`tx-${matrix.tx}`} label="tx" unit="mm" value={matrix.tx} step={1} onChange={(v) => P.setMatrixVal('tx', v)} />
+                    <FieldInline key={`c-${matrix.c}`}  label="c"  value={matrix.c}  step={0.01} onChange={(v) => P.setMatrixVal('c', v)} />
+                    <FieldInline key={`d-${matrix.d}`}  label="d"  value={matrix.d}  step={0.01} onChange={(v) => P.setMatrixVal('d', v)} />
+                    <FieldInline key={`ty-${matrix.ty}`} label="ty" unit="mm" value={matrix.ty} step={1} onChange={(v) => P.setMatrixVal('ty', v)} />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Btn variant="go" onClick={() => P.applyMatrixVals()}>✓ Apply</Btn>
+                    <Btn variant="default" onClick={() => P.resetMatrix()}>↺ Identity</Btn>
+                    <Btn variant="default" onClick={() => setMatrixModal({ mode: 'save', initial: '' })}>💾 Save as preset…</Btn>
+                  </div>
+
+                  {/* Saved matrix presets — apply / rename / delete. */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Presets</p>
+                  <div className="space-y-1.5">
+                    {matrices.map((m) => {
+                      const active = m.a === matrix.a && m.b === matrix.b && m.c === matrix.c
+                        && m.d === matrix.d && m.tx === matrix.tx && m.ty === matrix.ty;
+                      return (
+                        <div key={m.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                          <button onClick={() => P.applyMatrix(m)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                            {m.name} <span className="font-mono text-[11px] text-ink-500">[{m.a} {m.b} {m.tx} / {m.c} {m.d} {m.ty}]</span>
+                          </button>
+                          <button onClick={() => setMatrixModal({ mode: 'rename', initial: m.name, target: m.name })}
+                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
+                          <button onClick={() => P.deleteMatrix(m.name)}
+                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
+                        </div>
+                      );
+                    })}
+                    {matrices.length === 0 && <p className="text-[11px] text-ink-600">No presets saved yet.</p>}
+                  </div>
+                </Card>
+
                 <LogCard title="Log" icon="❯" accent="#059669" defaultSize="collapsed"
                   right={
                     <button onClick={() => P.pushLog('sys', '— cleared —')}
@@ -1370,6 +1418,21 @@ export default function App() {
             if (paperModal.mode === 'save') P.savePaper(name);
             else if (paperModal.target) P.renamePaper(paperModal.target, name);
             setPaperModal(null);
+          }}
+        />
+      )}
+
+      {matrixModal && (
+        <TextPromptModal
+          title={matrixModal.mode === 'save' ? 'Save current matrix as preset' : 'Rename matrix preset'}
+          label="Preset name"
+          initial={matrixModal.initial}
+          confirmText={matrixModal.mode === 'save' ? 'Save' : 'Rename'}
+          onCancel={() => setMatrixModal(null)}
+          onConfirm={(name) => {
+            if (matrixModal.mode === 'save') P.saveMatrix(name);
+            else if (matrixModal.target) P.renameMatrix(matrixModal.target, name);
+            setMatrixModal(null);
           }}
         />
       )}

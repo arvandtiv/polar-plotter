@@ -39,7 +39,20 @@ typedef struct {
     float steps_per_mm;   /* microsteps per mm of belt travel */
     int   left_sign;      /* +1/-1: sign of steps as the LEFT belt lengthens  */
     int   right_sign;     /* +1/-1: sign of steps as the RIGHT belt lengthens */
+    /* Optional affine warp applied to the logical (x,y) BEFORE the belt math:
+     *   x' = a*x + b*y + tx ;  y' = c*x + d*y + ty
+     * Identity (a=d=1, rest 0) = passthrough. Lets you explore rotation/shear/
+     * scale/offset of the whole drawing space. plt_steps_to_xy inverts it so
+     * `where`/position reporting stays in logical coordinates. */
+    float aff_a, aff_b, aff_c, aff_d, aff_tx, aff_ty;
 } plotter_geom_t;
+
+/* Reset the affine warp to identity (passthrough). */
+static inline void plt_affine_identity(plotter_geom_t *g)
+{
+    g->aff_a = 1.0f; g->aff_b = 0.0f; g->aff_tx = 0.0f;
+    g->aff_c = 0.0f; g->aff_d = 1.0f; g->aff_ty = 0.0f;
+}
 
 /* Belt length (mm) from each anchor to the gondola at (x, y). */
 static inline float plt_belt_left(const plotter_geom_t *g, float x, float y)
@@ -81,11 +94,14 @@ static inline float plt_drop_from_home_belt(float span_mm, float home_belt_mm)
 static inline void plt_xy_to_steps(const plotter_geom_t *g, float x, float y,
                                    int32_t *left_steps, int32_t *right_steps)
 {
+    /* Affine warp on the logical command (identity by default). */
+    float xa = g->aff_a * x + g->aff_b * y + g->aff_tx;
+    float ya = g->aff_c * x + g->aff_d * y + g->aff_ty;
     float l0 = plt_home_belt(g);
     *left_steps  = (int32_t)lroundf((float)g->left_sign  *
-                                    (plt_belt_left(g, x, y)  - l0) * g->steps_per_mm);
+                                    (plt_belt_left(g, xa, ya)  - l0) * g->steps_per_mm);
     *right_steps = (int32_t)lroundf((float)g->right_sign *
-                                    (plt_belt_right(g, x, y) - l0) * g->steps_per_mm);
+                                    (plt_belt_right(g, xa, ya) - l0) * g->steps_per_mm);
 }
 
 /* Number of straight chords to approximate a circle/arc of `radius_mm` so that
@@ -133,8 +149,19 @@ static inline void plt_steps_to_xy(const plotter_geom_t *g, int32_t left_steps,
 
     /* Subtracting the two belt equations eliminates y:
      *   aL^2 - aR^2 = 2*d*x  ->  x = (aL^2 - aR^2) / (2*d) */
-    *x = (al * al - ar * ar) / (2.0f * d);
-    float yy = al * al - (*x + d * 0.5f) * (*x + d * 0.5f);
+    float px = (al * al - ar * ar) / (2.0f * d);
+    float yy = al * al - (px + d * 0.5f) * (px + d * 0.5f);
     if (yy < 0.0f) yy = 0.0f;
-    *y = sqrtf(yy) - g->drop_mm;
+    float py = sqrtf(yy) - g->drop_mm;
+
+    /* Invert the affine warp so the reported coordinate is the logical one the
+     * caller commanded (identity by default -> px,py unchanged). */
+    float det = g->aff_a * g->aff_d - g->aff_b * g->aff_c;
+    if (fabsf(det) > 1e-6f) {
+        float dx = px - g->aff_tx, dy = py - g->aff_ty;
+        *x = ( g->aff_d * dx - g->aff_b * dy) / det;
+        *y = (-g->aff_c * dx + g->aff_a * dy) / det;
+    } else {
+        *x = px; *y = py;
+    }
 }

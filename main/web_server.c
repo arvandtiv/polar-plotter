@@ -431,6 +431,15 @@ static void handle_bounds(int sock, const char *qs)
     resp_enqueue(sock, "bounds queued", &c);
 }
 
+/* Affine warp of the logical (x,y) command space (session-only, identity default).
+ * Applied immediately — exploratory, not a queued drawing op. */
+static void handle_matrix(int sock, const char *qs)
+{
+    plotter_set_matrix(qf(qs, "a", 1.0f), qf(qs, "b", 0.0f), qf(qs, "c", 0.0f),
+                       qf(qs, "d", 1.0f), qf(qs, "tx", 0.0f), qf(qs, "ty", 0.0f));
+    resp_json(sock, "ok", "matrix applied");
+}
+
 static void handle_speed(int sock, const char *qs)
 {
     wcmd_t c = { .type = WCMD_SPEED };
@@ -463,8 +472,10 @@ static void handle_status(int sock, const char *qs)
     bool idle = (pending == 0);
     uint32_t mv = 0, ma = 0; float run_ma = 0.0f, hold_ma = 0.0f;
     plotter_get_motion(&mv, &ma, &run_ma, &hold_ma);
+    float ma_a, ma_b, ma_c, ma_d, ma_tx, ma_ty;
+    plotter_get_matrix(&ma_a, &ma_b, &ma_c, &ma_d, &ma_tx, &ma_ty);
 
-    char buf[800];
+    char buf[960];
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
         "\"pending\":%d,\"qcap\":%d,\"rejected\":%lu,\"peak\":%lu,"
@@ -472,7 +483,8 @@ static void handle_status(int sock, const char *qs)
         "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
         "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s},"
-        "\"motion\":{\"vmax\":%lu,\"amax\":%lu,\"run_ma\":%.1f,\"hold_ma\":%.1f}}\n",
+        "\"motion\":{\"vmax\":%lu,\"amax\":%lu,\"run_ma\":%.1f,\"hold_ma\":%.1f},"
+        "\"matrix\":{\"a\":%.5f,\"b\":%.5f,\"c\":%.5f,\"d\":%.5f,\"tx\":%.3f,\"ty\":%.3f}}\n",
         (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
         (unsigned long)g_job_done, pending, DRAW_QUEUE_DEPTH,
         (unsigned long)g_job_rejected, (unsigned long)g_pending_peak,
@@ -482,7 +494,8 @@ static void handle_status(int sock, const char *qs)
         g_drv_fault ? "false" : "true", g_drv_flags,
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
         plotter_bounds_ellipse() ? "true" : "false",
-        (unsigned long)mv, (unsigned long)ma, (double)run_ma, (double)hold_ma);
+        (unsigned long)mv, (unsigned long)ma, (double)run_ma, (double)hold_ma,
+        (double)ma_a, (double)ma_b, (double)ma_c, (double)ma_d, (double)ma_tx, (double)ma_ty);
     send_response(sock, 200, "application/json", buf);
 }
 
@@ -671,6 +684,7 @@ static const route_t s_routes[] = {
     { "/api/truchet",    handle_truchet    },
     { "/api/sethome",    handle_sethome    },
     { "/api/bounds",     handle_bounds     },
+    { "/api/matrix",     handle_matrix     },
     { "/api/speed",      handle_speed      },
     { "/api/accel",      handle_accel      },
     { "/api/cur",        handle_cur        },

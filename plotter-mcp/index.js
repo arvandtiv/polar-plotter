@@ -310,6 +310,28 @@ server.tool(
   }),
 );
 
+// plot_set_matrix ────────────────────────────────────────────────────────────
+server.tool(
+  'plot_set_matrix',
+  `Apply a 2D affine warp to the logical drawing space (session-only, NOT saved to flash).
+Every commanded (x,y) is transformed before the belt math:
+  x' = a*x + b*y + tx ;  y' = c*x + d*y + ty
+Identity (a=1, b=0, c=0, d=1, tx=0, ty=0) = no warp (the startup default).
+This is an EXPLORATION tool for rotation/shear/scale/offset of the whole drawing —
+an affine is linear and cannot correct the polargraph line-bow. Pass identity to reset.`,
+  {
+    a:  z.number().describe('x scale / cos term (identity 1)'),
+    b:  z.number().describe('x shear from y (identity 0)'),
+    c:  z.number().describe('y shear from x (identity 0)'),
+    d:  z.number().describe('y scale / cos term (identity 1)'),
+    tx: z.number().describe('x translation in mm (identity 0)'),
+    ty: z.number().describe('y translation in mm (identity 0)'),
+  },
+  async ({ a, b, c, d, tx, ty }) => ({
+    content: [{ type: 'text', text: ok(await api(`matrix?a=${a}&b=${b}&c=${c}&d=${d}&tx=${tx}&ty=${ty}`)) }],
+  }),
+);
+
 // plot_wobbly ────────────────────────────────────────────────────────────────
 server.tool(
   'plot_wobbly',
