@@ -91,7 +91,7 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.1.0',
+  version: '1.2.0',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
