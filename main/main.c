@@ -220,19 +220,15 @@ void plotter_clear_fault(void)
     web_log("fault / E-STOP cleared — drivers reconfigured & re-enabled");
 }
 
-/* Hardware E-STOP ISR (GPIO falling edge, button → GND, internal pull-up). Cuts the
- * TMC output stage in hardware right here — no SPI, no motion task, ~µs — then
- * latches it off (so the next move can't silently re-enable) and flags the motion
- * loop to bail at its next poll. Kept tiny: only register writes + volatile flags. */
+/* Hardware E-STOP ISR (GPIO falling edge, button → GND, internal pull-up). Kept
+ * tiny: sets the latch + abort flags (which gate the streaming and bail the motion
+ * loop) and wakes the high-priority responder that does the actual hard stop over
+ * SPI. We do NOT cut ENN here — a freewheel coasts at speed; the responder brakes. */
 static void estop_isr(uint gpio, uint32_t events)
 {
     (void)gpio; (void)events;
-    gpio_put(PIN_ENN, !ENN_ON_LEVEL);   /* drivers OFF immediately (hardware) */
-    tmc.hard_off = true;                 /* block any re-enable from the motion task */
-    g_estop      = true;                 /* motion_should_abort() bails the in-flight move */
-    g_job_abort  = true;                 /* trip the generic abort too (checked first in the loop) */
-    /* Wake the high-priority e-stop task to actively halt the chip's ramp generator
-     * over SPI — ENN-cut alone leaves the ramp commanding motion toward XTARGET. */
+    g_estop      = true;   /* gates path_emit + bails the motion loop (no new moves issued) */
+    g_job_abort  = true;
     if (s_estop_task) {
         BaseType_t hpw = pdFALSE;
         vTaskNotifyGiveFromISR(s_estop_task, &hpw);
@@ -240,26 +236,30 @@ static void estop_isr(uint gpio, uint32_t events)
     }
 }
 
-/* High-priority (> motion task) E-STOP responder: woken by the ISR, it preempts the
- * motion task and STOPS THE RAMP GENERATOR over SPI (VMAX=0 + XTARGET=XACTUAL) so the
- * chip immediately stops driving the motors, on top of the hardware ENN cut. */
+/* High-priority (> motion task) E-STOP responder. The chip's ramp generator is
+ * commanded toward a far XTARGET (look-ahead), so a freewheel would COAST at speed.
+ * Instead we ACTIVELY BRAKE: max deceleration + VMAX=0 + target pinned to the current
+ * position, re-applied for ~60 ms so it overrides any in-flight streamed move and the
+ * motor decelerates HARD to a standstill — no coast. Once stopped we cut power. */
 static void estop_task(void *arg)
 {
     (void)arg;
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        gpio_put(PIN_ENN, !ENN_ON_LEVEL);                 /* ENN off (if the pin is effective) */
-        /* De-energize the coils over SPI regardless of the ENN pin: CHOPCONF TOFF=0
-         * switches the output stage off immediately — instant freewheel. This is the
-         * real "stop now"; ENN is a backup. */
+        for (int i = 0; i < 30; i++) {
+            for (int m = 0; m < 2; m++) {
+                tmc5072_write(&tmc, TMC5072_DMAX(m), 0xFFFF);   /* max decel */
+                tmc5072_write(&tmc, TMC5072_VMAX(m), 0);        /* no velocity allowed */
+                tmc5072_write(&tmc, TMC5072_XTARGET(m), (uint32_t)tmc5072_position(&tmc, m));
+            }
+            vTaskDelay(pdMS_TO_TICKS(2));
+        }
+        /* Stopped — now de-energize and latch off until an explicit clear. */
+        gpio_put(PIN_ENN, !ENN_ON_LEVEL);
+        tmc.hard_off = true;
         tmc5072_write(&tmc, TMC5072_CHOPCONF(MOTOR_THETA), 0);
         tmc5072_write(&tmc, TMC5072_CHOPCONF(MOTOR_RHO),   0);
-        tmc5072_stop(&tmc, MOTOR_THETA);                  /* VMAX=0 -> also halt the ramp */
-        tmc5072_stop(&tmc, MOTOR_RHO);
-        /* Pin target to the current position so nothing lurches when re-energized. */
-        tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_THETA), (uint32_t)tmc5072_position(&tmc, MOTOR_THETA));
-        tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_RHO),   (uint32_t)tmc5072_position(&tmc, MOTOR_RHO));
-        web_log("!! E-STOP — motors de-energized & ramp halted");
+        web_log("!! E-STOP — emergency brake, motors de-energized");
     }
 }
 
@@ -563,6 +563,7 @@ static void path_begin(float x0, float y0)
 
 static void path_emit(bool last)
 {
+    if (g_estop) return;   /* stop feeding the chip new targets the instant e-stop fires */
     int32_t tl = s_path.pend_l, tr = s_path.pend_r;
     if (s_path.first || last)
         tmc5072_move_scaled_from(&tmc, tr, tl, s_path.cur_r, s_path.cur_l);
@@ -845,7 +846,7 @@ static void do_draw_border(void)
         float px = cx2 + rx2, py = cy2;
         move_to_xy(px, py);
         pen_drop();
-        for (int i = 1; i <= N; i++) {
+        for (int i = 1; i <= N && !motion_should_abort(); i++) {
             float th = (float)i / (float)N * 6.28318530718f;
             float nx = cx2 + rx2 * cosf(th);
             float ny = cy2 + ry2 * sinf(th);
@@ -855,10 +856,10 @@ static void do_draw_border(void)
     } else {
         move_to_xy(g_x_min, g_y_min);
         pen_drop();
-        draw_line_mm(g_x_min, g_y_min, g_x_max, g_y_min);
-        draw_line_mm(g_x_max, g_y_min, g_x_max, g_y_max);
-        draw_line_mm(g_x_max, g_y_max, g_x_min, g_y_max);
-        draw_line_mm(g_x_min, g_y_max, g_x_min, g_y_min);
+        if (!motion_should_abort()) draw_line_mm(g_x_min, g_y_min, g_x_max, g_y_min);
+        if (!motion_should_abort()) draw_line_mm(g_x_max, g_y_min, g_x_max, g_y_max);
+        if (!motion_should_abort()) draw_line_mm(g_x_max, g_y_max, g_x_min, g_y_max);
+        if (!motion_should_abort()) draw_line_mm(g_x_min, g_y_max, g_x_min, g_y_min);
     }
     pen_lift();
     emit_pos_event();

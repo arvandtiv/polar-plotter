@@ -779,7 +779,7 @@ const TRUCHET_MOTIF_HELP = [
 //  Hardware / chip reference data
 // ================================================================
 
-const FW_VERSION = 'pico2 · v1.1 Stable';
+const FW_VERSION = 'pico2 · v1.2 dev';
 
 const TMC5072_SPECS = [
   { label: 'Driver IC',      value: 'TMC5072',                    note: 'Trinamic / Analog Devices' },
