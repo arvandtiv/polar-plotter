@@ -422,6 +422,36 @@ const BOUNDS_PRESETS = [
   { label: 'Water - paper', up: 274, down: 105, left: 260, right: 260 },
 ] as const;
 
+// Quick paper-type picker shown above the Position window — applies a work-area
+// preset (sets + commits bounds) with one click; highlights the active one.
+function PaperPresets({ bounds, setBounds, commitBounds }: {
+  bounds: PlotterBounds;
+  setBounds: (b: PlotterBounds) => void;
+  commitBounds: (b: PlotterBounds) => void;
+}) {
+  const isActive = (p: typeof BOUNDS_PRESETS[number]) =>
+    bounds.left === p.left && bounds.right === p.right && bounds.up === p.up && bounds.down === p.down;
+  const pick = (p: typeof BOUNDS_PRESETS[number]) => {
+    const nb: PlotterBounds = { up: p.up, down: p.down, left: p.left, right: p.right, shape: bounds.shape };
+    setBounds(nb); commitBounds(nb);
+  };
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-ink-750 bg-ink-900 px-3 py-2 shadow-card">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">Paper type</span>
+      <div className="flex flex-wrap gap-1.5">
+        {BOUNDS_PRESETS.map((p) => (
+          <button key={p.label} onClick={() => pick(p)}
+            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+              isActive(p) ? 'border-cyanx/40 bg-cyanx/15 text-cyanx'
+                          : 'border-ink-700 bg-ink-850 text-ink-400 hover:border-cyanx/40 hover:text-cyanx'}`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BoundsControl({ bounds, setBounds, commitBounds }: {
   bounds: PlotterBounds;
   setBounds: (b: PlotterBounds | ((p: PlotterBounds) => PlotterBounds)) => void;
@@ -628,22 +658,29 @@ function IpInput({ ip, onSave }: { ip: string; onSave: (v: string) => void }) {
 
 function DriverBanner({ status, onClearFault }: { status: PlotterStatus | null; onClearFault: () => void }) {
   const fault = status ? !status.drvOk : false;
+  const estop = status?.estop ?? false;
+  const bad = fault || estop;
   return (
-    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${fault ? 'border-stop/60 bg-stop/10' : 'border-go/40 bg-go/[0.06]'}`}>
+    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${bad ? 'border-stop/60 bg-stop/10' : 'border-go/40 bg-go/[0.06]'}`}>
       <span className="relative flex h-3 w-3 shrink-0">
-        {fault && <span className="absolute inline-flex h-full w-full rounded-full bg-stop opacity-70 blink" />}
-        <span className={`relative inline-flex h-3 w-3 rounded-full ${status == null ? 'bg-ink-600' : fault ? 'bg-stop' : 'bg-go'}`} />
+        {bad && <span className="absolute inline-flex h-full w-full rounded-full bg-stop opacity-70 blink" />}
+        <span className={`relative inline-flex h-3 w-3 rounded-full ${status == null ? 'bg-ink-600' : bad ? 'bg-stop' : 'bg-go'}`} />
       </span>
       <div className="min-w-0 flex-1">
-        <div className={`text-[12px] font-semibold uppercase tracking-wider ${status == null ? 'text-ink-500' : fault ? 'text-stop' : 'text-go'}`}>
-          {status == null ? 'Driver — no data' : fault ? 'Driver fault' : 'Driver healthy'}
+        <div className={`text-[12px] font-semibold uppercase tracking-wider ${status == null ? 'text-ink-500' : bad ? 'text-stop' : 'text-go'}`}>
+          {status == null ? 'Driver — no data'
+            : estop ? '⛔ Hardware E-STOP — motors cut'
+            : fault ? 'Driver fault'
+            : 'Driver healthy'}
         </div>
         {fault && <div className="font-mono text-[12.5px] text-ink-200 break-words">{status?.drvFlags}</div>}
+        {estop && !fault && <div className="text-[11.5px] text-ink-400">Clear to release the latch &amp; re-enable, then re-home.</div>}
+        {!bad && status && <div className="font-mono text-[11.5px] text-ink-500">flags: {status.drvFlags}</div>}
       </div>
-      {fault && (
+      {bad && (
         <button onClick={onClearFault}
           className="shrink-0 rounded-lg border border-stop/50 bg-stop/15 px-3 py-1.5 text-[12px] font-semibold text-stop hover:bg-stop/25 transition-colors active:scale-[.97]">
-          Clear fault
+          {estop ? 'Clear E-STOP' : 'Clear fault'}
         </button>
       )}
     </div>
@@ -959,7 +996,7 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
 
 // ================================================================
 
-type Tab = 'draw' | 'jog' | 'area' | 'calib' | 'ai' | 'script';
+type Tab = 'area' | 'draw' | 'ai';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
@@ -974,7 +1011,7 @@ export default function App() {
   const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1 });
   const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
-  const [tab, setTab]       = useState<Tab>('draw');
+  const [tab, setTab]       = useState<Tab>('area');
 
   const fg = f(gotoF, setGoto);
   const fc = f(circle, setCircle);
@@ -1030,7 +1067,8 @@ export default function App() {
 
           {/* ====== LEFT: machine state ====== */}
           <div className="space-y-4 overflow-y-auto">
-            <Card title="Position" icon="◎" accent="#0284c7" right={
+            <PaperPresets bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
+            <Card title="Position" icon="◎" accent="#0284c7" defaultCollapsed={false} right={
               <div className="flex items-center gap-3 font-mono text-[12px]">
                 <span className={moving ? 'text-warn' : 'text-ink-500'}>{moving ? '● MOVING' : '○ idle'}</span>
                 <span className={pen.down ? 'text-go' : 'text-ink-500'}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
@@ -1051,20 +1089,16 @@ export default function App() {
               </div>
             </Card>
 
-            {/* Motion */}
-            <Card title="Motion" icon="⚡" accent="#d97706" collapsible>
-              <div className="space-y-5">
-                <ParamSlider label="Speed" unit="µstep/t" value={motion.vmax} min={260000} max={440000} step={5000} def={DEFAULTS.motion.vmax} accent="#0284c7"
-                  onInput={(v) => P.setMotion('vmax', v)} onCommit={(v) => { P.setMotion('vmax', v); P.commitMotion('vmax', v); }} />
-                <ParamSlider label="Acceleration" unit="AMAX=DMAX" value={motion.amax} min={1270} max={2110} step={10} def={DEFAULTS.motion.amax} accent="#059669"
-                  onInput={(v) => P.setMotion('amax', v)} onCommit={(v) => { P.setMotion('amax', v); P.commitMotion('amax', v); }} />
-                <div className="h-px bg-ink-800" />
-                <ParamSlider label="Run current" unit="mA" value={motion.run} min={700} max={1180} step={20} def={DEFAULTS.motion.run} accent="#d97706"
-                  onInput={(v) => P.setMotion('run', v)} onCommit={(v) => { P.setMotion('run', v); P.commitMotion('run', v); }} />
-                <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={320} max={560} step={20} def={DEFAULTS.motion.hold} accent="#ea580c"
-                  onInput={(v) => P.setMotion('hold', v)} onCommit={(v) => { P.setMotion('hold', v); P.commitMotion('hold', v); }} />
-              </div>
+            <Card title="Driver health" icon="❤" accent="#059669">
+              <DriverBanner status={status} onClearFault={P.clearFault} />
+              <p className="mt-3 text-[12px] leading-relaxed text-ink-500">
+                The MCP halts the running job and pauses the script on a real TMC5072 fault
+                (over-temp, coil short). Fix the cause, then <span className="text-ink-300">Clear</span> to resume.
+              </p>
             </Card>
+
+            <ChipInfoCard status={status} />
+
           </div>
 
           {/* ====== RIGHT: controls ======
@@ -1077,7 +1111,7 @@ export default function App() {
           <div className="flex flex-col gap-4 h-full min-h-0">
             {/* Tab bar */}
             <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
-              {([['draw','Draw'],['jog','Move'],['script','Script'],['area','Work Area'],['calib','Calibrate'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
+              {([['area','Calibration'],['draw','Draw'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors ${tab === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
               ))}
@@ -1087,26 +1121,6 @@ export default function App() {
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
             {/* Tab panels */}
             <div className="space-y-4">
-            {/* ---- Move tab ---- */}
-            {tab === 'jog' && (
-              <Card title="Move to point" icon="↗" accent="#0284c7" defaultCollapsed={false}>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                  <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
-                  <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
-                  <Btn variant="primary" className="col-span-2 sm:col-span-1"
-                    onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
-                </div>
-                <div className="mt-4">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
-                  <JogPad onJog={(dx, dy) => {
-                    const nx = pen.x + dx, ny = pen.y + dy;
-                    setGoto({ x: nx, y: ny });
-                    P.enqueue({ type: 'goto', x: nx, y: ny });
-                  }} />
-                </div>
-              </Card>
-            )}
-
             {/* ---- Draw tab ---- */}
             {tab === 'draw' && (
               <>
@@ -1229,68 +1243,92 @@ export default function App() {
               </>
             )}
 
-            {/* ---- Script tab ---- */}
-            {tab === 'script' && <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />}
-
-            {/* ---- Work Area tab ---- */}
+            {/* ---- Work area tab (work area + move + calibration) ---- */}
             {tab === 'area' && (
-              <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible defaultCollapsed={false}>
-                <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
-                  Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
-                  Updates the canvas and sends to firmware.
-                </p>
-                <BoundsControl bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
-                <div className="mt-4 flex gap-2">
-                  <Btn variant="ghost" onClick={() => { P.setBounds(DEFAULTS.bounds); P.commitBounds(DEFAULTS.bounds); }}>Reset to default</Btn>
-                </div>
-              </Card>
-            )}
+              <>
+                <Card title="Move to point" icon="↗" accent="#0284c7" defaultCollapsed={false}>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                    <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
+                    <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
+                    <Btn variant="primary" className="col-span-2 sm:col-span-1"
+                      onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
+                  </div>
+                  <div className="mt-4">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
+                    <JogPad onJog={(dx, dy) => {
+                      const nx = pen.x + dx, ny = pen.y + dy;
+                      setGoto({ x: nx, y: ny });
+                      P.enqueue({ type: 'goto', x: nx, y: ny });
+                    }} />
+                  </div>
+                </Card>
 
-            {/* ---- Calibrate tab ---- */}
-            {tab === 'calib' && (
-              <Card title="Calibration" icon="✛" accent="#db2777" collapsible defaultCollapsed={false}>
-                {/* Limit path: walk the active work-area boundary once (pen down) so you
-                    can compare the firmware's reachable edge against the physical machine. */}
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Limit path</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Btn variant="go" onClick={() => P.enqueue({ type: 'border', ...bounds })}>
-                    ⬡ Walk limits ({bounds.shape === 'ellipse' ? 'ellipse' : 'rect'})
-                  </Btn>
-                  <span className="font-mono text-[11px] text-ink-500">
-                    {bounds.left + bounds.right}×{bounds.up + bounds.down} mm
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
-                  Traces the boundary set under <span className="text-ink-300">Work Area</span> once (pen down)
-                  so you can compare the firmware's reachable edge against the physical machine.
-                </p>
+                <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
+                  <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
+                    Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
+                    Updates the canvas and sends to firmware.
+                  </p>
+                  <BoundsControl bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
+                  <div className="mt-4 flex gap-2">
+                    <Btn variant="ghost" onClick={() => { P.setBounds(DEFAULTS.bounds); P.commitBounds(DEFAULTS.bounds); }}>Reset to default</Btn>
+                  </div>
+                </Card>
 
-                <div className="my-4 h-px bg-ink-800" />
+                <Card title="Helper" icon="✛" accent="#db2777" collapsible>
+                  {/* Limit path: walk the active work-area boundary once (pen down). */}
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Limit path</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Btn variant="go" onClick={() => P.enqueue({ type: 'border', ...bounds })}>
+                      ⬡ Walk limits ({bounds.shape === 'ellipse' ? 'ellipse' : 'rect'})
+                    </Btn>
+                    <span className="font-mono text-[11px] text-ink-500">
+                      {bounds.left + bounds.right}×{bounds.up + bounds.down} mm
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
+                    Traces the active work-area boundary once (pen down) so you can compare the
+                    firmware's reachable edge against the physical machine.
+                  </p>
 
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Center patterns</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <FieldInline label="Center X" unit="mm" value={calib.cx} onChange={fca('cx') as (v: number) => void} />
-                  <FieldInline label="Center Y" unit="mm" value={calib.cy} onChange={fca('cy') as (v: number) => void} />
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Btn variant="primary" onClick={() => P.enqueue({ type: 'bullseye', ...calib })}>◎ Bullseye</Btn>
-                </div>
-              </Card>
+                  <div className="my-4 h-px bg-ink-800" />
+
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Center patterns</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FieldInline label="Center X" unit="mm" value={calib.cx} onChange={fca('cx') as (v: number) => void} />
+                    <FieldInline label="Center Y" unit="mm" value={calib.cy} onChange={fca('cy') as (v: number) => void} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Btn variant="primary" onClick={() => P.enqueue({ type: 'bullseye', ...calib })}>◎ Bullseye</Btn>
+                  </div>
+                </Card>
+
+                <Card title="Motion" icon="⚡" accent="#d97706" collapsible>
+                  <div className="space-y-5">
+                    <ParamSlider label="Speed" unit="µstep/t" value={motion.vmax} min={260000} max={440000} step={5000} def={DEFAULTS.motion.vmax} accent="#0284c7"
+                      onInput={(v) => P.setMotion('vmax', v)} onCommit={(v) => { P.setMotion('vmax', v); P.commitMotion('vmax', v); }} />
+                    <ParamSlider label="Acceleration" unit="AMAX=DMAX" value={motion.amax} min={1270} max={2110} step={10} def={DEFAULTS.motion.amax} accent="#059669"
+                      onInput={(v) => P.setMotion('amax', v)} onCommit={(v) => { P.setMotion('amax', v); P.commitMotion('amax', v); }} />
+                    <div className="h-px bg-ink-800" />
+                    <ParamSlider label="Run current" unit="mA" value={motion.run} min={700} max={1180} step={20} def={DEFAULTS.motion.run} accent="#d97706"
+                      onInput={(v) => P.setMotion('run', v)} onCommit={(v) => { P.setMotion('run', v); P.commitMotion('run', v); }} />
+                    <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={320} max={560} step={20} def={DEFAULTS.motion.hold} accent="#ea580c"
+                      onInput={(v) => P.setMotion('hold', v)} onCommit={(v) => { P.setMotion('hold', v); P.commitMotion('hold', v); }} />
+                  </div>
+                </Card>
+
+                <LogCard title="Log" icon="❯" accent="#059669" defaultSize="collapsed"
+                  right={
+                    <button onClick={() => P.pushLog('sys', '— cleared —')}
+                      className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
+                  }>
+                  <LogView log={log} />
+                </LogCard>
+              </>
             )}
 
             {/* ---- Autonomous tab ---- */}
             {tab === 'ai' && (
               <>
-                <Card title="Driver health" icon="❤" accent="#059669">
-                  <DriverBanner status={status} onClearFault={P.clearFault} />
-                  <p className="mt-3 text-[12px] leading-relaxed text-ink-500">
-                    The MCP halts the running job and pauses the script on a real TMC5072 fault
-                    (over-temp, coil short). Fix the cause, then <span className="text-ink-300">Clear fault</span> to resume.
-                  </p>
-                </Card>
-
-                <ChipInfoCard status={status} />
-
                 <LogCard title="Job queue" icon="▦" accent="#0284c7" defaultSize="expanded"
                   right={
                     <div className="flex items-center gap-1">
@@ -1310,6 +1348,8 @@ export default function App() {
                   </div>
                 </LogCard>
 
+                <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
+
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />
                 </LogCard>
@@ -1317,16 +1357,7 @@ export default function App() {
             )}
 
             </div>{/* end tab panels */}
-
-            {/* Log — sits directly after the method cards */}
-            <LogCard title="Log" icon="❯" accent="#059669"
-              right={
-                <button onClick={() => P.pushLog('sys', '— cleared —')}
-                  className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
-              }>
-              <LogView log={log} />
-            </LogCard>
-            </div>{/* end methods + log scroll region */}
+            </div>{/* end methods scroll region */}
           </div>
         </div>
         </div>

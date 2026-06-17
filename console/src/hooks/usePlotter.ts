@@ -39,6 +39,7 @@ export interface PlotterStatus {
   enqueued: number; current: number; done: number; pending: number;
   idle: boolean; aborting: boolean; paused: boolean; estop: boolean; job: string;
   drvOk: boolean; drvFlags: string;
+  motion?: { vmax: number; amax: number; run_ma: number; hold_ma: number };
 }
 // One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
 // MCP's full plan), so labels are captured as `current` advances; not-yet-run jobs
@@ -786,17 +787,12 @@ export function usePlotter() {
       setPen((p) => ({ ...p, x: s.x, y: s.y }));
       setMoving(!s.idle && !s.paused);
 
-      // On first successful response, seed work-area and motion params from the firmware
-      // so the console reflects what's actually configured rather than hard-coded defaults.
-      if (!boundsSeeded.current && s.bounds) {
+      // On first connect, SELECT the default paper (Water - paper): set it in the
+      // console and push it to the firmware so the board matches the chosen preset.
+      if (!boundsSeeded.current) {
         boundsSeeded.current = true;
-        setBoundsState({
-          left:  -s.bounds.xn,
-          right:  s.bounds.xp,
-          up:     s.bounds.yp,
-          down:  -s.bounds.yn,
-          shape:  s.bounds.ellipse ? 'ellipse' : 'rect',
-        });
+        setBoundsState({ ...DEFAULTS.bounds });
+        apiGet(ip, boundsToQuery(DEFAULTS.bounds)).catch(() => {});
       }
       if (!motionSeeded.current && s.motion) {
         motionSeeded.current = true;
@@ -813,7 +809,7 @@ export function usePlotter() {
       setStatus({
         enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
         idle: s.idle, aborting: s.aborting, paused: s.paused, estop: !!s.estop, job: s.job,
-        drvOk: s.drv_ok, drvFlags: s.drv_flags,
+        drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion,
       });
 
       // Build the job rows. Cap to a trailing window so a long session doesn't
