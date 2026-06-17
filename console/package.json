@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "astro dev --port 4321",
+    "dev": "astro dev --host --port 4321",
     "build": "astro build",
     "preview": "astro preview",
     "start": "astro build && astro preview --port 4321"
