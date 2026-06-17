@@ -417,36 +417,27 @@ function PlotterCanvas({ bounds, pen, moving }: {
 // an explicit "Apply bounds" button instead of updating on every keystroke.
 // The previous keystroke-driven approach caused the canvas to repaint and the
 // firmware to receive a new /api/bounds on every character typed ("too noisy").
-// Work-area presets, one per paper size — add more as new papers are introduced.
-const BOUNDS_PRESETS = [
-  { label: 'Water - paper', up: 274, down: 105, left: 260, right: 260 },
-] as const;
-
-// Quick paper-type picker shown above the Position window — applies a work-area
-// preset (sets + commits bounds) with one click; highlights the active one.
-function PaperPresets({ bounds, setBounds, commitBounds }: {
-  bounds: PlotterBounds;
-  setBounds: (b: PlotterBounds) => void;
-  commitBounds: (b: PlotterBounds) => void;
+// Small in-app modal that prompts for a single line of text (used to name a paper).
+function TextPromptModal({ title, label, initial, confirmText, onConfirm, onCancel }: {
+  title: string; label: string; initial: string; confirmText: string;
+  onConfirm: (value: string) => void; onCancel: () => void;
 }) {
-  const isActive = (p: typeof BOUNDS_PRESETS[number]) =>
-    bounds.left === p.left && bounds.right === p.right && bounds.up === p.up && bounds.down === p.down;
-  const pick = (p: typeof BOUNDS_PRESETS[number]) => {
-    const nb: PlotterBounds = { up: p.up, down: p.down, left: p.left, right: p.right, shape: bounds.shape };
-    setBounds(nb); commitBounds(nb);
-  };
+  const [val, setVal] = useState(initial);
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-ink-750 bg-ink-900 px-3 py-2 shadow-card">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">Paper type</span>
-      <div className="flex flex-wrap gap-1.5">
-        {BOUNDS_PRESETS.map((p) => (
-          <button key={p.label} onClick={() => pick(p)}
-            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              isActive(p) ? 'border-cyanx/40 bg-cyanx/15 text-cyanx'
-                          : 'border-ink-700 bg-ink-850 text-ink-400 hover:border-cyanx/40 hover:text-cyanx'}`}>
-            {p.label}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
+      <div className="w-80 rounded-xl border border-ink-700 bg-ink-900 p-4 shadow-card" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-2 text-[13px] font-semibold text-ink-100">{title}</h3>
+        <label className="text-[11px] text-ink-500">{label}</label>
+        <input autoFocus value={val} onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) onConfirm(val.trim()); if (e.key === 'Escape') onCancel(); }}
+          className="mt-1 w-full rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50" />
+        <div className="mt-3 flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-[12px] text-ink-400 hover:text-ink-200">Cancel</button>
+          <button onClick={() => val.trim() && onConfirm(val.trim())} disabled={!val.trim()}
+            className="rounded-md border border-cyanx/40 bg-cyanx/15 px-3 py-1.5 text-[12px] font-semibold text-cyanx hover:bg-cyanx/25 disabled:opacity-40">
+            {confirmText}
           </button>
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -491,16 +482,6 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
     commitBounds(nb);
   };
 
-  const applyPreset = (p: typeof BOUNDS_PRESETS[number]) => {
-    if (refs.up.current)    refs.up.current.value    = String(p.up);
-    if (refs.down.current)  refs.down.current.value  = String(p.down);
-    if (refs.left.current)  refs.left.current.value  = String(p.left);
-    if (refs.right.current) refs.right.current.value = String(p.right);
-    const nb: PlotterBounds = { up: p.up, down: p.down, left: p.left, right: p.right, shape };
-    setBounds(nb);
-    commitBounds(nb);
-  };
-
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') apply(); };
 
   // Switching shape applies immediately (and re-sends bounds) so the canvas + firmware
@@ -522,28 +503,6 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
 
   return (
     <div className="space-y-3">
-      {/* ---- Presets: Y grows, X stays ±240 ---- */}
-      <div>
-        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-          Presets — X ±240 mm, Y grows
-        </span>
-        <div className="flex gap-1">
-          {BOUNDS_PRESETS.map((p) => {
-            const active = bounds.up === p.up && bounds.down === p.down
-                        && bounds.left === p.left && bounds.right === p.right;
-            return (
-              <button key={p.label} onClick={() => applyPreset(p)}
-                className={`flex-1 rounded-md py-1.5 text-[11px] font-mono font-semibold transition-colors
-                  ${active
-                    ? 'bg-cyanx text-white'
-                    : 'bg-ink-850 border border-ink-700 text-ink-400 hover:border-cyanx/40 hover:text-cyanx'}`}>
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {row(refs.up,    'Down (+Y)',  bounds.up)}
       {row(refs.down,  'Up  (−Y)',   bounds.down)}
       {row(refs.left,  'Left  (−X)', bounds.left)}
@@ -855,7 +814,7 @@ const SCRIPT_HINT = `[
 ]`;
 
 function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
-  sendRaw: (ep: string) => Promise<boolean>;
+  sendRaw: (ep: string, json?: string) => Promise<boolean>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
@@ -902,7 +861,7 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
       // burst (conservative → can't overflow), then re-read pending next loop.
       let budget = HIGH - pend;
       while (budget-- > 0 && i < good.length && !cancelled()) {
-        const ok = await sendRaw(good[i].query!);
+        const ok = await sendRaw(good[i].query!, good[i].raw);
         if (!ok) errors++;   // real rejection (e.g. out of bounds) — skip, don't retry
         i++;
         setRun(r => ({ ...r, sent: i, errors }));
@@ -1002,7 +961,7 @@ const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>
 
 export default function App() {
   const P = usePlotter();
-  const { pen, moving, connected, motion, bounds, log, status, jobs } = P;
+  const { pen, moving, connected, motion, bounds, log, status, jobs, papers } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
@@ -1012,6 +971,7 @@ export default function App() {
   const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
+  const [paperModal, setPaperModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
 
   const fg = f(gotoF, setGoto);
   const fc = f(circle, setCircle);
@@ -1067,12 +1027,8 @@ export default function App() {
 
           {/* ====== LEFT: machine state ====== */}
           <div className="space-y-4 overflow-y-auto">
-            <PaperPresets bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
             <Card title="Position" icon="◎" accent="#0284c7" defaultCollapsed={false} right={
-              <div className="flex items-center gap-3 font-mono text-[12px]">
-                <span className={moving ? 'text-warn' : 'text-ink-500'}>{moving ? '● MOVING' : '○ idle'}</span>
-                <span className={pen.down ? 'text-go' : 'text-ink-500'}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
-              </div>
+              <span className={`font-mono text-[12px] ${pen.down ? 'text-go' : 'text-ink-500'}`}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
             }>
               <PlotterCanvas bounds={bounds} pen={pen} moving={moving} />
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1081,11 +1037,29 @@ export default function App() {
                 <Readout label="Pending" value={status?.pending ?? 0} unit="job" />
                 <Readout label="Done" value={status?.done ?? 0} unit="" />
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
+              {/* Current job — its exact JSON while running (console + Script tab), else idle. */}
+              <div className="mt-3">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Current job</div>
+                <div className={`rounded-md border border-ink-800 bg-ink-950 px-2.5 py-1.5 font-mono text-[11px] break-all ${P.currentJob ? 'text-cyanx' : 'text-ink-600'}`}>
+                  {P.currentJob || '— idle —'}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
                 <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
                 <Btn variant={pen.down ? 'default' : 'go'} onClick={() => P.enqueue({ type: 'pen', pos: 'up' })}>Pen Up</Btn>
                 <Btn variant={pen.down ? 'go' : 'default'} onClick={() => P.enqueue({ type: 'pen', pos: 'down' })}>Pen Down</Btn>
+                {/* Paper type selector — right-aligned; manage papers in the Calibration tab. */}
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper</span>
+                  <select
+                    value={papers.find((p) => p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down)?.name ?? ''}
+                    onChange={(e) => { const p = papers.find((x) => x.name === e.target.value); if (p) P.applyPaper(p); }}
+                    className="rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50">
+                    <option value="" disabled hidden>Custom…</option>
+                    {papers.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
               </div>
             </Card>
 
@@ -1271,7 +1245,28 @@ export default function App() {
                   </p>
                   <BoundsControl bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
                   <div className="mt-4 flex gap-2">
-                    <Btn variant="ghost" onClick={() => { P.setBounds(DEFAULTS.bounds); P.commitBounds(DEFAULTS.bounds); }}>Reset to default</Btn>
+                    <Btn variant="go" onClick={() => setPaperModal({ mode: 'save', initial: '' })}>💾 Save as paper…</Btn>
+                  </div>
+
+                  {/* Saved papers — apply / rename / delete. New ones come from "Save as paper". */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper types</p>
+                  <div className="space-y-1.5">
+                    {papers.map((p) => {
+                      const active = p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down;
+                      return (
+                        <div key={p.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                          <button onClick={() => P.applyPaper(p)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                            {p.name} <span className="font-mono text-[11px] text-ink-500">{p.left + p.right}×{p.up + p.down} mm</span>
+                          </button>
+                          <button onClick={() => setPaperModal({ mode: 'rename', initial: p.name, target: p.name })}
+                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
+                          <button onClick={() => P.deletePaper(p.name)}
+                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
+                        </div>
+                      );
+                    })}
+                    {papers.length === 0 && <p className="text-[11px] text-ink-600">No papers saved yet.</p>}
                   </div>
                 </Card>
 
@@ -1363,6 +1358,21 @@ export default function App() {
         </div>
         </div>
       </main>
+
+      {paperModal && (
+        <TextPromptModal
+          title={paperModal.mode === 'save' ? 'Save current work area as paper' : 'Rename paper'}
+          label="Paper name"
+          initial={paperModal.initial}
+          confirmText={paperModal.mode === 'save' ? 'Save' : 'Rename'}
+          onCancel={() => setPaperModal(null)}
+          onConfirm={(name) => {
+            if (paperModal.mode === 'save') P.savePaper(name);
+            else if (paperModal.target) P.renamePaper(paperModal.target, name);
+            setPaperModal(null);
+          }}
+        />
+      )}
     </div>
   );
 }

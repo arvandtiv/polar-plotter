@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiGet, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
+import { loadPapers, savePapers, type Paper } from '../lib/papers';
+export type { Paper } from '../lib/papers';
 
 // ---- types -------------------------------------------------------
 
@@ -671,10 +673,14 @@ export function usePlotter() {
   const [log, setLog]              = useState<LogEntry[]>([mkLog('sys', 'console ready')]);
   const [status, setStatus]        = useState<PlotterStatus | null>(null);
   const [jobs, setJobs]            = useState<JobEntry[]>([]);
+  const [papers, setPapers]        = useState<Paper[]>(() => loadPapers());
 
   // Labels captured per job id as `current` advances (firmware only reports the
   // CURRENT job's label, so we remember each one to render the done-job history).
   const jobLabels = useRef<Map<number, string>>(new Map());
+  // JSON of each job we submitted (console enqueue + Script-tab items), keyed by
+  // job id, so the Position panel can show the running job's exact JSON value.
+  const jobJson = useRef<Map<number, string>>(new Map());
 
   // Tracks whether we've already seeded bounds/motion from the firmware on this IP.
   // Reset when IP changes so a new plotter gets a fresh read.
@@ -690,6 +696,8 @@ export function usePlotter() {
   // value and would otherwise see stale data (EventSource handlers, setInterval).
   // The ref is updated every render so the callback always reads the current value.
   const motionRef = useRef(motion);    motionRef.current = motion;
+  const boundsRef = useRef(bounds);    boundsRef.current = bounds;
+  const papersRef = useRef(papers);    papersRef.current = papers;
   const ipRef     = useRef(ip);        ipRef.current     = ip;
   const cancelRef = useRef(false);     // set true by stop()/clearQueue() to cancel client-side work
   const runCancelRef = useRef(false);  // set true by stop()/clearQueue() to halt a running script batch
@@ -790,12 +798,16 @@ export function usePlotter() {
       setPen((p) => ({ ...p, x: s.x, y: s.y }));
       setMoving(!s.idle && !s.paused);
 
-      // On first connect, SELECT the default paper (Water - paper): set it in the
-      // console and push it to the firmware so the board matches the chosen preset.
+      // On first connect, SELECT the default paper (first in the list): set it in
+      // the console and push it to the firmware so the board matches.
       if (!boundsSeeded.current) {
         boundsSeeded.current = true;
-        setBoundsState({ ...DEFAULTS.bounds });
-        apiGet(ip, boundsToQuery(DEFAULTS.bounds)).catch(() => {});
+        const p = papersRef.current[0];
+        const b: PlotterBounds = p
+          ? { left: p.left, right: p.right, up: p.up, down: p.down, shape: 'rect' }
+          : { ...DEFAULTS.bounds };
+        setBoundsState(b);
+        apiGet(ip, boundsToQuery(b)).catch(() => {});
       }
       if (!motionSeeded.current && s.motion) {
         motionSeeded.current = true;
@@ -860,18 +872,19 @@ export function usePlotter() {
     if (cmd.type === 'pen') setPen((p) => ({ ...p, down: cmd.pos === 'down' }));
     setQueue((q) => [...q, cmd.type]);
     const d = await send(ep);
-    /* Register the job label at submit time so pending entries in the job list
-     * show their type (e.g. "line — pending") instead of a blank "pending…". */
-    if (d?.id) jobLabels.current.set(d.id, cmdLabel(cmd));
+    /* Register the job label + JSON at submit time so the job list shows the type
+     * and the Position panel can show the running job's exact JSON. */
+    if (d?.id) { jobLabels.current.set(d.id, cmdLabel(cmd)); jobJson.current.set(d.id, cmdToJson(cmd)); }
     setQueue((q) => q.slice(1));
   }, [send, pushLog]);
 
-  // Quiet raw send for bulk script execution — no individual log lines,
-  // returns true on ok, false on error/network failure.
-  const sendRaw = useCallback(async (endpoint: string): Promise<boolean> => {
+  // Quiet raw send for bulk script execution — no individual log lines, returns
+  // true on ok. Pass the item's JSON so the Position panel can show it while it runs.
+  const sendRaw = useCallback(async (endpoint: string, json?: string): Promise<boolean> => {
     if (!ipRef.current) return false;
     try {
       const d = await apiGet(ipRef.current, endpoint);
+      if (d.status === 'ok' && d.id != null && json) jobJson.current.set(d.id, json);
       return d.status === 'ok';
     } catch {
       return false;
@@ -941,12 +954,46 @@ export function usePlotter() {
     if (ipRef.current) send('clearfault');
   }, [send, pushLog]);
 
+  // ---- paper presets (persisted, user-managed) -----------------
+  const applyPaper = useCallback((p: Paper) => {
+    const b: PlotterBounds = { left: p.left, right: p.right, up: p.up, down: p.down, shape: 'rect' };
+    setBoundsState(b);
+    if (ipRef.current) apiGet(ipRef.current, boundsToQuery(b)).catch(() => {});
+    pushLog('ok', `[paper] ${p.name}`);
+  }, [pushLog]);
+
+  const savePaper = useCallback((name: string) => {
+    const b = boundsRef.current;
+    const p: Paper = { name, up: b.up, down: b.down, left: b.left, right: b.right };
+    const next = [...papersRef.current.filter((x) => x.name !== name), p];
+    setPapers(next); savePapers(next);
+    pushLog('ok', `[paper] saved "${name}" (${b.left + b.right}×${b.up + b.down} mm)`);
+  }, [pushLog]);
+
+  const renamePaper = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    const next = papersRef.current.map((x) => (x.name === oldName ? { ...x, name: newName.trim() } : x));
+    setPapers(next); savePapers(next);
+  }, []);
+
+  const deletePaper = useCallback((name: string) => {
+    const next = papersRef.current.filter((x) => x.name !== name);
+    setPapers(next); savePapers(next);
+  }, []);
+
+  // Running job for the Position panel: its JSON if we submitted it (console or
+  // Script tab), else the firmware's text description; '' when nothing is running.
+  const currentJob = (status && !status.idle && status.current > 0)
+    ? (jobJson.current.get(status.current) ?? status.job ?? '')
+    : '';
+
   return {
     ip, setIp,
     pen, moving, connected,
     motion, bounds,
     queue, log,
-    status, jobs,
+    status, jobs, currentJob,
+    papers, applyPaper, savePaper, renamePaper, deletePaper,
     setMotion, commitMotion,
     setBounds, commitBounds,
     enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
