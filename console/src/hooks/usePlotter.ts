@@ -22,7 +22,8 @@ export interface GridCmd     { type: 'grid';     cx: number; cy: number; }
 // canvas can preview the exact perimeter (the firmware uses its own stored bounds).
 export interface BorderCmd   { type: 'border';   left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface WobblyCmd   { type: 'wobbly';   cx: number; cy: number; r: number; boundR: number;
-                               wobble: number; harmonics: number; seed: number; cycles: number; }
+                               wobble: number; harmonics: number; seed: number; cycles: number;
+                               fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
 // Truchet (Carlson 2018 winged motifs, single scale): white ribbons + hatched ground.
 // Carries the current bounds (like BorderCmd) so the preview can mirror the firmware's
 // work-area grid + clipping; the firmware itself uses its own stored bounds.
@@ -75,7 +76,8 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'grid':     return `grid?cx=${cmd.cx}&cy=${cmd.cy}`;
     case 'border':   return 'border';   // firmware traces its own stored bounds
     case 'wobbly':   return `wobbly?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&bound_r=${cmd.boundR}` +
-                            `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}`;
+                            `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}` +
+                            `&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
     case 'truchet':  return `truchet?n=${cmd.n}&spacing=${cmd.spacing}&angle=${cmd.angle}&seed=${cmd.seed}&motifs=${cmd.motifs}`;
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
@@ -93,7 +95,7 @@ export function cmdToJson(cmd: PlotCmd): string {
     case 'line':     return JSON.stringify({ type: 'line', x0: cmd.x0, y0: cmd.y0, x1: cmd.x1, y1: cmd.y1, cycles: cmd.cycles });
     case 'circle':   return JSON.stringify({ type: 'circle', cx: cmd.cx, cy: cmd.cy, r: cmd.r, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
     case 'square':   return JSON.stringify({ type: 'square', cx: cmd.cx, cy: cmd.cy, size: cmd.size, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
-    case 'wobbly':   return JSON.stringify({ type: 'wobbly', cx: cmd.cx, cy: cmd.cy, r: cmd.r, bound_r: cmd.boundR, wobble: cmd.wobble, harmonics: cmd.harmonics, seed: cmd.seed, cycles: cmd.cycles });
+    case 'wobbly':   return JSON.stringify({ type: 'wobbly', cx: cmd.cx, cy: cmd.cy, r: cmd.r, bound_r: cmd.boundR, wobble: cmd.wobble, harmonics: cmd.harmonics, seed: cmd.seed, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
     case 'truchet':  return JSON.stringify({ type: 'truchet', n: cmd.n, spacing: cmd.spacing, angle: cmd.angle, seed: cmd.seed, motifs: cmd.motifs });
     case 'bullseye': return JSON.stringify({ type: 'bullseye', cx: cmd.cx, cy: cmd.cy });
     case 'grid':     return JSON.stringify({ type: 'grid', cx: cmd.cx, cy: cmd.cy });
@@ -214,8 +216,9 @@ export function parseJsonScript(text: string): ParsedLine[] {
       }
       case 'wobbly': {
         const e = req('cx','cy','r'); if (e) return { idx, raw, error: `wobbly: ${e}` };
+        const ol = o.outline === false || o.outline === 0 ? 0 : 1;
         return { idx, raw, query:
-          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}` };
+          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
       }
       case 'truchet': {
         return { idx, raw, query:

@@ -336,12 +336,17 @@ Examples:
     wobble:    z.number().min(0).max(1).default(0.4).describe('Distortion amount 0.0–1.0 (default 0.4)'),
     harmonics: z.number().int().min(1).max(8).default(3).describe('Shape complexity 1–8 (default 3)'),
     seed:      z.number().int().min(0).default(42).describe('Random seed — same seed = same shape (default 42)'),
-    cycles:    z.number().int().min(1).default(1).describe('Number of passes (default 1)'),
+    cycles:    z.number().int().min(1).default(1).describe('Outline passes (default 1)'),
+    fill_mode:   z.number().int().min(0).max(2).default(0).describe('0=none 1=hatch 2=concentric (nested wavy rings)'),
+    hatch_angle: z.number().default(0).describe('Hatch angle in degrees (default 0 = horizontal)'),
+    spacing:     z.number().positive().default(3).describe('Hatch / ring spacing in mm (default 3)'),
+    outline:     z.boolean().default(true).describe('Draw the wavy perimeter (default true)'),
   },
-  async ({ cx, cy, r, bound_r, wobble, harmonics, seed, cycles }) => ({
+  async ({ cx, cy, r, bound_r, wobble, harmonics, seed, cycles, fill_mode, hatch_angle, spacing, outline }) => ({
     content: [{ type: 'text', text: ok(await drawAndWait(
       `wobbly?cx=${cx}&cy=${cy}&r=${r}&bound_r=${bound_r}` +
-      `&wobble=${wobble}&harmonics=${harmonics}&seed=${seed}&cycles=${cycles}`,
+      `&wobble=${wobble}&harmonics=${harmonics}&seed=${seed}&cycles=${cycles}` +
+      `&fill=${fill_mode}&angle=${hatch_angle}&spacing=${spacing}&outline=${outline ? 1 : 0}`,
     )) }],
   }),
 );

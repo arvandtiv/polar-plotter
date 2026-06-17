@@ -125,7 +125,8 @@ static void do_draw_square(float cx, float cy, float size, int cycles, int fill_
 static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_bullseye(float cx, float cy);
 static void do_draw_grid(float cx, float cy);
-static void do_draw_wobbly(float cx, float cy, float r, float bound_r, float wobble, int harmonics, int seed, int cycles);
+static void do_draw_wobbly(float cx, float cy, float r, float bound_r, float wobble, int harmonics, int seed, int cycles,
+                           int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_truchet(float cx, float cy, int n, float spacing, float angle_deg, int seed, uint32_t mask);
 
 static void init_geometry(void)
@@ -865,11 +866,63 @@ static void do_draw_border(void)
     emit_pos_event();
 }
 
+/* Insertion-sort a small float array ascending. */
+static void sort_floats_asc(float *a, int n)
+{
+    for (int i = 1; i < n; i++) {
+        float v = a[i]; int j = i - 1;
+        while (j >= 0 && a[j] > v) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = v;
+    }
+}
+
+/* Hatch-fill an arbitrary closed polygon (px,py,n) with parallel lines at angle_deg,
+ * spacing_mm apart. Per line: intersect every polygon edge, sort the hits along the
+ * line, ink between alternating pairs (even-odd) — so it follows a wavy / non-convex
+ * boundary. (cx2,cy2,maxr) bound the sweep. */
+static void hatch_polygon(const float *px, const float *py, int n,
+                          float cx2, float cy2, float maxr,
+                          float angle_deg, float spacing_mm)
+{
+    if (spacing_mm < 0.1f) spacing_mm = 0.1f;
+    float theta = angle_deg * (PLT_PI / 180.0f);
+    float cos_t = cosf(theta), sin_t = sinf(theta);
+    float extent = maxr + spacing_mm;
+    float hits[24];
+    for (float t = -extent + spacing_mm; t < extent; t += spacing_mm) {
+        if (motion_should_abort()) return;
+        float lx = cx2 + t * (-sin_t);
+        float ly = cy2 + t * ( cos_t);
+        int nh = 0;
+        for (int i = 0; i < n && nh < 24; i++) {
+            float ax = px[i], ay = py[i];
+            float bx = px[(i + 1) % n], by = py[(i + 1) % n];
+            float ex = bx - ax, ey = by - ay;
+            float det = ex * sin_t - cos_t * ey;
+            if (fabsf(det) < 1e-6f) continue;            /* edge ∥ hatch line */
+            float wx = ax - lx, wy = ay - ly;
+            float u = (cos_t * wy - sin_t * wx) / det;   /* param along edge [0,1) */
+            if (u >= 0.0f && u < 1.0f)
+                hits[nh++] = (ex * wy - ey * wx) / det;  /* param along hatch line */
+        }
+        if (nh < 2) continue;
+        sort_floats_asc(hits, nh);
+        for (int k = 0; k + 1 < nh; k += 2) {
+            float s0 = hits[k], s1 = hits[k + 1];
+            if (s1 - s0 < 0.5f) continue;
+            float x0 = lx + s0 * cos_t, y0 = ly + s0 * sin_t;
+            float x1 = lx + s1 * cos_t, y1 = ly + s1 * sin_t;
+            pen_lift(); move_to_xy(x0, y0); pen_drop(); draw_line_mm(x0, y0, x1, y1);
+        }
+    }
+}
+
 static void do_draw_wobbly(float cx2, float cy2, float r, float bound_r,
-                            float wobble, int harmonics, int seed, int cycles)
+                            float wobble, int harmonics, int seed, int cycles,
+                            int fill_mode, float hatch_angle, float hatch_spacing, bool outline)
 {
 #define WOBBLY_MAX_PTS 128
-    float px[WOBBLY_MAX_PTS], py[WOBBLY_MAX_PTS];
+    float ri[WOBBLY_MAX_PTS], px[WOBBLY_MAX_PTS], py[WOBBLY_MAX_PTS];
     if (harmonics < 1) harmonics = 1;
     if (harmonics > 8) harmonics = 8;
     int n = harmonics * 16;
@@ -882,26 +935,55 @@ static void do_draw_wobbly(float cx2, float cy2, float r, float bound_r,
         amp[h] = wobble * r / (float)(h + 1) * rand_scale;
         ph[h]  = (float)(rand() % 1000) / 1000.0f * PLT_TWO_PI;
     }
-    float min_r = r * 0.05f;
+    float min_r = r * 0.05f, maxr = 0.0f;
     for (int i = 0; i < n; i++) {
         float theta = PLT_TWO_PI * (float)i / (float)n;
-        float ri = r;
+        float rr = r;
         for (int h = 0; h < harmonics; h++)
-            ri += amp[h] * sinf((float)(h + 1) * theta + ph[h]);
-        if (bound_r > 0.0f && ri > bound_r) ri = bound_r;
-        if (ri < min_r) ri = min_r;
-        px[i] = cx2 + ri * cosf(theta);
-        py[i] = cy2 + ri * sinf(theta);
+            rr += amp[h] * sinf((float)(h + 1) * theta + ph[h]);
+        if (bound_r > 0.0f && rr > bound_r) rr = bound_r;
+        if (rr < min_r) rr = min_r;
+        ri[i] = rr;
+        if (rr > maxr) maxr = rr;
+        px[i] = cx2 + rr * cosf(theta);
+        py[i] = cy2 + rr * sinf(theta);
     }
     tmc5072_enable(&tmc, true);
-    pen_lift();
-    move_to_xy(px[0], py[0]);
-    pen_drop();
-    path_begin(px[0], py[0]);
-    for (int c = 0; c < cycles; c++)
-        for (int i = 1; i <= n; i++)
-            path_to(px[i % n], py[i % n]);
-    path_end();
+
+    /* Outline first (matches circle/square), then the fill. */
+    if (outline) {
+        pen_lift();
+        move_to_xy(px[0], py[0]);
+        pen_drop();
+        path_begin(px[0], py[0]);
+        for (int c = 0; c < cycles; c++)
+            for (int i = 1; i <= n; i++)
+                path_to(px[i % n], py[i % n]);
+        path_end();
+    }
+
+    if (fill_mode == 1) {
+        hatch_polygon(px, py, n, cx2, cy2, maxr, hatch_angle, hatch_spacing);
+    } else if (fill_mode == 2) {
+        /* Concentric: nested copies of the blob scaled inward ~spacing per ring. */
+        if (hatch_spacing < 0.1f) hatch_spacing = 0.1f;
+        float step = hatch_spacing / r;
+        float scale = outline ? 1.0f - step : 1.0f;
+        for (; scale > 0.0f && scale * maxr > hatch_spacing * 0.5f; scale -= step) {
+            if (motion_should_abort()) break;
+            for (int i = 0; i < n; i++) {
+                float theta = PLT_TWO_PI * (float)i / (float)n;
+                px[i] = cx2 + scale * ri[i] * cosf(theta);
+                py[i] = cy2 + scale * ri[i] * sinf(theta);
+            }
+            pen_lift();
+            move_to_xy(px[0], py[0]);
+            pen_drop();
+            path_begin(px[0], py[0]);
+            for (int i = 1; i <= n; i++) path_to(px[i % n], py[i % n]);
+            path_end();
+        }
+    }
     pen_lift();
 #undef WOBBLY_MAX_PTS
 }
@@ -1416,7 +1498,8 @@ static void web_draw_task(void *arg)
                     (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],
                     (double)cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7]);
             do_draw_wobbly(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],
-                           cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7]);
+                           cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7],
+                           (int)cmd.p[8],cmd.p[9],cmd.p[10],cmd.p[11]!=0.0f);
             emit_pos_event(); web_log("wobbly done"); break;
         case WCMD_TRUCHET:
             web_log("truchet n=%d spacing=%.1f angle=%.0f seed=%d motifs=0x%x",
@@ -1643,8 +1726,11 @@ static int cmd_wobbly(int argc, char **argv)
     int harmonics=(argc>=7)?atoi(argv[6]):3;
     int seed=(argc>=8)?atoi(argv[7]):42;
     int cycles=(argc>=9)?parse_cycles(argv[8]):1;
+    int fill=(argc>=10)?atoi(argv[9]):0;
+    float hang=(argc>=11)?atof(argv[10]):0.0f;
+    float hsp=(argc>=12)?atof(argv[11]):3.0f;
     if (r<=0) { printf("r must be > 0\n"); return 0; }
-    do_draw_wobbly(cx2,cy2,r,bound_r,wobble,harmonics,seed,cycles);
+    do_draw_wobbly(cx2,cy2,r,bound_r,wobble,harmonics,seed,cycles, fill,hang,hsp,true);
     printf("wobbly done\n"); return 0;
 }
 static int cmd_truchet(int argc, char **argv)

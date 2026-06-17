@@ -31,7 +31,7 @@ typedef enum {
 typedef struct {
     wcmd_type_t type;
     uint32_t    id;
-    float p[8];
+    float p[12];
 } wcmd_t;
 
 extern QueueHandle_t g_draw_queue;

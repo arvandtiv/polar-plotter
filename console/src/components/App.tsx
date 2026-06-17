@@ -1008,7 +1008,7 @@ export default function App() {
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [lineF, setLine]    = useState({ x0: 0, y0: 0, x1: 100, y1: 0, cycles: 1 });
-  const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1 });
+  const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
@@ -1182,16 +1182,17 @@ export default function App() {
                     <FieldInline label="Harmonics" value={wobbly.harmonics} min={1} max={8} step={1}
                       onChange={fw('harmonics') as (v: number) => void} />
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <FieldInline label="Seed" value={wobbly.seed} min={0} max={99999} step={1}
                       onChange={fw('seed') as (v: number) => void} />
                     <FieldInline label="Cycles" value={wobbly.cycles} min={1}
                       onChange={fw('cycles') as (v: number) => void} />
-                    <div className="flex items-end">
-                      <p className="text-[11px] leading-relaxed text-ink-500">
-                        0 = circle · 1 = max wobble<br/>harmonics = shape complexity
-                      </p>
-                    </div>
+                    <FieldInline label="Angle" unit="°" value={wobbly.angle} onChange={fw('angle') as (v: number) => void} />
+                    <FieldInline label="Spacing" unit="mm" value={wobbly.spacing} min={0.5} step={0.5} onChange={fw('spacing') as (v: number) => void} />
+                  </div>
+                  <div className="mt-3 flex gap-3">
+                    <div className="flex-1"><FillPicker value={wobbly.fillMode} onChange={(v) => setWobbly({ ...wobbly, fillMode: v })} /></div>
+                    <div className="w-28"><OutlineToggle value={wobbly.outline} onChange={(v) => setWobbly({ ...wobbly, outline: v })} /></div>
                   </div>
                 </Card>
 

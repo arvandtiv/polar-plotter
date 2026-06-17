@@ -380,6 +380,10 @@ static void handle_wobbly(int sock, const char *qs)
     c.p[5] = qf(qs, "harmonics", 3.0f);
     c.p[6] = qf(qs, "seed",     42.0f);
     c.p[7] = qf(qs, "cycles",    1.0f);
+    c.p[8]  = qf(qs, "fill",     0.0f);   /* 0 none/outline, 1 hatch, 2 concentric */
+    c.p[9]  = qf(qs, "angle",    0.0f);   /* hatch angle (deg) */
+    c.p[10] = qf(qs, "spacing",  3.0f);   /* hatch / ring spacing (mm) */
+    c.p[11] = qf(qs, "outline",  1.0f);   /* 1 = draw the outline too */
     if (c.p[2] <= 0) { resp_json(sock, "error", "r must be > 0"); return; }
     if (c.p[3] <= 0.0f) c.p[3] = c.p[2] * 1.5f;
     if (!box_ok(sock, c.p[0], c.p[1], c.p[3], c.p[3])) return;
