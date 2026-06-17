@@ -43,6 +43,7 @@
 
 static const char *TAG = "plotter";
 static tmc5072_t   tmc;
+static TaskHandle_t s_estop_task = NULL;   /* high-prio task the E-STOP ISR wakes to halt the ramp */
 
 static volatile bool s_wifi_connected = false;
 static char          s_wifi_ip_str[20] = "";
@@ -201,6 +202,8 @@ static bool motion_should_abort(void)
     return false;
 }
 
+static void reconfigure_drivers(void);   /* fwd decl: restores CHOPCONF/current/ramp */
+
 void plotter_clear_fault(void)
 {
     g_estop = false;            /* release the hardware E-STOP latch (if set)... */
@@ -209,9 +212,12 @@ void plotter_clear_fault(void)
     tmc5072_enable(&tmc, false);
     vTaskDelay(pdMS_TO_TICKS(5));
     tmc5072_enable(&tmc, true);
+    /* The e-stop zeroed CHOPCONF (TOFF=0) and VMAX — reconfigure to restore the
+     * output stage, currents, speed and accel so motion works again. */
+    reconfigure_drivers();
     g_drv_fault = 0;
     snprintf(g_drv_flags, sizeof(g_drv_flags), "ok");
-    web_log("fault / E-STOP cleared — drivers re-enabled");
+    web_log("fault / E-STOP cleared — drivers reconfigured & re-enabled");
 }
 
 /* Hardware E-STOP ISR (GPIO falling edge, button → GND, internal pull-up). Cuts the
@@ -221,9 +227,40 @@ void plotter_clear_fault(void)
 static void estop_isr(uint gpio, uint32_t events)
 {
     (void)gpio; (void)events;
-    gpio_put(PIN_ENN, !ENN_ON_LEVEL);   /* drivers OFF immediately */
+    gpio_put(PIN_ENN, !ENN_ON_LEVEL);   /* drivers OFF immediately (hardware) */
     tmc.hard_off = true;                 /* block any re-enable from the motion task */
-    g_estop = true;                      /* motion_should_abort() bails the in-flight move */
+    g_estop      = true;                 /* motion_should_abort() bails the in-flight move */
+    g_job_abort  = true;                 /* trip the generic abort too (checked first in the loop) */
+    /* Wake the high-priority e-stop task to actively halt the chip's ramp generator
+     * over SPI — ENN-cut alone leaves the ramp commanding motion toward XTARGET. */
+    if (s_estop_task) {
+        BaseType_t hpw = pdFALSE;
+        vTaskNotifyGiveFromISR(s_estop_task, &hpw);
+        portYIELD_FROM_ISR(hpw);
+    }
+}
+
+/* High-priority (> motion task) E-STOP responder: woken by the ISR, it preempts the
+ * motion task and STOPS THE RAMP GENERATOR over SPI (VMAX=0 + XTARGET=XACTUAL) so the
+ * chip immediately stops driving the motors, on top of the hardware ENN cut. */
+static void estop_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        gpio_put(PIN_ENN, !ENN_ON_LEVEL);                 /* ENN off (if the pin is effective) */
+        /* De-energize the coils over SPI regardless of the ENN pin: CHOPCONF TOFF=0
+         * switches the output stage off immediately — instant freewheel. This is the
+         * real "stop now"; ENN is a backup. */
+        tmc5072_write(&tmc, TMC5072_CHOPCONF(MOTOR_THETA), 0);
+        tmc5072_write(&tmc, TMC5072_CHOPCONF(MOTOR_RHO),   0);
+        tmc5072_stop(&tmc, MOTOR_THETA);                  /* VMAX=0 -> also halt the ramp */
+        tmc5072_stop(&tmc, MOTOR_RHO);
+        /* Pin target to the current position so nothing lurches when re-energized. */
+        tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_THETA), (uint32_t)tmc5072_position(&tmc, MOTOR_THETA));
+        tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_RHO),   (uint32_t)tmc5072_position(&tmc, MOTOR_RHO));
+        web_log("!! E-STOP — motors de-energized & ramp halted");
+    }
 }
 
 /* Live E-STOP button level: 1 = HIGH (idle, pull-up holding it), 0 = LOW (pressed). */
@@ -1959,6 +1996,11 @@ static void main_task(void *arg)
     };
     if (!tmc5072_init(&tmc, &cfg))
         printf("[main] WARNING: tmc5072_init failed — check wiring\n");
+
+    /* High-priority E-STOP responder (above the motion task) so a button press
+     * preempts motion and halts the ramp generator immediately. Created before the
+     * IRQ is armed so the ISR always has a task to notify. */
+    xTaskCreate(estop_task, "estop", 1024, NULL, 6, &s_estop_task);
 
     /* Arm the hardware E-STOP button (GP14 → GND, active-LOW). On press the ISR
      * cuts driver power in hardware and latches it off until a fault/e-stop clear. */
