@@ -44,3 +44,6 @@ log-layout.png
 
 # Editor
 .vscode/
+
+# Third-party reference code (study only, NOT shipped) — see reference/NOTICE.md
+reference/

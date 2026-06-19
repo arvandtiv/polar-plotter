@@ -232,6 +232,7 @@ for the full diagnosis procedure.
 | File | Contents |
 |------|----------|
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, bring‑up history, gotchas, calibration deep‑dive |
+| [`docs/v1.3/`](docs/v1.3/README.md) | v1.3 "Studio" design + day‑by‑day build roadmap (Frame pipeline, generators, modifiers, toolpath optimization) |
 | [`PICO2W.md`](PICO2W.md) | Pico 2 W bring‑up specifics |
 | [`polar_plotter_wiring.md`](polar_plotter_wiring.md) | Wiring table + diagram |
 | [`plotter-mcp/AGENT_GUIDE.md`](plotter-mcp/AGENT_GUIDE.md) | How an agent should drive the plotter |
