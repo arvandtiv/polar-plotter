@@ -36,6 +36,7 @@ optional firmware adds (an `arc`/G2-G3 primitive, an export profile) clearly fla
 |-----|----------------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The Frame IR, the registry, the field schema, the compile pipeline — the target design |
 | [ROADMAP.md](ROADMAP.md) | The build plan, **one day (session) at a time**, in dependency order with acceptance tests |
+| [SCHEDULE.md](SCHEDULE.md) | How to **pace the build within a daily token budget** — sessions grouped by cost, cadence, per-session playbook |
 | [02-fields-and-registry.md](02-fields-and-registry.md) | Declarative param schema → auto-generated panels; pluggable generator registry |
 | [03-geometry-core.md](03-geometry-core.md) | Shared geometry toolkit (resample, bbox, fit, bezier, RNG, boolean ops) |
 | [04-travel-and-simplify.md](04-travel-and-simplify.md) | Nearest-neighbour travel ordering + RDP simplify + optional arc fitting |
