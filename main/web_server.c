@@ -480,7 +480,7 @@ static void handle_status(int sock, const char *qs)
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
         "\"pending\":%d,\"qcap\":%d,\"rejected\":%lu,\"peak\":%lu,"
-        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"estop\":%s,\"estop_pin\":%d,\"job\":\"%s\","
+        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"estop\":%s,\"estop_pin\":%d,\"pen_down\":%s,\"job\":\"%s\","
         "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
         "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s},"
@@ -491,7 +491,8 @@ static void handle_status(int sock, const char *qs)
         (unsigned long)g_job_rejected, (unsigned long)g_pending_peak,
         idle ? "true" : "false",
         g_job_abort ? "true" : "false", g_paused ? "true" : "false",
-        g_estop ? "true" : "false", plotter_estop_level(), g_job_desc,
+        g_estop ? "true" : "false", plotter_estop_level(),
+        plotter_pen_is_down() ? "true" : "false", g_job_desc,
         g_drv_fault ? "false" : "true", g_drv_flags,
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
         plotter_bounds_ellipse() ? "true" : "false",

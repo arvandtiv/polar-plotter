@@ -1364,6 +1364,7 @@ void plotter_get_matrix(float *a, float *b, float *c, float *d, float *tx, float
     if (a) *a = g_geom.aff_a; if (b) *b = g_geom.aff_b; if (tx) *tx = g_geom.aff_tx;
     if (c) *c = g_geom.aff_c; if (d) *d = g_geom.aff_d; if (ty) *ty = g_geom.aff_ty;
 }
+bool plotter_pen_is_down(void) { return s_pen_is_down; }
 void plotter_abort_now(void)
 {
     g_job_abort = true;

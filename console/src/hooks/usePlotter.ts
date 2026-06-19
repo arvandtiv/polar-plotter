@@ -857,7 +857,9 @@ export function usePlotter() {
       // Pen position + MOVING come straight from the board — no client animation.
       // The dot tracks the real XACTUAL→mm position, and MOVING reflects true
       // execution: on while a job runs, off the instant the board is idle (or paused).
-      setPen((p) => ({ ...p, x: s.x, y: s.y }));
+      // Pen down/up mirrors the REAL firmware state (it toggles during scripts /
+      // G-code / MCP draws, not just on UI button clicks).
+      setPen((p) => ({ ...p, x: s.x, y: s.y, down: s.pen_down ?? p.down }));
       setMoving(!s.idle && !s.paused);
 
       // On first connect, SELECT the default paper (first in the list): set it in
