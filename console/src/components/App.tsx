@@ -675,14 +675,18 @@ function JobList({ jobs }: { jobs: JobEntry[] }) {
   const idleTimer = useRef<number | null>(null);
   const progUntil = useRef(0);             // ignore our own programmatic scroll events until this time
 
-  // Keep the CURRENT (doing) job centered in the viewport — unless the user is
-  // actively scrolling. Adding pending jobs no longer yanks the view to the bottom.
+  // Park the CURRENT (doing) job 150 px below the window's top — the first ~148 px
+  // is covered by the panel chrome above the list — unless the user is actively
+  // scrolling. Adding pending jobs no longer yanks the view to the bottom.
+  const TOP_OFFSET = 150;
   const centerCurrent = useCallback(() => {
     const c = ref.current;
     if (!c || interacting.current) return;
     const el = c.querySelector<HTMLElement>('[data-doing="1"]');
     if (!el) return;
-    const target = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2;
+    // el's offset within the scroll content (robust regardless of offsetParent)
+    const elTop = el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop;
+    const target = elTop - TOP_OFFSET;
     progUntil.current = Date.now() + 700;  // smooth scroll fires many events; ignore them all
     c.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
   }, []);
