@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   usePlotter,
   parseJsonScript,
+  streamQueries,
   type ParsedLine,
   type PlotterBounds,
   type MotionParams,
@@ -15,6 +16,8 @@ import {
   TRUCHET_MOTIF_NAMES,
   TRUCHET_DEFAULT_MASK,
 } from '../hooks/usePlotter';
+import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
+import { decodeBgcode } from '../lib/bgcode';
 
 // ================================================================
 //  Primitives
@@ -668,14 +671,48 @@ function JobProgress({ status }: { status: PlotterStatus | null }) {
 
 function JobList({ jobs }: { jobs: JobEntry[] }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [jobs.length]);
+  const interacting = useRef(false);       // user is scrolling → don't auto-move
+  const idleTimer = useRef<number | null>(null);
+  const progUntil = useRef(0);             // ignore our own programmatic scroll events until this time
+
+  // Keep the CURRENT (doing) job centered in the viewport — unless the user is
+  // actively scrolling. Adding pending jobs no longer yanks the view to the bottom.
+  const centerCurrent = useCallback(() => {
+    const c = ref.current;
+    if (!c || interacting.current) return;
+    const el = c.querySelector<HTMLElement>('[data-doing="1"]');
+    if (!el) return;
+    const target = el.offsetTop - c.clientHeight / 2 + el.clientHeight / 2;
+    progUntil.current = Date.now() + 700;  // smooth scroll fires many events; ignore them all
+    c.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+  }, []);
+
+  // A real (user) scroll pauses auto-centering; it resumes ~4 s after they stop.
+  const markInteract = useCallback(() => {
+    interacting.current = true;
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => { interacting.current = false; centerCurrent(); }, 4000);
+  }, [centerCurrent]);
+
+  const onScroll = useCallback(() => {
+    if (Date.now() < progUntil.current) return;   // our own scrollTo — not the user
+    markInteract();
+  }, [markInteract]);
+
+  // Re-center when the current job advances or the list changes (idle only).
+  const doingId = jobs.find((j) => j.state === 'doing')?.id;
+  useEffect(() => { centerCurrent(); }, [doingId, jobs.length, centerCurrent]);
+  useEffect(() => () => { if (idleTimer.current) clearTimeout(idleTimer.current); }, []);
+
   if (!jobs.length) return <p className="text-[12px] text-ink-500">No jobs yet. Queue work from the MCP or the Draw tab.</p>;
   const dot = (s: JobEntry['state']) => (s === 'done' ? '✓' : s === 'doing' ? '▶' : '○');
   const cls = (s: JobEntry['state']) => (s === 'done' ? 'text-go' : s === 'doing' ? 'text-warn' : 'text-ink-600');
   return (
-    <div ref={ref} className="h-full space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
+    <div ref={ref} onScroll={onScroll} onWheel={markInteract} onTouchStart={markInteract} onPointerDown={markInteract}
+      className="h-full space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
       {jobs.map((j) => (
-        <div key={j.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
+        <div key={j.id} data-doing={j.state === 'doing' ? '1' : undefined}
+          className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
           <span className={`${cls(j.state)} ${j.state === 'doing' ? 'blink' : ''}`}>{dot(j.state)}</span>
           <span className="w-9 shrink-0 tabular-nums text-ink-700">#{j.id}</span>
           <span className={`flex-1 truncate ${j.state === 'pending' ? 'text-ink-500' : 'text-ink-200'}`}>
@@ -835,43 +872,16 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
     runCancelRef.current = false;   // clear any prior STOP/CLEAR signal before a fresh run
     setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
     pushLog('cmd', `> script: queuing ${good.length} commands (flow-controlled)`);
-    let errors = 0;
-    // The board's draw queue holds 256 jobs and sendRaw returns on ENQUEUE (not on
-    // draw-completion). To never overflow — even when the machine is already busy
-    // with an EARLIER stack — gate every burst on the board's REAL pending count.
-    // Crucially: if the status read fails, or the queue is full, we WAIT rather
-    // than send (a rejection must never look like "room available").
-    const CAP = 256, HIGH = 220;
-    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
     const cancelled = () => abortRef.current || runCancelRef.current;  // STOP/CLEAR halt the feed
-    let i = 0;
-    let warned = false;
-    while (i < good.length && !cancelled()) {
-      const pend = await getPending();
-      if (pend === null || pend >= HIGH) {
-        if (pend !== null && !warned) {
-          pushLog('sys', `[script] board busy (${pend}/${CAP} queued) — waiting for room…`);
-          warned = true;
-        }
-        await sleep(400);
-        continue;          // do NOT send while full / unknown
-      }
-      warned = false;
-      // Room for (HIGH - pend) jobs. Assume the board doesn't drain during the
-      // burst (conservative → can't overflow), then re-read pending next loop.
-      let budget = HIGH - pend;
-      while (budget-- > 0 && i < good.length && !cancelled()) {
-        const ok = await sendRaw(good[i].query!, good[i].raw);
-        if (!ok) errors++;   // real rejection (e.g. out of bounds) — skip, don't retry
-        i++;
-        setRun(r => ({ ...r, sent: i, errors }));
-      }
-    }
-    const stopped = cancelled() && i < good.length;
+    const { sent, errors, stopped } = await streamQueries(
+      good.map(l => ({ query: l.query!, raw: l.raw })),
+      { sendRaw, getPending, isCancelled: cancelled, pushLog, label: 'script',
+        onProgress: (s, e) => setRun(r => ({ ...r, sent: s, errors: e })) },
+    );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
             stopped
-              ? `[script] halted by STOP/CLEAR — ${i}/${good.length} sent, ${good.length - i} not queued`
-              : `[script] done — ${i - errors} queued` +
+              ? `[script] halted by STOP/CLEAR — ${sent}/${good.length} sent, ${good.length - sent} not queued`
+              : `[script] done — ${sent - errors} queued` +
                 (errors ? `, ${errors} rejected (NOT queue-full — check bounds/syntax)` : ', no rejections'));
     setRun(r => ({ ...r, status: 'done' }));
   }, [good, sendRaw, getPending, runCancelRef, pushLog]);
@@ -949,6 +959,200 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
           </div>
         </div>
       )}
+    </Card>
+  );
+}
+
+// ================================================================
+// GcodeTab — G-code digester: paste or upload .gcode / .bgcode, translate to
+// goto/line/pen ops, and stream them flow-controlled like the JSON script tab.
+// ================================================================
+
+const PEN_MODES: [PenMode, string][] = [
+  ['auto', 'Auto-detect'], ['z', 'Z height'], ['spindle', 'Spindle M3/M5'],
+  ['servo', 'Servo M280'], ['g01', 'G0 travel / G1 draw'],
+];
+const PLACE_MODES: [PlaceMode, string][] = [
+  ['fit', 'Auto-fit & center'], ['center', 'Center, no scale'],
+  ['rawflip', 'Raw + Y-flip'], ['raw', 'Raw (no transform)'],
+];
+
+function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled }: {
+  label: string; value: T; opts: [T, string][]; onChange: (v: T) => void; disabled?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
+      <select
+        className="rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyan-600 disabled:opacity-50"
+        value={value} disabled={disabled}
+        onChange={(e) => onChange(e.target.value as T)}>
+        {opts.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function GcodeTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
+  sendRaw: (ep: string, json?: string) => Promise<boolean>;
+  getPending: () => Promise<number | null>;
+  runCancelRef: React.MutableRefObject<boolean>;
+  pushLog: (kind: LogEntry['kind'], text: string) => void;
+  bounds: PlotterBounds;
+}) {
+  const [text, setText] = useState('');
+  const [penMode, setPenMode] = useState<PenMode>('auto');
+  const [placeMode, setPlaceMode] = useState<PlaceMode>('fit');
+  const [fileName, setFileName] = useState('');
+  const [decoding, setDecoding] = useState(false);
+  const [decodeErr, setDecodeErr] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef(false);
+  const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; errors: number; total: number }>({
+    status: 'idle', sent: 0, errors: 0, total: 0,
+  });
+
+  const result = useMemo<GcodeResult | null>(() => {
+    if (!text.trim()) return null;
+    try {
+      return digestGcode(text, {
+        penMode, placeMode,
+        bounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down },
+      });
+    } catch { return null; }
+  }, [text, penMode, placeMode, bounds.left, bounds.right, bounds.up, bounds.down]);
+
+  const loadFile = useCallback(async (file: File) => {
+    setDecodeErr(''); setFileName(file.name);
+    const lower = file.name.toLowerCase();
+    const isBinary = lower.endsWith('.bgcode') || lower.endsWith('.bgc');
+    try {
+      if (isBinary) {
+        setDecoding(true);
+        const txt = await decodeBgcode(await file.arrayBuffer());
+        setText(txt);
+        pushLog('ok', `[gcode] decoded ${file.name} → ${txt.length.toLocaleString()} chars`);
+      } else {
+        setText(await file.text());
+        pushLog('ok', `[gcode] loaded ${file.name}`);
+      }
+    } catch (e) {
+      setDecodeErr((e as Error).message);
+      pushLog('err', `[gcode] ${file.name}: ${(e as Error).message}`);
+    } finally {
+      setDecoding(false);
+      setRun((r) => ({ ...r, status: 'idle' }));
+    }
+  }, [pushLog]);
+
+  const start = useCallback(async () => {
+    if (!result || !result.queries.length) return;
+    abortRef.current = false;
+    runCancelRef.current = false;
+    setRun({ status: 'running', sent: 0, errors: 0, total: result.queries.length });
+    pushLog('cmd', `> gcode: queuing ${result.queries.length} ops (${result.draws} draws, ${result.travels} travels)`);
+    const cancelled = () => abortRef.current || runCancelRef.current;
+    const { sent, errors, stopped } = await streamQueries(
+      result.queries.map((q) => ({ query: q })),
+      { sendRaw, getPending, isCancelled: cancelled, pushLog, label: 'gcode',
+        onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
+    );
+    pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
+            stopped
+              ? `[gcode] halted by STOP/CLEAR — ${sent}/${result.queries.length} sent`
+              : `[gcode] done — ${sent - errors} queued` + (errors ? `, ${errors} rejected` : ''));
+    setRun((r) => ({ ...r, status: 'done' }));
+  }, [result, sendRaw, getPending, runCancelRef, pushLog]);
+
+  const abort = useCallback(() => { abortRef.current = true; }, []);
+  const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
+
+  return (
+    <Card title="G-code" icon="⌀" accent="#7c3aed" defaultCollapsed={false}>
+      {/* upload row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input ref={fileRef} type="file" accept=".gcode,.gco,.g,.nc,.bgcode,.bgc" className="hidden"
+          onChange={(e) => { const fl = e.target.files?.[0]; if (fl) loadFile(fl); e.target.value = ''; }} />
+        <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={run.status === 'running' || decoding}>
+          ⬆ Upload .gcode / .bgcode
+        </Btn>
+        {decoding && <span className="text-[12px] text-amber-400">decoding…</span>}
+        {fileName && !decoding && <span className="font-mono text-[11px] text-ink-500 truncate max-w-[200px]">{fileName}</span>}
+      </div>
+
+      {decodeErr && <div className="mt-2 font-mono text-[11px] text-red-400">{decodeErr}</div>}
+
+      <textarea
+        className="mt-3 w-full h-44 resize-y rounded bg-ink-900 border border-ink-700 p-2 font-mono text-[12px] text-ink-300 placeholder-ink-600 focus:outline-none focus:border-cyan-600"
+        placeholder={`; paste G-code here, or upload a file above\nG21\nG90\nG0 X10 Y10\nG1 Z0\nG1 X40 Y10\nG1 X40 Y40\nG0 Z2`}
+        value={text}
+        onChange={(e) => { setText(e.target.value); setRun((r) => ({ ...r, status: 'idle' })); }}
+        spellCheck={false}
+        disabled={run.status === 'running'}
+      />
+
+      {/* options */}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <GcodeSelect label="Pen control" value={penMode} opts={PEN_MODES} onChange={setPenMode} disabled={run.status === 'running'} />
+        <GcodeSelect label="Placement" value={placeMode} opts={PLACE_MODES} onChange={setPlaceMode} disabled={run.status === 'running'} />
+      </div>
+
+      {/* digest summary */}
+      {result && (
+        <div className="mt-3 rounded border border-ink-800 bg-ink-850 p-2.5 text-[12px] space-y-1">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-ink-300">
+            <span><span className="text-ink-500">draws</span> <span className="font-semibold">{result.draws}</span></span>
+            <span><span className="text-ink-500">travels</span> <span className="font-semibold">{result.travels}</span></span>
+            <span><span className="text-ink-500">pen</span> <span className="font-mono">{penMode === 'auto' ? `auto → ${result.resolvedPen}` : result.resolvedPen}</span></span>
+            {placeMode === 'fit' && <span><span className="text-ink-500">scale</span> <span className="font-mono">{(result.scale * 100).toFixed(0)}%</span></span>}
+          </div>
+          {result.bbox && (
+            <div className="font-mono text-[11px] text-ink-500">
+              source bbox: ({result.bbox.x0.toFixed(1)}, {result.bbox.y0.toFixed(1)}) → ({result.bbox.x1.toFixed(1)}, {result.bbox.y1.toFixed(1)}) mm
+            </div>
+          )}
+          {result.warnings.map((w, i) => (
+            <div key={i} className="text-[11px] text-amber-400">⚠ {w}</div>
+          ))}
+        </div>
+      )}
+
+      {/* action row */}
+      <div className="mt-3 flex items-center gap-3">
+        {run.status !== 'running' ? (
+          <Btn variant="go" onClick={start} disabled={!result || result.queries.length === 0}>
+            Run {result ? result.draws + result.travels : 0} move{result && (result.draws + result.travels) !== 1 ? 's' : ''} →
+          </Btn>
+        ) : (
+          <Btn variant="danger" onClick={abort}>Abort</Btn>
+        )}
+        {text && run.status !== 'running' && (
+          <button className="ml-auto text-[11px] text-ink-600 hover:text-ink-400"
+            onClick={() => { setText(''); setFileName(''); setDecodeErr(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* progress */}
+      {run.status !== 'idle' && run.total > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-[11px] text-ink-500 mb-1">
+            <span>{run.status === 'running' ? 'Streaming…' : 'Done'}</span>
+            <span>{run.sent} / {run.total}</span>
+          </div>
+          <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
+            <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`}
+              style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] leading-relaxed text-ink-500">
+        Translates G-code to the plotter's goto/line/pen moves (Z/E/F are ignored — only X/Y + pen).
+        Binary <span className="font-mono">.bgcode</span> is decoded in the browser. Coordinates are
+        placed into the active work area; pen up/down is read per the selected convention.
+      </p>
     </Card>
   );
 }
@@ -1393,6 +1597,8 @@ export default function App() {
                 </LogCard>
 
                 <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
+
+                <GcodeTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />

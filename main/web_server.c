@@ -313,6 +313,7 @@ static void handle_line(int sock, const char *qs)
     c.p[2] = qf(qs, "x1",  100.0f);
     c.p[3] = qf(qs, "y1",    0.0f);
     c.p[4] = qf(qs, "cycles", 1.0f);
+    c.p[5] = qf(qs, "lift",   1.0f);   /* 1 = standalone (pen up/travel/down/draw/up); 0 = continuous (no bob) */
     if (!pt_ok(sock, c.p[0], c.p[1]) || !pt_ok(sock, c.p[2], c.p[3])) return;
     resp_enqueue(sock, "line queued", &c);
 }

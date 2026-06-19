@@ -122,7 +122,7 @@ static void led_task(void *arg)
 
 /* Forward declarations */
 static void do_draw_goto(float x, float y);
-static void do_draw_line(float x0, float y0, float x1, float y1, int cycles);
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift);
 static void do_draw_square(float cx, float cy, float size, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_bullseye(float cx, float cy);
@@ -523,8 +523,14 @@ static bool clamp_xy(float *x, float *y)
     return clamped;
 }
 
-static void pen_lift(void) { servo_write_deg(PEN_UP_DEG);   vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
-static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
+/* Logical pen state, tracked so a pause/STOP hold can restore it on resume: a
+ * continuous draw (the G-code digester's lift=0 segments) assumes the pen stays
+ * down across jobs, but the hold lifts it — without restoring, drawing resumes in
+ * the air. s_resume_pen_down asks the draw loop to re-drop before the next job. */
+static volatile bool s_pen_is_down     = false;
+static volatile bool s_resume_pen_down = false;
+static void pen_lift(void) { servo_write_deg(PEN_UP_DEG);   vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); s_pen_is_down = false; }
+static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); s_pen_is_down = true;  }
 
 static void move_to_xy(float x, float y)
 {
@@ -704,19 +710,22 @@ static void do_draw_goto(float x, float y)
     emit_pos_event();
 }
 
-static void do_draw_line(float x0, float y0, float x1, float y1, int cycles)
+/* lift = true: standalone line — pen up, travel to start, pen down, draw, pen up.
+ * lift = false: continuous-path mode (the G-code digester chains segments) — leave
+ * the pen wherever it is and just draw from the current point through (x0,y0)->(x1,y1)
+ * so back-to-back segments don't bob the pen up/down at every vertex. */
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift)
 {
     tmc5072_enable(&tmc, true);
-    pen_lift();
-    move_to_xy(x0, y0);
-    pen_drop();
+    if (lift) { pen_lift(); move_to_xy(x0, y0); pen_drop(); }
+    else      { move_to_xy(x0, y0); }   /* pen already down; no-op if already at x0,y0 */
     path_begin(x0, y0);
     for (int c = 0; c < cycles; c++) {
         if (c & 1) path_to(x0, y0);
         else       path_to(x1, y1);
     }
     path_end();
-    pen_lift();
+    if (lift) pen_lift();
 }
 
 static void do_draw_square(float cx2, float cy2, float size, int cycles, int fill_mode,
@@ -1375,7 +1384,8 @@ void plotter_stop_hold(void)
     tmc5072_stop(&tmc, MOTOR_THETA);
     tmc5072_stop(&tmc, MOTOR_RHO);
     g_paused = true;
-    pen_lift();
+    /* The draw task's hold block lifts the pen AND remembers its state so resume
+     * can continue a stroke pen-down. Lifting here would clobber that capture. */
 }
 
 /* ---- web_draw_task — verbatim from ESP32 build ---- */
@@ -1417,16 +1427,22 @@ static void web_draw_task(void *arg)
          * draining the queue faster than the 1 Hz console can show it. The E-STOP latch
          * stays set (drivers cut in the ISR) until an explicit clear. */
         if (g_paused || g_estop) {
+            bool was_down  = s_pen_is_down;   /* remember so resume can continue a stroke pen-down */
+            bool was_estop = g_estop;         /* E-STOP cuts drivers → re-home; never auto-drop the pen */
             pen_lift();
             web_log(g_estop ? "!! E-STOP — motors cut, %lu job(s) held"
                             : "paused — %lu job(s) held in queue",
                     (unsigned long)(g_job_enqueued - g_job_done));
             while (g_paused || g_estop) vTaskDelay(pdMS_TO_TICKS(100));
             web_log("resumed");
+            s_resume_pen_down = was_down && !was_estop;
         }
 
         if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
         g_job_abort = false;
+        /* Restore a mid-stroke pen-down held across a pause/STOP so the next
+         * continuation segment (lift=0) draws instead of skating in the air. */
+        if (s_resume_pen_down) { pen_drop(); s_resume_pen_down = false; }
         ensure_configured();   /* self-heal if the TMC was power-cycled under us */
         if (cmd.id) {
             g_job_current = cmd.id;
@@ -1483,7 +1499,7 @@ static void web_draw_task(void *arg)
         case WCMD_LINE:
             web_log("line (%.1f,%.1f)->(%.1f,%.1f) x%d",
                     (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(int)cmd.p[4]);
-            do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4]);
+            do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4], cmd.p[5]!=0.0f);
             emit_pos_event(); web_log("line done"); break;
         case WCMD_GOTO:
             web_log("goto (%.1f, %.1f)",(double)cmd.p[0],(double)cmd.p[1]);
@@ -1714,7 +1730,7 @@ static int cmd_line(int argc, char **argv)
     float x0=atof(argv[1]),y0=atof(argv[2]),x1=atof(argv[3]),y1=atof(argv[4]);
     int cycles=(argc>=6)?parse_cycles(argv[5]):1;
     printf("line (%.1f,%.1f)->(%.1f,%.1f) x%d\n",(double)x0,(double)y0,(double)x1,(double)y1,cycles);
-    do_draw_line(x0,y0,x1,y1,cycles);
+    do_draw_line(x0,y0,x1,y1,cycles,true);
     printf("line done\n"); return 0;
 }
 static int cmd_circle(int argc, char **argv)

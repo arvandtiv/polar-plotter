@@ -29,6 +29,13 @@ Drive it three ways, all feeding the same draw queue:
 - **Streaming interpolation:** straight edges are sub‑segmented and issued with look‑ahead, so the gondola flows through a path and only truly stops at corners.
 - **Work area:** rectangle *or* the inscribed **ellipse** (for machines whose reachable Y tapers toward the X extremes); out‑of‑area targets are rejected and strays clamped back onto the boundary.
 
+**Importing & transforms**
+- 📥 **G‑code digester** — paste a G‑code program *or* upload a `.gcode`/`.bgcode` file in the console's Autonomous tab; it translates to the plotter's `goto`/`line`/`pen` moves entirely in the browser and streams them flow‑controlled. A polar plotter has only X/Y + a pen, so Z/E/F are dropped: pen‑up → travel, pen‑down → drawn segment.
+  - **Pen up/down** by selectable convention: auto‑detect · Z‑height · spindle `M3`/`M5` · servo `M280` · G0‑travel‑vs‑G1‑draw.
+  - **Placement** into the active work area: auto‑fit + center + Y‑flip (default) · center · raw + Y‑flip · raw. (G‑code is corner‑origin Y‑up; the plotter is centre‑origin Y‑down.)
+  - **Binary `.bgcode`** is decoded in‑browser — Prusa container + deflate, heatshrink (11/4 & 12/4), and MeatPack (a faithful port of libbgcode `unbinarize`).
+- 🔁 **Affine warp** (exploration layer) — an optional 2×3 matrix `x' = a·x + b·y + tx ; y' = c·x + d·y + ty` applied to the logical command *before* the belt math, for exploring rotation/shear/scale/offset of the drawing space. **Session‑only**, default identity (resets on boot); an affine is linear so it can't fix the line‑bow. Set via the console Calibrate tab, `setmatrix`, `/api/matrix`, or MCP `plot_set_matrix`.
+
 **Run control**
 - ⏸️ **Pause / resume** — parks pen‑up at the next job boundary and **holds the whole queue** for pen swaps / ink fixes, then continues in order.
 - ⏹️ **STOP that keeps the queue** — halts motion immediately but *preserves* pending jobs (resume to continue); only an explicit abort flushes.
@@ -49,7 +56,7 @@ Drive it three ways, all feeding the same draw queue:
 |------|------|
 | Raspberry Pi **Pico 2 W** (RP2350) | MCU — WiFi (CYW43439), USB, FreeRTOS |
 | **TMC5072‑BOB** | Dual stepper controller/driver with integrated sixPoint ramp generator |
-| **SG90** servo | Pen lift (up = 180°, down = 120°) |
+| **SG90** servo | Pen lift (up = 50°, down = 70°) |
 | GT2 belt + 20‑tooth pulley | Drive train — 40 mm/rev |
 | 12 V / 2 A supply | Motor power |
 
@@ -72,6 +79,9 @@ components/
   tmc5072/        — register-level SPI driver (datasheet §6 map; no Arduino dep)
   servo/          — SG90 via PWM
 console/          — Astro 4 + React 18 + Tailwind web UI  (npm run dev → :4321)
+  src/lib/gcode.ts   — G-code → goto/line/pen digester (pen + placement modes)
+  src/lib/bgcode.ts  — Prusa binary .bgcode decoder (deflate/heatshrink/MeatPack)
+  test/digest.test.ts— host test: digester + all bgcode paths (npx tsx)
 plotter-mcp/      — Node MCP server exposing the HTTP API as tools (index.js)
 tools/
   kinematics_test/ — host-runnable geometry unit test
@@ -103,6 +113,7 @@ The boot log prints a build marker (`[build] <date> <time> …`) so you can conf
 the running firmware is the one you just flashed.
 
 **Geometry dry‑run** (no hardware): `cc tools/kinematics_test/test_kinematics.c -o /tmp/ktest -lm && /tmp/ktest`.
+**Digester test** (no hardware): `cd console && npx tsx test/digest.test.ts` — covers the G‑code parser + every `.bgcode` compression/encoding path.
 
 ---
 
@@ -118,11 +129,15 @@ Set the plotter's IP in the header. The console opens `GET /events` (SSE) for li
 log + pen position and sends draw commands to `GET /api/<cmd>?<params>`.
 
 Tabs: **Draw** · **Move** (goto + jog pad) · **Work Area** (bounds + rect/ellipse) ·
-**Calibrate** (walk‑limits, bullseye) · **Autonomous** (job progress, driver
-health, errors) · **Script** (paste a JSON command list, sent flow‑controlled).
-A header **PAUSE/RESUME** (hold), **STOP** (halt, keep queue), and **CLEAR**
-(flush the queue) drive the machine regardless of tab; STOP/CLEAR also halt the
-in-flight script batch.
+**Calibrate** (walk‑limits, bullseye, **affine matrix** card with raw 6‑value entry +
+saved presets) · **Autonomous** (job progress + driver health + errors, the **JSON
+Script** runner, and the **G‑code digester** — paste/upload `.gcode`/`.bgcode`, pick
+pen + placement, then stream). A header **PAUSE/RESUME** (hold), **STOP** (halt, keep
+queue), and **CLEAR** (flush the queue) drive the machine regardless of tab;
+STOP/CLEAR also halt the in‑flight script / G‑code batch.
+
+Paper presets (work‑area sizes) and affine‑matrix presets are saved in the browser
+(localStorage) — save / rename / delete / apply, just like a named profile.
 
 ---
 
@@ -132,7 +147,7 @@ in-flight script batch.
 Set `PLOTTER_IP` / `PLOTTER_PORT` and register it in `.mcp.json`.
 
 - Drawing: `plot_goto/line/circle/square/wobbly/truchet/bullseye/grid/border`
-- Control: `plot_pen/home/sethome/stop/abort`, `plot_pause/plot_resume`, `plot_set_speed/accel/current`, `plot_clear_fault`
+- Control: `plot_pen/home/sethome/stop/abort`, `plot_pause/plot_resume`, `plot_set_speed/accel/current`, `plot_set_matrix` (affine warp), `plot_clear_fault`
 - Orchestration: **`plot_script`** runs an ordered list, waiting for each job to *physically* finish (and pausing on a driver fault) before the next
 - Introspection: **`plot_status`** reports the coordinate frame, work‑area bounds, live position, queue health, and driver state
 
@@ -157,6 +172,7 @@ stay inside them. Agent playbook → [`plotter-mcp/AGENT_GUIDE.md`](plotter-mcp/
 | `pen <up\|down\|deg>` · `en <0\|1>` | Servo / driver enable |
 | `cur <run> [hold]` · `speed <vmax>` · `accel <amax>` | Motion tuning |
 | `setbelt` / `setspan` / `setsteps` / `setbounds` | Runtime geometry & work‑area |
+| `setmatrix <a b c d tx ty>` / `setmatrix identity` | Affine warp of the command space (session‑only) |
 | `sethome` · `home` | Set origin here · return to origin |
 | `jobs` · `estop` | Queue snapshot · escape (stop + flush + pen up) |
 

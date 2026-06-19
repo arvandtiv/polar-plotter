@@ -6,6 +6,7 @@
     "strictNullChecks": true
   },
   "exclude": [
-    "truchet_preview_test.ts"
+    "truchet_preview_test.ts",
+    "test"
   ]
 }

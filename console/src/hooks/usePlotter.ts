@@ -257,6 +257,50 @@ export function boundsToQuery(b: PlotterBounds): string {
   return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.down}&yp=${b.up}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
 }
 
+// ---- shared flow-controlled query streamer -----------------------
+// The board's draw queue holds 256 jobs and sendRaw returns on ENQUEUE (not on
+// draw-completion). To never overflow — even when the machine is already busy
+// with an EARLIER stack — gate every burst on the board's REAL pending count.
+// Crucially: if the status read fails OR the queue is full, WAIT rather than send
+// (a rejection must never look like "room available"). Used by both the JSON
+// Script tab and the G-code digester so they share identical back-pressure.
+export interface StreamItem { query: string; raw?: string; }
+export interface StreamHandlers {
+  sendRaw: (ep: string, json?: string) => Promise<boolean>;
+  getPending: () => Promise<number | null>;
+  isCancelled: () => boolean;
+  onProgress?: (sent: number, errors: number) => void;
+  pushLog: (kind: LogEntry['kind'], text: string) => void;
+  label?: string;
+}
+export async function streamQueries(items: StreamItem[], h: StreamHandlers): Promise<{ sent: number; errors: number; stopped: boolean }> {
+  const CAP = 256, HIGH = 220;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let errors = 0, i = 0, warned = false;
+  while (i < items.length && !h.isCancelled()) {
+    const pend = await h.getPending();
+    if (pend === null || pend >= HIGH) {
+      if (pend !== null && !warned) {
+        h.pushLog('sys', `[${h.label ?? 'stream'}] board busy (${pend}/${CAP} queued) — waiting for room…`);
+        warned = true;
+      }
+      await sleep(400);
+      continue;                       // do NOT send while full / unknown
+    }
+    warned = false;
+    // Room for (HIGH - pend) jobs. Assume the board doesn't drain during the
+    // burst (conservative → can't overflow), then re-read pending next loop.
+    let budget = HIGH - pend;
+    while (budget-- > 0 && i < items.length && !h.isCancelled()) {
+      const ok = await h.sendRaw(items[i].query, items[i].raw);
+      if (!ok) errors++;              // real rejection (bounds/syntax) — skip, don't retry
+      i++;
+      h.onProgress?.(i, errors);
+    }
+  }
+  return { sent: i, errors, stopped: h.isCancelled() && i < items.length };
+}
+
 export function matrixToQuery(m: MatrixParams): string {
   return `matrix?a=${m.a}&b=${m.b}&c=${m.c}&d=${m.d}&tx=${m.tx}&ty=${m.ty}`;
 }
