@@ -107,10 +107,17 @@ cmake --build build
 #   drag build/main/polar_plotter.uf2 onto it (it reboots itself)
 # or:
 picotool load -fx build/main/polar_plotter.uf2
+
+# monitor the USB‑serial console / boot log (115200 baud):
+tio /dev/cu.usbmodemXXX            # macOS (replace XXX; tab‑complete: tio /dev/cu.usbmodem<TAB>)
+#   minicom -b 115200 -D /dev/cu.usbmodemXXX   # alternative
+#   Linux: the port is usually /dev/ttyACM0
 ```
 
 The boot log prints a build marker (`[build] <date> <time> …`) so you can confirm
-the running firmware is the one you just flashed.
+the running firmware is the one you just flashed. Open the monitor within ~30 s of
+reset to catch the boot log (the firmware waits that long for a USB‑serial client).
+`tio` auto‑reconnects across the USB re‑enumeration that happens on each reset.
 
 **Geometry dry‑run** (no hardware): `cc tools/kinematics_test/test_kinematics.c -o /tmp/ktest -lm && /tmp/ktest`.
 **Digester test** (no hardware): `cd console && npx tsx test/digest.test.ts` — covers the G‑code parser + every `.bgcode` compression/encoding path.
