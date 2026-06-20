@@ -24,7 +24,7 @@ building anything fancy.*
   - Test: `compile.test.ts` — box → expected query list (mirror `digest.test.ts` style).
   - Done-when: button plots a clean square with one pen-down per side run; tsc clean.
 
-- [ ] **Day 2 — Geometry toolkit v1**
+- [x] **Day 2 — Geometry toolkit v1** ✅ (S2, branch `v1.3-s1`)
   - Goal: the shared helpers every later day needs. (See `03-geometry-core.md`.)
   - Build: `lib/geom.ts` — `resample`, `bbox`, `fitToBounds`, `translate/rotate/scale`
     (affine), `sampleBezier`, `seededRandom`, `polylineLength`.
@@ -32,7 +32,7 @@ building anything fancy.*
     resample preserves endpoints, seededRandom is deterministic.
   - Done-when: all pure, no DOM import; tests pass.
 
-- [ ] **Day 3 — Registry + first real generator (Box/Grid)**
+- [x] **Day 3 — Registry + first real generator (Box/Grid)** ✅ (S2, branch `v1.3-s1`)
   - Goal: the module contract exists and one generator uses it. (See `02-fields-and-registry.md`.)
   - Build: `lib/registry.ts` (types + `register`/`defaultsOf`); `lib/modules/box.ts`
     registering a `make` module with `sections/fields` + `generate`.
