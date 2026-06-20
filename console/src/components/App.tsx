@@ -18,6 +18,8 @@ import {
 } from '../hooks/usePlotter';
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
+import { compile } from '../lib/compile';
+import { rectPath, type Frame } from '../lib/frame';
 
 // ================================================================
 //  Primitives
@@ -997,6 +999,41 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
   );
 }
 
+// v1.3 / S1 (Day 1): temporary proof of the Frame → compile → stream pipeline.
+// Plots a 100x100 box built as a Frame, compiled to the firmware query queue.
+// Will be replaced by the Studio tab in S4; safe to delete after.
+function FrameTestButton({ sendRaw, getPending, runCancelRef, pushLog }: {
+  sendRaw: (ep: string, json?: string) => Promise<boolean>;
+  getPending: () => Promise<number | null>;
+  runCancelRef: React.MutableRefObject<boolean>;
+  pushLog: (kind: LogEntry['kind'], text: string) => void;
+}) {
+  const [running, setRunning] = useState(false);
+  const run = useCallback(async () => {
+    const frame: Frame = { widthMm: 100, heightMm: 100, paths: [rectPath(0, 0, 100, 100)] };
+    const queries = compile(frame);
+    setRunning(true);
+    runCancelRef.current = false;
+    pushLog('cmd', `> frame test: 100×100 box (${queries.length} ops via compile)`);
+    const { sent, errors } = await streamQueries(
+      queries.map((q) => ({ query: q })),
+      { sendRaw, getPending, isCancelled: () => runCancelRef.current, pushLog, label: 'frame' },
+    );
+    pushLog(errors ? 'warn' : 'ok', `[frame] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
+    setRunning(false);
+  }, [sendRaw, getPending, runCancelRef, pushLog]);
+
+  return (
+    <Card title="Frame pipeline (v1.3 · S1)" icon="◻" accent="#7c3aed" defaultCollapsed={false}>
+      <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
+        Day-1 proof of the new <span className="font-mono">Frame → compile → stream</span> path:
+        plots a 100×100&nbsp;mm box centred on the origin. Temporary; replaced by the Studio tab.
+      </p>
+      <Btn variant="go" onClick={run} disabled={running}>{running ? 'Plotting…' : '◻ Run test frame'}</Btn>
+    </Card>
+  );
+}
+
 function GcodeTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<boolean>;
   getPending: () => Promise<number | null>;
@@ -1603,6 +1640,8 @@ export default function App() {
                 <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
 
                 <GcodeTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+
+                <FrameTestButton sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />

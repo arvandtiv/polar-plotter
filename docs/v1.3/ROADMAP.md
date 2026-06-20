@@ -15,7 +15,7 @@ Branch: cut `v1.3` from `v1.2` before Day 1.
 *Prove the whole pipeline end-to-end with the simplest possible generator before
 building anything fancy.*
 
-- [ ] **Day 1 — Frame + compile + run one box**
+- [x] **Day 1 — Frame + compile + run one box** ✅ (S1, branch `v1.3-s1`)
   - Goal: a hardcoded rectangle Frame draws on the real plotter through the new path.
   - Build: `lib/frame.ts` (types + `frameBounds`, `clonePath`); `lib/compile.ts`
     (`compile(frame): string[]` → `pen up`, `goto`, `pen down`, `line …&lift=0` per
