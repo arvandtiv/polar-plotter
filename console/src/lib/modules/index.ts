@@ -9,4 +9,5 @@ import "./orbital-weave";
 import "./moire-curtain";
 import "./pattern-maker";
 import "./mask";
+import "./fill";
 export {};
