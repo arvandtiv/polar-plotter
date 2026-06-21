@@ -11,4 +11,5 @@ import "./pattern-maker";
 import "./mask";
 import "./fill";
 import "./warp";
+import "./text";
 export {};

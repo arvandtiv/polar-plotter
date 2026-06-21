@@ -107,6 +107,19 @@ function ColorField({ field, value, onChange }: {
   );
 }
 
+function TextField({ field, value, onChange }: {
+  field: Extract<Field, { type: 'text' }>; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{field.label}</span>
+      <input type="text" value={value} placeholder={field.placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-200 outline-none focus:border-cyanx/50" />
+    </label>
+  );
+}
+
 function renderField(field: Field, value: Val, onChange: (v: Val) => void) {
   switch (field.type) {
     case 'range':  return <RangeField  field={field} value={Number(value)}  onChange={onChange as (v: number) => void} />;
@@ -114,6 +127,7 @@ function renderField(field: Field, value: Val, onChange: (v: Val) => void) {
     case 'select': return <SelectField field={field} value={String(value)}  onChange={onChange as (v: string) => void} />;
     case 'toggle': return <ToggleField field={field} value={Boolean(value)} onChange={onChange as (v: boolean) => void} />;
     case 'color':  return <ColorField  field={field} value={String(value)}  onChange={onChange as (v: string) => void} />;
+    case 'text':   return <TextField   field={field} value={String(value)}  onChange={onChange as (v: string) => void} />;
   }
 }
 

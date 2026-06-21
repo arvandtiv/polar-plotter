@@ -16,7 +16,8 @@ export type Field =
   | (FieldBase & { type: "number"; min?: number; max?: number; step?: number })
   | (FieldBase & { type: "select"; options: { value: string; label: string }[] })
   | (FieldBase & { type: "toggle" })
-  | (FieldBase & { type: "color" });
+  | (FieldBase & { type: "color" })
+  | (FieldBase & { type: "text"; placeholder?: string });
 
 export interface Section { title: string; fields: Field[]; }
 

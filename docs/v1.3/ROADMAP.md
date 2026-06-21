@@ -124,7 +124,7 @@ building anything fancy.*
 ---
 
 ## Phase 5 — Text & image
-- [ ] **Day 20 — Text generator** — add `opentype.js` (upstream, MIT); string+font→paths.
+- [x] **Day 20 — Text generator** ✅ (S14, branch `v1.3-s1`) — built-in single-stroke font (no dep/font-file; better for plotting than opentype outlines)
 - [ ] **Day 21 — Image → linework** — threshold/edge → flowlines (canvas in worker).
 - [ ] **Day 22 — Image → halftone / squiggle** — density-driven dots/waves.
   - Each: a module; image days use an OffscreenCanvas, output a Frame like any other.
