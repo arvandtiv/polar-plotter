@@ -118,7 +118,7 @@ building anything fancy.*
   - Test: `pipeline.test.ts` — two makes compose; order affects output.
 - [x] **Day 17 — Shape Mask** ✅ (S11, branch `v1.3-s1`) — polyline-vs-region clip (no lib dep needed for open strokes)
 - [x] **Day 18 — Fill** ✅ (S12, branch `v1.3-s1`) — scanline hatch + concentric on any closed path below
-- [ ] **Day 19 — Warp/Ripple** (displace `lowerFrame` points by a field) (ref: `modules/ripples.js`)
+- [x] **Day 19 — Warp/Ripple** ✅ (S13, branch `v1.3-s1`) — water warp + droplet rings displace lowerFrame
   - Each modifier: `kind:"modify"`, reads `ctx.lowerFrame`, returns a new Frame; tested pure.
 
 ---
