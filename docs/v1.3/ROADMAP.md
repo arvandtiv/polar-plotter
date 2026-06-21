@@ -116,7 +116,7 @@ building anything fancy.*
   - Build: `lib/pipeline.ts` — `Layer[]` evaluated bottom→top, passing `lowerFrame`;
     `StudioTab` gains a Sequence list (add/remove/reorder).
   - Test: `pipeline.test.ts` — two makes compose; order affects output.
-- [ ] **Day 17 — Shape Mask** (clipper boolean; add a real clipping lib dep)
+- [x] **Day 17 — Shape Mask** ✅ (S11, branch `v1.3-s1`) — polyline-vs-region clip (no lib dep needed for open strokes)
 - [ ] **Day 18 — Fill** (scanline hatch + concentric inside a frame's closed paths)
 - [ ] **Day 19 — Warp/Ripple** (displace `lowerFrame` points by a field) (ref: `modules/ripples.js`)
   - Each modifier: `kind:"modify"`, reads `ctx.lowerFrame`, returns a new Frame; tested pure.
