@@ -20,9 +20,10 @@ import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../
 import { decodeBgcode } from '../lib/bgcode';
 import { compile } from '../lib/compile';
 import { optimizeOrder, simplifyFrame } from '../lib/toolpath';
-import { listModules, getModule, type GenCtx } from '../lib/registry';
+import { listModules, getModule, defaultsOf } from '../lib/registry';
+import { evaluate, type Layer } from '../lib/pipeline';
 import '../lib/modules';   // side effect: registers all generators/modifiers
-import { ParamPanel, useModuleValues } from './ParamPanel';
+import { ParamPanel } from './ParamPanel';
 
 // ================================================================
 //  Primitives
@@ -1005,6 +1006,27 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
 // v1.3 / S4 (Day 5): the Studio — pick a generator, tweak its schema-driven params,
 // and Run it through Frame → compile → streamQueries. Auto-lists every registered
 // "make" module, so new generators (S5+) appear here with zero UI wiring.
+// ---- Studio layer-stack persistence (localStorage) ----
+const STUDIO_KEY = 'plotterStudioLayers';
+let _layerSeq = 0;
+const newLayerId = () => `L${Date.now().toString(36)}${(_layerSeq++).toString(36)}`;
+function loadStudioLayers(): Layer[] {
+  try {
+    const raw = localStorage.getItem(STUDIO_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return arr.filter((l) => l && getModule(l.moduleKey))
+                  .map((l) => ({ id: l.id || newLayerId(), moduleKey: l.moduleKey, params: l.params || {} }));
+      }
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+// v1.3 / S10 (Day 16): the Studio is now a layer STACK. Each layer is a generator or
+// modifier; the stack evaluates bottom→top (a modifier sees everything beneath it),
+// then optimize → compile → stream. New modules appear in the Add picker automatically.
 function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<boolean>;
   getPending: () => Promise<number | null>;
@@ -1012,27 +1034,55 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   pushLog: (kind: LogEntry['kind'], text: string) => void;
   bounds: PlotterBounds;
 }) {
+  const allMods = useMemo(() => listModules(), []);
   const makes = useMemo(() => listModules('make'), []);
-  const [moduleKey, setModuleKey] = useState(makes[0]?.key ?? 'box');
-  const mod = getModule(moduleKey) ?? makes[0];
-  const { values, setValue, reset } = useModuleValues(mod);
+  const [layers, setLayers] = useState<Layer[]>(() => {
+    const stored = loadStudioLayers();
+    if (stored.length) return stored;
+    const m = makes[0];
+    return m ? [{ id: newLayerId(), moduleKey: m.key, params: defaultsOf(m) }] : [];
+  });
+  const [selId, setSelId] = useState<string>(() => layers[0]?.id ?? '');
+  const [addKey, setAddKey] = useState<string>(makes[0]?.key ?? '');
   const abortRef = useRef(false);
   const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; total: number; errors: number }>({
     status: 'idle', sent: 0, total: 0, errors: 0,
   });
 
-  const ctx: GenCtx = { bounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down } };
-  const frame = useMemo(() => mod.generate(values, ctx),
-    [mod, values, bounds.left, bounds.right, bounds.up, bounds.down]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { try { localStorage.setItem(STUDIO_KEY, JSON.stringify(layers)); } catch { /* ignore */ } }, [layers]);
+
+  const sel = layers.find((l) => l.id === selId) ?? layers[0];
+  const selMod = sel ? getModule(sel.moduleKey) : undefined;
+
+  const frame = useMemo(() => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }),
+    [layers, bounds.left, bounds.right, bounds.up, bounds.down]);
   const queries = useMemo(() => compile(optimizeOrder(simplifyFrame(frame))), [frame]);
   const draws = queries.filter((q) => q.startsWith('line?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
+  const addLayer = () => {
+    const m = getModule(addKey); if (!m) return;
+    const layer: Layer = { id: newLayerId(), moduleKey: addKey, params: defaultsOf(m) };
+    setLayers((ls) => [...ls, layer]); setSelId(layer.id); setRun((r) => ({ ...r, status: 'idle' }));
+  };
+  const removeLayer = (id: string) => setLayers((ls) => {
+    const next = ls.filter((l) => l.id !== id);
+    if (selId === id) setSelId(next[next.length - 1]?.id ?? '');
+    return next;
+  });
+  const move = (id: string, dir: -1 | 1) => setLayers((ls) => {
+    const i = ls.findIndex((l) => l.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= ls.length) return ls;
+    const next = ls.slice(); [next[i], next[j]] = [next[j], next[i]]; return next;
+  });
+  const setParam = (key: string, val: number | string | boolean) =>
+    setLayers((ls) => ls.map((l) => (l.id === sel?.id ? { ...l, params: { ...l.params, [key]: val } } : l)));
+  const resetSel = () => { if (selMod && sel) setLayers((ls) => ls.map((l) => (l.id === sel.id ? { ...l, params: defaultsOf(selMod) } : l))); };
+
   const start = useCallback(async () => {
-    abortRef.current = false;
-    runCancelRef.current = false;
+    abortRef.current = false; runCancelRef.current = false;
     setRun({ status: 'running', sent: 0, total: queries.length, errors: 0 });
-    pushLog('cmd', `> studio ${mod.label}: ${queries.length} ops (${draws} draws, ${travels} travels)`);
+    pushLog('cmd', `> studio: ${layers.length} layer(s), ${queries.length} ops (${draws} draws, ${travels} travels)`);
     const { sent, errors, stopped } = await streamQueries(
       queries.map((q) => ({ query: q })),
       { sendRaw, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
@@ -1042,24 +1092,50 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
       stopped ? `[studio] halted — ${sent}/${queries.length} sent`
               : `[studio] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
     setRun((r) => ({ ...r, status: 'done' }));
-  }, [queries, mod, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
+  }, [queries, layers.length, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
   const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
+  const busy = run.status === 'running';
 
   return (
     <Card title="Studio (v1.3)" icon="✦" accent="#7c3aed" defaultCollapsed={false}>
-      <label className="flex items-center gap-2 mb-3">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Generator</span>
-        <select value={moduleKey} onChange={(e) => { setModuleKey(e.target.value); setRun((r) => ({ ...r, status: 'idle' })); }}
-          disabled={run.status === 'running'}
-          className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
-          {makes.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-        </select>
-      </label>
-      {mod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{mod.description}</p>}
+      {/* Sequence (layer stack) — evaluated bottom→top; a modifier sees the layers below it. */}
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Sequence</p>
+      <div className="space-y-1">
+        {layers.map((l, i) => {
+          const m = getModule(l.moduleKey);
+          const active = l.id === sel?.id;
+          return (
+            <div key={l.id} className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+              <button onClick={() => setSelId(l.id)} className={`flex-1 text-left text-[12px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                {m?.label ?? l.moduleKey}
+                {m?.kind === 'modify' && <span className="ml-1 text-[10px] text-ink-500">modify</span>}
+              </button>
+              <button onClick={() => move(l.id, -1)} disabled={i === 0 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
+              <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
+              <button onClick={() => removeLayer(l.id)} disabled={busy} className="text-ink-500 hover:text-stop disabled:opacity-30 text-[12px]" title="Remove">✕</button>
+            </div>
+          );
+        })}
+        {layers.length === 0 && <p className="text-[11px] text-ink-600">No layers — add one below.</p>}
+      </div>
 
-      <ParamPanel sections={mod.sections} values={values} onChange={setValue} />
+      <div className="mt-2 flex items-center gap-2">
+        <select value={addKey} onChange={(e) => setAddKey(e.target.value)} disabled={busy}
+          className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+          {allMods.map((m) => <option key={m.key} value={m.key}>{m.label}{m.kind === 'modify' ? ' · modify' : ''}</option>)}
+        </select>
+        <Btn variant="default" onClick={addLayer} disabled={busy}>+ Add</Btn>
+      </div>
+
+      {/* Selected layer's parameters */}
+      {sel && selMod && (
+        <div className="mt-4 border-t border-ink-800 pt-3">
+          {selMod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{selMod.description}</p>}
+          <ParamPanel sections={selMod.sections} values={sel.params} onChange={setParam} />
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-x-4 text-[12px] text-ink-400">
         <span><span className="text-ink-500">draws</span> <span className="font-semibold">{draws}</span></span>
@@ -1068,16 +1144,16 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        {run.status !== 'running'
-          ? <Btn variant="go" onClick={start}>▶ Run</Btn>
+        {!busy
+          ? <Btn variant="go" onClick={start} disabled={draws === 0}>▶ Run</Btn>
           : <Btn variant="danger" onClick={abort}>Abort</Btn>}
-        <Btn variant="default" onClick={reset} disabled={run.status === 'running'}>⟲ Reset</Btn>
+        <Btn variant="default" onClick={resetSel} disabled={busy || !selMod}>⟲ Reset layer</Btn>
       </div>
 
       {run.status !== 'idle' && run.total > 0 && (
         <div className="mt-3">
           <div className="flex justify-between text-[11px] text-ink-500 mb-1">
-            <span>{run.status === 'running' ? 'Streaming…' : 'Done'}</span>
+            <span>{busy ? 'Streaming…' : 'Done'}</span>
             <span>{run.sent} / {run.total}</span>
           </div>
           <div className="h-1.5 rounded bg-ink-800 overflow-hidden">

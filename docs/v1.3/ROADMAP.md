@@ -112,7 +112,7 @@ building anything fancy.*
 ## Phase 4 — Modifier stack ("Modify")
 *Non-destructive layers; modifiers read the frame beneath.* (See `05-modifier-pipeline.md`.)
 
-- [ ] **Day 16 — Layer model + pipeline eval**
+- [x] **Day 16 — Layer model + pipeline eval** ✅ (S10, branch `v1.3-s1`)
   - Build: `lib/pipeline.ts` — `Layer[]` evaluated bottom→top, passing `lowerFrame`;
     `StudioTab` gains a Sequence list (add/remove/reorder).
   - Test: `pipeline.test.ts` — two makes compose; order affects output.
