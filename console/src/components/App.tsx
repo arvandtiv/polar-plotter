@@ -19,7 +19,9 @@ import {
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
 import { compile } from '../lib/compile';
-import { rectPath, type Frame } from '../lib/frame';
+import type { GenCtx } from '../lib/registry';
+import { boxModule } from '../lib/modules/box';
+import { ParamPanel, useModuleValues } from './ParamPanel';
 
 // ================================================================
 //  Primitives
@@ -999,37 +1001,49 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
   );
 }
 
-// v1.3 / S1 (Day 1): temporary proof of the Frame → compile → stream pipeline.
-// Plots a 100x100 box built as a Frame, compiled to the firmware query queue.
-// Will be replaced by the Studio tab in S4; safe to delete after.
-function FrameTestButton({ sendRaw, getPending, runCancelRef, pushLog }: {
+// v1.3 / S3 (Day 4): proof of the schema-driven panel + Frame pipeline. Renders the
+// `box` module's fields via ParamPanel, compiles box.generate(values), and streams it.
+// A precursor to the full Studio tab (S4: module picker + preview). Safe to replace.
+function FramePipelineCard({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<boolean>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: LogEntry['kind'], text: string) => void;
+  bounds: PlotterBounds;
 }) {
+  const { values, setValue, reset } = useModuleValues(boxModule);
   const [running, setRunning] = useState(false);
+
+  const ctx: GenCtx = { bounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down } };
+  const frame = boxModule.generate(values, ctx);
+  const queries = compile(frame);
+
   const run = useCallback(async () => {
-    const frame: Frame = { widthMm: 100, heightMm: 100, paths: [rectPath(0, 0, 100, 100)] };
-    const queries = compile(frame);
     setRunning(true);
     runCancelRef.current = false;
-    pushLog('cmd', `> frame test: 100×100 box (${queries.length} ops via compile)`);
+    pushLog('cmd', `> ${boxModule.label}: ${queries.length} ops via Frame→compile`);
     const { sent, errors } = await streamQueries(
       queries.map((q) => ({ query: q })),
       { sendRaw, getPending, isCancelled: () => runCancelRef.current, pushLog, label: 'frame' },
     );
     pushLog(errors ? 'warn' : 'ok', `[frame] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
     setRunning(false);
-  }, [sendRaw, getPending, runCancelRef, pushLog]);
+  }, [queries, sendRaw, getPending, runCancelRef, pushLog]);
 
   return (
-    <Card title="Frame pipeline (v1.3 · S1)" icon="◻" accent="#7c3aed" defaultCollapsed={false}>
+    <Card title="Frame pipeline (v1.3 · S3)" icon="◻" accent="#7c3aed" defaultCollapsed={false}>
       <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
-        Day-1 proof of the new <span className="font-mono">Frame → compile → stream</span> path:
-        plots a 100×100&nbsp;mm box centred on the origin. Temporary; replaced by the Studio tab.
+        Schema-driven controls for the <span className="font-mono">{boxModule.label}</span> generator
+        → <span className="font-mono">Frame → compile → stream</span>. Precursor to the Studio tab.
       </p>
-      <Btn variant="go" onClick={run} disabled={running}>{running ? 'Plotting…' : '◻ Run test frame'}</Btn>
+      <ParamPanel sections={boxModule.sections} values={values} onChange={setValue} />
+      <div className="mt-3 rounded border border-ink-800 bg-ink-850 p-2 font-mono text-[11px] text-ink-500 break-all">
+        {JSON.stringify(values)} <span className="text-ink-600">· {queries.length} ops</span>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <Btn variant="go" onClick={run} disabled={running}>{running ? 'Plotting…' : '▶ Run'}</Btn>
+        <Btn variant="default" onClick={reset}>⟲ Reset</Btn>
+      </div>
     </Card>
   );
 }
@@ -1641,7 +1655,7 @@ export default function App() {
 
                 <GcodeTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
-                <FrameTestButton sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
+                <FramePipelineCard sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />

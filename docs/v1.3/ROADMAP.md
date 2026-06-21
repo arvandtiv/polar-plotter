@@ -45,7 +45,7 @@ building anything fancy.*
 ## Phase 1 — Schema-driven UI + port existing shapes
 *Replace hand-wired controls with auto-panels and make today's shapes modules.*
 
-- [ ] **Day 4 — `ParamPanel` component**
+- [x] **Day 4 — `ParamPanel` component** ✅ (S3, branch `v1.3-s1`)
   - Goal: render any module's `sections` and own its values.
   - Build: `components/ParamPanel.tsx` (range/select/color/toggle/number → controls,
     reusing existing `FieldInline`/`FillPicker` styling); localStorage per-module values.
