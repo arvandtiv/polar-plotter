@@ -59,7 +59,7 @@ building anything fancy.*
   - Done-when: pick Box → tweak → Run → plots; STOP/abort halts it.
 
 - [~] **Day 6–8 — Port circle, square, line/polygon, wobbly as modules**
-  *(circle + square ✅ S5, branch `v1.3-s1`; line/polygon + wobbly → S6)*
+  *(circle + square ✅ S5; wobbly ✅ S6, branch `v1.3-s1`; line/polygon → later)*
   - Goal: today's primitives become Frame generators (one per day). Keep the old
     firmware primitives too; these are the *console-side* generators that compile to
     `line` runs, gaining travel-optimised continuous draw for free.
@@ -73,7 +73,7 @@ building anything fancy.*
 ## Phase 2 — Smarter toolpaths (measurable win)
 *Cut air-time and point count for everything that flows through compile.*
 
-- [ ] **Day 9 — Nearest-neighbour travel ordering**
+- [x] **Day 9 — Nearest-neighbour travel ordering** ✅ (S6, branch `v1.3-s1`)
   - Goal: reorder Frame paths (and allow reversing) to minimise pen-up travel.
   - Build: `lib/toolpath.ts` `optimizeOrder(frame): Frame`; wire into `compile`.
     (See `04-travel-and-simplify.md`.)

@@ -3,4 +3,5 @@
 import "./box";
 import "./circle";
 import "./square";
+import "./wobbly";
 export {};
