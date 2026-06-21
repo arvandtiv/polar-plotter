@@ -19,8 +19,8 @@ import {
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
 import { compile } from '../lib/compile';
-import type { GenCtx } from '../lib/registry';
-import { boxModule } from '../lib/modules/box';
+import { listModules, getModule, type GenCtx } from '../lib/registry';
+import '../lib/modules';   // side effect: registers all generators/modifiers
 import { ParamPanel, useModuleValues } from './ParamPanel';
 
 // ================================================================
@@ -1001,49 +1001,89 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
   );
 }
 
-// v1.3 / S3 (Day 4): proof of the schema-driven panel + Frame pipeline. Renders the
-// `box` module's fields via ParamPanel, compiles box.generate(values), and streams it.
-// A precursor to the full Studio tab (S4: module picker + preview). Safe to replace.
-function FramePipelineCard({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
+// v1.3 / S4 (Day 5): the Studio — pick a generator, tweak its schema-driven params,
+// and Run it through Frame → compile → streamQueries. Auto-lists every registered
+// "make" module, so new generators (S5+) appear here with zero UI wiring.
+function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<boolean>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: LogEntry['kind'], text: string) => void;
   bounds: PlotterBounds;
 }) {
-  const { values, setValue, reset } = useModuleValues(boxModule);
-  const [running, setRunning] = useState(false);
+  const makes = useMemo(() => listModules('make'), []);
+  const [moduleKey, setModuleKey] = useState(makes[0]?.key ?? 'box');
+  const mod = getModule(moduleKey) ?? makes[0];
+  const { values, setValue, reset } = useModuleValues(mod);
+  const abortRef = useRef(false);
+  const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; total: number; errors: number }>({
+    status: 'idle', sent: 0, total: 0, errors: 0,
+  });
 
   const ctx: GenCtx = { bounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down } };
-  const frame = boxModule.generate(values, ctx);
-  const queries = compile(frame);
+  const frame = useMemo(() => mod.generate(values, ctx),
+    [mod, values, bounds.left, bounds.right, bounds.up, bounds.down]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const queries = useMemo(() => compile(frame), [frame]);
+  const draws = queries.filter((q) => q.startsWith('line?')).length;
+  const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
-  const run = useCallback(async () => {
-    setRunning(true);
+  const start = useCallback(async () => {
+    abortRef.current = false;
     runCancelRef.current = false;
-    pushLog('cmd', `> ${boxModule.label}: ${queries.length} ops via Frame→compile`);
-    const { sent, errors } = await streamQueries(
+    setRun({ status: 'running', sent: 0, total: queries.length, errors: 0 });
+    pushLog('cmd', `> studio ${mod.label}: ${queries.length} ops (${draws} draws, ${travels} travels)`);
+    const { sent, errors, stopped } = await streamQueries(
       queries.map((q) => ({ query: q })),
-      { sendRaw, getPending, isCancelled: () => runCancelRef.current, pushLog, label: 'frame' },
+      { sendRaw, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
+        onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
     );
-    pushLog(errors ? 'warn' : 'ok', `[frame] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
-    setRunning(false);
-  }, [queries, sendRaw, getPending, runCancelRef, pushLog]);
+    pushLog(stopped ? 'warn' : (errors ? 'warn' : 'ok'),
+      stopped ? `[studio] halted — ${sent}/${queries.length} sent`
+              : `[studio] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
+    setRun((r) => ({ ...r, status: 'done' }));
+  }, [queries, mod, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
+
+  const abort = useCallback(() => { abortRef.current = true; }, []);
+  const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
 
   return (
-    <Card title="Frame pipeline (v1.3 · S3)" icon="◻" accent="#7c3aed" defaultCollapsed={false}>
-      <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
-        Schema-driven controls for the <span className="font-mono">{boxModule.label}</span> generator
-        → <span className="font-mono">Frame → compile → stream</span>. Precursor to the Studio tab.
-      </p>
-      <ParamPanel sections={boxModule.sections} values={values} onChange={setValue} />
-      <div className="mt-3 rounded border border-ink-800 bg-ink-850 p-2 font-mono text-[11px] text-ink-500 break-all">
-        {JSON.stringify(values)} <span className="text-ink-600">· {queries.length} ops</span>
+    <Card title="Studio (v1.3)" icon="✦" accent="#7c3aed" defaultCollapsed={false}>
+      <label className="flex items-center gap-2 mb-3">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Generator</span>
+        <select value={moduleKey} onChange={(e) => { setModuleKey(e.target.value); setRun((r) => ({ ...r, status: 'idle' })); }}
+          disabled={run.status === 'running'}
+          className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+          {makes.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+      </label>
+      {mod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{mod.description}</p>}
+
+      <ParamPanel sections={mod.sections} values={values} onChange={setValue} />
+
+      <div className="mt-3 flex flex-wrap gap-x-4 text-[12px] text-ink-400">
+        <span><span className="text-ink-500">draws</span> <span className="font-semibold">{draws}</span></span>
+        <span><span className="text-ink-500">travels</span> <span className="font-semibold">{travels}</span></span>
+        <span><span className="text-ink-500">ops</span> <span className="font-semibold">{queries.length}</span></span>
       </div>
+
       <div className="mt-3 flex items-center gap-2">
-        <Btn variant="go" onClick={run} disabled={running}>{running ? 'Plotting…' : '▶ Run'}</Btn>
-        <Btn variant="default" onClick={reset}>⟲ Reset</Btn>
+        {run.status !== 'running'
+          ? <Btn variant="go" onClick={start}>▶ Run</Btn>
+          : <Btn variant="danger" onClick={abort}>Abort</Btn>}
+        <Btn variant="default" onClick={reset} disabled={run.status === 'running'}>⟲ Reset</Btn>
       </div>
+
+      {run.status !== 'idle' && run.total > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-[11px] text-ink-500 mb-1">
+            <span>{run.status === 'running' ? 'Streaming…' : 'Done'}</span>
+            <span>{run.sent} / {run.total}</span>
+          </div>
+          <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
+            <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -1655,7 +1695,7 @@ export default function App() {
 
                 <GcodeTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
-                <FramePipelineCard sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+                <StudioTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />

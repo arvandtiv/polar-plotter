@@ -52,13 +52,14 @@ building anything fancy.*
   - Test: manual — pick Box, sliders update a live JSON readout.
   - Done-when: changing a field updates values; reset restores `field.default`.
 
-- [ ] **Day 5 — `StudioTab` shell**
+- [x] **Day 5 — `StudioTab` shell** ✅ (S4, branch `v1.3-s1`)
   - Goal: picker (Make list from registry) + ParamPanel + "Run" (compile→stream) +
     parse summary. Reuse `streamQueries` and the run/abort UI from `GcodeTab`.
   - Build: `components/StudioTab.tsx`; add a "Studio" card to the Autonomous tab.
   - Done-when: pick Box → tweak → Run → plots; STOP/abort halts it.
 
-- [ ] **Day 6–8 — Port circle, square, line/polygon, wobbly as modules**
+- [~] **Day 6–8 — Port circle, square, line/polygon, wobbly as modules**
+  *(circle + square ✅ S5, branch `v1.3-s1`; line/polygon + wobbly → S6)*
   - Goal: today's primitives become Frame generators (one per day). Keep the old
     firmware primitives too; these are the *console-side* generators that compile to
     `line` runs, gaining travel-optimised continuous draw for free.
