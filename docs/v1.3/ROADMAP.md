@@ -102,8 +102,8 @@ building anything fancy.*
 
 - [x] **Day 12 — Spirograph** ✅ (S8, branch `v1.3-s1`) (ref: `modules/spirograph-*.js`)
 - [x] **Day 13 — Orbital weave / harmonograph** ✅ (S8, branch `v1.3-s1`) (ref: `modules/orbital-weave.js`)
-- [ ] **Day 14 — Moiré curtain / line patterns**
-- [ ] **Day 15 — Pattern maker (shape cascade)**
+- [x] **Day 14 — Moiré curtain / line patterns** ✅ (S9, branch `v1.3-s1`)
+- [x] **Day 15 — Pattern maker (shape cascade)** ✅ (S9, branch `v1.3-s1`)
   - Each day: `lib/modules/<name>.ts` + `sections/fields` + `<name>.test.ts` (bbox /
     point-count / determinism) + appears in the Make picker. Done-when it plots.
 

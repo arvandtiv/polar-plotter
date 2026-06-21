@@ -6,4 +6,6 @@ import "./square";
 import "./wobbly";
 import "./spirograph";
 import "./orbital-weave";
+import "./moire-curtain";
+import "./pattern-maker";
 export {};

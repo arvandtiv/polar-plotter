@@ -67,6 +67,25 @@ export function rotate(points: Pt[], angleRad: number, cx = 0, cy = 0): Pt[] {
   });
 }
 
+/** Clip segment a–b to an axis-aligned rect (Liang–Barsky). null if fully outside. */
+export function clipSegmentToRect(
+  a: Pt, b: Pt, rect: { x0: number; y0: number; x1: number; y1: number },
+): [Pt, Pt] | null {
+  let t0 = 0, t1 = 1;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const p = [-dx, dx, -dy, dy];
+  const q = [a.x - rect.x0, rect.x1 - a.x, a.y - rect.y0, rect.y1 - a.y];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) { if (q[i] < 0) return null; }
+    else {
+      const r = q[i] / p[i];
+      if (p[i] < 0) { if (r > t1) return null; if (r > t0) t0 = r; }
+      else { if (r < t0) return null; if (r < t1) t1 = r; }
+    }
+  }
+  return [{ x: a.x + t0 * dx, y: a.y + t0 * dy }, { x: a.x + t1 * dx, y: a.y + t1 * dy }];
+}
+
 /** Cubic Bézier sampled into n+1 points (t = 0..1 inclusive). */
 export function sampleBezier(p0: Pt, p1: Pt, p2: Pt, p3: Pt, n: number): Pt[] {
   const out: Pt[] = [];
