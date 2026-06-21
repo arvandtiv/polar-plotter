@@ -9,6 +9,15 @@
 // Z/E/F and everything else is ignored. Coordinates are fitted into the active
 // work area (see PlaceMode) because G-code is usually corner-origin, Y-up while
 // the plotter is centre-origin, Y-down.
+//
+// As of v1.3 (S7) the digester builds a Frame and runs it through the shared
+// pipeline (simplify → travel-order → compile), so imports inherit the same
+// optimization as generators. Pen-up-only travels that lead to no drawing are
+// dropped (they aren't geometry).
+
+import type { Frame, Path, Pt } from './frame';
+import { compile } from './compile';
+import { optimizeOrder, simplifyFrame } from './toolpath';
 
 export type PenMode = 'auto' | 'z' | 'spindle' | 'servo' | 'g01';
 export type PlaceMode = 'fit' | 'center' | 'rawflip' | 'raw';
@@ -175,33 +184,32 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
 
   const { fn: T, scale } = makeTransform(opts.placeMode, bbox, opts.bounds);
 
-  // ---- pass 2: emit queries ----
-  const queries: string[] = ['pen?pos=up'];   // known-safe start
-  let draws = 0, travels = 0;
+  // ---- pass 2: build a Frame (group pen-down runs into paths) ----
+  // A continuous pen-down stroke = one Path, starting at the gondola position when
+  // the pen dropped. Pen-up moves only advance that position (no geometry).
+  const paths: Path[] = [];
+  let cur: Pt[] | null = null;
   let down = false;
-  let last: [number, number] | null = null;
-  const r = (n: number) => Math.round(n * 100) / 100;
+  let pos: Pt | null = null;
+  const flush = () => { if (cur && cur.length > 1) paths.push({ points: cur }); cur = null; };
 
   for (const o of ops) {
     if (o.kind === 'pen') {
+      if (o.down && !down) cur = pos ? [pos] : [];   // start a stroke at current position
+      if (!o.down && down) flush();                  // pen lifted → close the stroke
       down = o.down;
-      queries.push(`pen?pos=${down ? 'down' : 'up'}`);
       continue;
     }
     const [X, Y] = T(o.x, o.y);
-    if (down && last) {
-      // lift=0: the digester drives the pen explicitly (one drop per drawn run,
-      // one lift before each travel), so the firmware line must NOT bob the pen
-      // up/down at every segment — back-to-back segments draw continuously.
-      queries.push(`line?x0=${r(last[0])}&y0=${r(last[1])}&x1=${r(X)}&y1=${r(Y)}&cycles=1&lift=0`);
-      draws++;
-    } else {
-      queries.push(`goto?x=${r(X)}&y=${r(Y)}`);
-      travels++;
-    }
-    last = [X, Y];
+    pos = { x: X, y: Y };
+    if (down) { if (!cur) cur = []; cur.push(pos); }
   }
-  queries.push('pen?pos=up');
+  flush();
+
+  const frame: Frame = { widthMm: opts.bounds.left + opts.bounds.right, heightMm: opts.bounds.up + opts.bounds.down, paths };
+  const queries = compile(optimizeOrder(simplifyFrame(frame)));
+  const draws = queries.filter((q) => q.startsWith('line?')).length;
+  const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
   if (!bbox) warnings.push('no X/Y moves found — nothing to draw');
   if (opts.placeMode === 'fit' && scale < 1)

@@ -2,8 +2,17 @@
 // generators, imported G-code) plots with less pen-up travel. Geometry is never
 // changed: paths are only reordered and optionally reversed. See docs/v1.3/04-*.md.
 
-import { dist } from "./geom";
+import { dist, simplifyRDP } from "./geom";
 import { clonePath, type Frame, type Path, type Pt } from "./frame";
+
+/** Simplify every path in the frame (RDP) within `tol` mm. Default 0.2 mm (sub-pen).
+ *  Closed paths keep their closure flag; fewer points → fewer firmware jobs. */
+export function simplifyFrame(frame: Frame, tol = 0.2): Frame {
+  if (tol <= 0) return frame;
+  const paths: Path[] = frame.paths.map((p) =>
+    p.points.length > 2 ? { ...p, points: simplifyRDP(p.points, tol) } : clonePath(p));
+  return { ...frame, paths };
+}
 
 const ORIGIN: Pt = { x: 0, y: 0 };
 

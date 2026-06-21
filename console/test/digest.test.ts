@@ -56,13 +56,16 @@ async function main() {
   // ============ [2] Z-height pen + auto-detect ============
   console.log('[2] digest: Z-height pen, auto-detect, raw+flip');
   {
-    const prog = `G90\nG0 Z2\nG0 X0 Y0\nG1 Z0\nG1 X10 Y0\nG0 Z2\nG0 X50 Y50`;
+    // pen drops at (0,0), draws to (10,20); Y-flip sends the drawn endpoint to -20.
+    const prog = `G90\nG0 Z2\nG0 X0 Y0\nG1 Z0\nG1 X10 Y20\nG0 Z2`;
     const r = digestGcode(prog, { penMode: 'auto', placeMode: 'rawflip',
       bounds: { left: 300, right: 300, up: 300, down: 300 } });
     ok('auto-detects Z mode', r.resolvedPen === 'z', `got ${r.resolvedPen}`);
     ok('one drawn segment', r.draws === 1, `draws=${r.draws}`);
-    ok('Y is flipped (Y0 stays 0)', r.queries.includes('line?x0=0&y0=0&x1=10&y1=0&cycles=1&lift=0'));
-    ok('flip sends Y50 -> -50', r.queries.includes('goto?x=50&y=-50'));
+    ok('Y-flip on drawn geometry (Y20 → -20)',
+       r.queries.includes('line?x0=0&y0=0&x1=10&y1=-20&cycles=1&lift=0'), JSON.stringify(r.queries));
+    ok('pen-up-only trailing travel dropped (Frame model)',
+       !r.queries.some((q) => q.startsWith('goto?x=50')));
   }
 
   // ============ [3] auto-fit scaling + centering ============

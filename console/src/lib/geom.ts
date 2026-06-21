@@ -82,6 +82,46 @@ export function sampleBezier(p0: Pt, p1: Pt, p2: Pt, p3: Pt, n: number): Pt[] {
   return out;
 }
 
+/** Perpendicular distance from p to the (infinite) line through a–b. */
+function pointLineDistance(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-12) return dist(p, a);
+  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+
+/** Ramer–Douglas–Peucker: drop points that stay within `tol` of the simplified line. */
+export function simplifyRDP(points: Pt[], tol: number): Pt[] {
+  if (points.length < 3 || tol <= 0) return points.map((p) => ({ ...p }));
+  const keep = new Array<boolean>(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  while (stack.length) {
+    const [lo, hi] = stack.pop()!;
+    let maxD = 0, idx = -1;
+    for (let i = lo + 1; i < hi; i++) {
+      const d = pointLineDistance(points[i], points[lo], points[hi]);
+      if (d > maxD) { maxD = d; idx = i; }
+    }
+    if (idx !== -1 && maxD > tol) { keep[idx] = true; stack.push([lo, idx], [idx, hi]); }
+  }
+  return points.filter((_, i) => keep[i]).map((p) => ({ ...p }));
+}
+
+/** Drop a midpoint that lies within `tol` of the line through its neighbours. */
+export function filterCollinear(points: Pt[], tol: number): Pt[] {
+  if (points.length < 3 || tol <= 0) return points.map((p) => ({ ...p }));
+  const out: Pt[] = [{ ...points[0] }];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (pointLineDistance(points[i], out[out.length - 1], points[i + 1]) > tol) {
+      out.push({ ...points[i] });
+    }
+  }
+  out.push({ ...points[points.length - 1] });
+  return out;
+}
+
 /** Deterministic PRNG (mulberry32). seededRandom(42)() always gives the same stream. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;

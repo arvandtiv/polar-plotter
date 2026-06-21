@@ -81,14 +81,14 @@ building anything fancy.*
     naive order; endpoints preserved; deterministic.
   - Done-when: a multi-path Frame plots with visibly less hopping; metric logged.
 
-- [ ] **Day 10 — RDP simplify + collinear filter**
+- [x] **Day 10 — RDP simplify + collinear filter** ✅ (S7, branch `v1.3-s1`)
   - Goal: drop redundant points (fewer firmware jobs) within a deviation tolerance.
   - Build: `simplifyRDP(points, tol)`, `filterCollinear`; apply in `compile` with a
     user tolerance field.
   - Test: straight run collapses to 2 points; a curve stays within tolerance.
   - Done-when: job count for a sample drops materially with no visible quality loss.
 
-- [ ] **Day 11 — Route the G-code digester through compile**
+- [x] **Day 11 — Route the G-code digester through compile** ✅ (S7, branch `v1.3-s1`)
   - Goal: replace the digester's bespoke emit loop with `compile(frameFromGcode)`,
     so it gains ordering + simplify. (`lib/gcode.ts` produces a Frame now.)
   - Test: update `digest.test.ts` to assert on the compiled queries; behaviour parity

@@ -19,7 +19,7 @@ import {
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
 import { compile } from '../lib/compile';
-import { optimizeOrder } from '../lib/toolpath';
+import { optimizeOrder, simplifyFrame } from '../lib/toolpath';
 import { listModules, getModule, type GenCtx } from '../lib/registry';
 import '../lib/modules';   // side effect: registers all generators/modifiers
 import { ParamPanel, useModuleValues } from './ParamPanel';
@@ -1024,7 +1024,7 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   const ctx: GenCtx = { bounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down } };
   const frame = useMemo(() => mod.generate(values, ctx),
     [mod, values, bounds.left, bounds.right, bounds.up, bounds.down]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const queries = useMemo(() => compile(optimizeOrder(frame)), [frame]);
+  const queries = useMemo(() => compile(optimizeOrder(simplifyFrame(frame))), [frame]);
   const draws = queries.filter((q) => q.startsWith('line?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
