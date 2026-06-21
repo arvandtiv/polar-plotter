@@ -12,4 +12,5 @@ import "./mask";
 import "./fill";
 import "./warp";
 import "./text";
+import "./image-linework";
 export {};

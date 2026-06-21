@@ -21,11 +21,16 @@ export type Field =
 
 export interface Section { title: string; fields: Field[]; }
 
+/** Downsampled grayscale image (0=black..1=white, row-major), supplied by the UI. */
+export interface GrayImage { width: number; height: number; gray: Float32Array; }
+
 export interface GenCtx {
   /** Active work-area extents (mm from origin). */
   bounds: { left: number; right: number; up: number; down: number };
   /** For modifiers: the composited frame of every layer below this one. */
   lowerFrame?: Frame;
+  /** Source image (for image modules), loaded by the Studio. */
+  image?: GrayImage;
 }
 
 export type ParamValues = Record<string, number | string | boolean>;

@@ -21,12 +21,12 @@ export function mergeFrames(a: Frame, b: Frame): Frame {
 }
 
 /** Evaluate the stack to a single Frame. Unknown module keys are skipped. */
-export function evaluate(layers: Layer[], bounds: GenCtx["bounds"]): Frame {
+export function evaluate(layers: Layer[], bounds: GenCtx["bounds"], image?: GenCtx["image"]): Frame {
   let acc = emptyFrame(bounds);
   for (const layer of layers) {
     const mod = getModule(layer.moduleKey);
     if (!mod) continue;
-    const out = mod.generate(layer.params, { bounds, lowerFrame: acc });
+    const out = mod.generate(layer.params, { bounds, lowerFrame: acc, image });
     acc = mod.kind === "modify" ? out : mergeFrames(acc, out);
   }
   return acc;

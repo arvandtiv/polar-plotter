@@ -22,6 +22,8 @@ import { compile } from '../lib/compile';
 import { optimizeOrder, simplifyFrame } from '../lib/toolpath';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer } from '../lib/pipeline';
+import { loadImageToGray } from '../lib/image';
+import type { GrayImage } from '../lib/registry';
 import '../lib/modules';   // side effect: registers all generators/modifiers
 import { ParamPanel } from './ParamPanel';
 
@@ -1051,11 +1053,17 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
 
   useEffect(() => { try { localStorage.setItem(STUDIO_KEY, JSON.stringify(layers)); } catch { /* ignore */ } }, [layers]);
 
+  // Source image for image modules (loaded in the UI, fed to evaluate via ctx.image).
+  const [image, setImage] = useState<GrayImage | undefined>(undefined);
+  const [imageName, setImageName] = useState('');
+  const imgRef = useRef<HTMLInputElement>(null);
+  const needsImage = layers.some((l) => getModule(l.moduleKey)?.group === 'Image');
+
   const sel = layers.find((l) => l.id === selId) ?? layers[0];
   const selMod = sel ? getModule(sel.moduleKey) : undefined;
 
-  const frame = useMemo(() => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }),
-    [layers, bounds.left, bounds.right, bounds.up, bounds.down]);
+  const frame = useMemo(() => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, image),
+    [layers, bounds.left, bounds.right, bounds.up, bounds.down, image]);
   const queries = useMemo(() => compile(optimizeOrder(simplifyFrame(frame))), [frame]);
   const draws = queries.filter((q) => q.startsWith('line?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
@@ -1101,6 +1109,22 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   return (
     <Card title="Studio (v1.3)" icon="✦" accent="#7c3aed" defaultCollapsed={false}>
       {/* Sequence (layer stack) — evaluated bottom→top; a modifier sees the layers below it. */}
+      {/* Source image — only relevant when an Image module is in the stack */}
+      {needsImage && (
+        <div className="mb-3 flex items-center gap-2">
+          <input ref={imgRef} type="file" accept="image/*" className="hidden"
+            onChange={async (e) => {
+              const fl = e.target.files?.[0]; e.target.value = '';
+              if (!fl) return;
+              try { setImage(await loadImageToGray(fl)); setImageName(fl.name); pushLog('ok', `[studio] image ${fl.name}`); }
+              catch (err) { pushLog('err', `[studio] image: ${(err as Error).message}`); }
+            }} />
+          <Btn variant="primary" onClick={() => imgRef.current?.click()} disabled={busy}>🖼 Source image…</Btn>
+          {imageName ? <span className="font-mono text-[11px] text-ink-500 truncate max-w-[160px]">{imageName} {image && `(${image.width}×${image.height})`}</span>
+                     : <span className="text-[11px] text-amber-400">load an image</span>}
+        </div>
+      )}
+
       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Sequence</p>
       <div className="space-y-1">
         {layers.map((l, i) => {
