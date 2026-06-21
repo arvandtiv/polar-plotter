@@ -4,4 +4,6 @@ import "./box";
 import "./circle";
 import "./square";
 import "./wobbly";
+import "./spirograph";
+import "./orbital-weave";
 export {};

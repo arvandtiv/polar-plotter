@@ -100,8 +100,8 @@ building anything fancy.*
 ## Phase 3 — The "Make" library (one generator per day)
 *Now generators are cheap: each is one pure file + its fields.*
 
-- [ ] **Day 12 — Spirograph** (ref: `modules/spirograph-*.js`)
-- [ ] **Day 13 — Orbital weave / harmonograph** (ref: `modules/orbital-weave.js`)
+- [x] **Day 12 — Spirograph** ✅ (S8, branch `v1.3-s1`) (ref: `modules/spirograph-*.js`)
+- [x] **Day 13 — Orbital weave / harmonograph** ✅ (S8, branch `v1.3-s1`) (ref: `modules/orbital-weave.js`)
 - [ ] **Day 14 — Moiré curtain / line patterns**
 - [ ] **Day 15 — Pattern maker (shape cascade)**
   - Each day: `lib/modules/<name>.ts` + `sections/fields` + `<name>.test.ts` (bbox /
