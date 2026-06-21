@@ -13,4 +13,6 @@ import "./fill";
 import "./warp";
 import "./text";
 import "./image-linework";
+import "./image-halftone";
+import "./image-squiggle";
 export {};

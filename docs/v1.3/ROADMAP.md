@@ -126,7 +126,7 @@ building anything fancy.*
 ## Phase 5 — Text & image
 - [x] **Day 20 — Text generator** ✅ (S14, branch `v1.3-s1`) — built-in single-stroke font (no dep/font-file; better for plotting than opentype outlines)
 - [x] **Day 21 — Image → linework** ✅ (S15, branch `v1.3-s1`) — brightness iso-contours (marching squares); image fed via ctx.image
-- [ ] **Day 22 — Image → halftone / squiggle** — density-driven dots/waves.
+- [x] **Day 22 — Image → halftone / squiggle** ✅ (S16, branch `v1.3-s1`) — density dots + wavy scanlines (ctx.image)
   - Each: a module; image days use an OffscreenCanvas, output a Frame like any other.
 
 ---
