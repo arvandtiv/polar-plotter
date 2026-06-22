@@ -1012,7 +1012,7 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
 // "make" module, so new generators (S5+) appear here with zero UI wiring.
 // v1.3 / S17 (Day 23-24): live Frame preview with a drawing-order scrubber. Draws the
 // active (optimised, progress-sliced) frame in plotter coords. Self-contained SVG.
-function FramePreview({ bounds, frame }: { bounds: PlotterBounds; frame: Frame }) {
+function FramePreview({ bounds, frame, contain = false }: { bounds: PlotterBounds; frame: Frame; contain?: boolean }) {
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
   const vbX = -left - pad, vbY = -down - pad, vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
@@ -1020,9 +1020,11 @@ function FramePreview({ bounds, frame }: { bounds: PlotterBounds; frame: Frame }
   const CAP = 6000;   // guard against pathological path counts freezing the SVG
   const shown = frame.paths.slice(0, CAP);
   return (
-    <div className="rounded-lg border border-ink-800 bg-ink-950 overflow-hidden">
-      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full"
-        style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block' }} preserveAspectRatio="xMidYMid meet">
+    <div className={contain ? 'h-full w-full overflow-hidden' : 'rounded-lg border border-ink-800 bg-ink-950 overflow-hidden'}>
+      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+        className={contain ? 'h-full w-full' : 'w-full'}
+        style={contain ? { display: 'block' } : { aspectRatio: `${vbW} / ${vbH}`, display: 'block' }}
+        preserveAspectRatio="xMidYMid meet">
         <rect x={-left} y={-down} width={left + right} height={up + down} fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.2} rx={sw} />
         {shown.map((p, i) => {
           const pts = p.closed && p.points.length > 2 ? [...p.points, p.points[0]] : p.points;
@@ -1052,16 +1054,16 @@ function loadStudioLayers(): Layer[] {
   return [];
 }
 
-// v1.3 / S10 (Day 16): the Studio is now a layer STACK. Each layer is a generator or
-// modifier; the stack evaluates bottom→top (a modifier sees everything beneath it),
-// then optimize → compile → stream. New modules appear in the Add picker automatically.
-function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
-  sendRaw: (ep: string, json?: string) => Promise<boolean>;
-  getPending: () => Promise<number | null>;
-  runCancelRef: React.MutableRefObject<boolean>;
-  pushLog: (kind: LogEntry['kind'], text: string) => void;
+// v1.3: the Studio is its own full-page product — a layer STACK (generators + modifiers,
+// evaluated bottom→top), a big live preview on the left, controls on the right. New
+// modules appear in the Add picker automatically.
+function StudioPage({ P, status, moving, bounds }: {
+  P: ReturnType<typeof usePlotter>;
+  status: PlotterStatus | null;
+  moving: boolean;
   bounds: PlotterBounds;
 }) {
+  const { sendRaw, getPending, runCancelRef, pushLog } = P;
   const allMods = useMemo(() => listModules(), []);
   const makes = useMemo(() => listModules('make'), []);
   const [layers, setLayers] = useState<Layer[]>(() => {
@@ -1165,115 +1167,137 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   const busy = run.status === 'running';
 
   return (
-    <Card title="Studio (v1.3)" icon="✦" accent="#7c3aed" defaultCollapsed={false}>
-      {/* Documents — save / load / rename / delete named stacks + JSON export/import */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <select value={docName} onChange={(e) => setDocName(e.target.value)} disabled={busy}
-          className="flex-1 min-w-[120px] rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
-          <option value="">— saved designs —</option>
-          {docs.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
-        </select>
-        <Btn variant="default" onClick={() => docName && loadDoc(docName)} disabled={busy || !docName}>Load</Btn>
-        <Btn variant="default" onClick={() => docName && setDocModal({ mode: 'rename', initial: docName, target: docName })} disabled={busy || !docName}>✎</Btn>
-        <Btn variant="default" onClick={() => docName && deleteDoc(docName)} disabled={busy || !docName}>✕</Btn>
-      </div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Btn variant="default" onClick={() => setDocModal({ mode: 'save', initial: docName })} disabled={busy || layers.length === 0}>💾 Save as…</Btn>
-        <Btn variant="default" onClick={exportDoc} disabled={layers.length === 0}>⤓ Export</Btn>
-        <input ref={importRef} type="file" accept=".json,application/json" className="hidden"
-          onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) importDoc(fl); }} />
-        <Btn variant="default" onClick={() => importRef.current?.click()} disabled={busy}>⤒ Import</Btn>
-      </div>
-      <div className="mb-3 h-px bg-ink-800" />
+    <div className="h-full mx-auto max-w-[1500px] px-4 py-4 sm:px-6 sm:py-6">
+      <div className="h-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:[grid-template-rows:minmax(0,1fr)]">
 
-      {/* Sequence (layer stack) — evaluated bottom→top; a modifier sees the layers below it. */}
-      {/* Source image — only relevant when an Image module is in the stack */}
-      {needsImage && (
-        <div className="mb-3 flex items-center gap-2">
-          <input ref={imgRef} type="file" accept="image/*" className="hidden"
-            onChange={async (e) => {
-              const fl = e.target.files?.[0]; e.target.value = '';
-              if (!fl) return;
-              try { setImage(await loadImageToGray(fl)); setImageName(fl.name); pushLog('ok', `[studio] image ${fl.name}`); }
-              catch (err) { pushLog('err', `[studio] image: ${(err as Error).message}`); }
-            }} />
-          <Btn variant="primary" onClick={() => imgRef.current?.click()} disabled={busy}>🖼 Source image…</Btn>
-          {imageName ? <span className="font-mono text-[11px] text-ink-500 truncate max-w-[160px]">{imageName} {image && `(${image.width}×${image.height})`}</span>
-                     : <span className="text-[11px] text-amber-400">load an image</span>}
-        </div>
-      )}
-
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Sequence</p>
-      <div className="space-y-1">
-        {layers.map((l, i) => {
-          const m = getModule(l.moduleKey);
-          const active = l.id === sel?.id;
-          return (
-            <div key={l.id} className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
-              <button onClick={() => setSelId(l.id)} className={`flex-1 text-left text-[12px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
-                {m?.label ?? l.moduleKey}
-                {m?.kind === 'modify' && <span className="ml-1 text-[10px] text-ink-500">modify</span>}
-              </button>
-              <button onClick={() => move(l.id, -1)} disabled={i === 0 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
-              <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
-              <button onClick={() => removeLayer(l.id)} disabled={busy} className="text-ink-500 hover:text-stop disabled:opacity-30 text-[12px]" title="Remove">✕</button>
+        {/* ====== LEFT: live preview canvas + run/scrub/machine controls ====== */}
+        <div className="flex flex-col gap-4 min-h-0">
+          <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4">
+            <div className="mb-3 flex items-center justify-between shrink-0">
+              <h2 className="text-[13px] font-bold tracking-tight text-ink-100">Preview</h2>
+              <span className="font-mono text-[11px] text-ink-500">{draws} draws · {travels} travels · {queries.length} ops</span>
             </div>
-          );
-        })}
-        {layers.length === 0 && <p className="text-[11px] text-ink-600">No layers — add one below.</p>}
-      </div>
-
-      <div className="mt-2 flex items-center gap-2">
-        <select value={addKey} onChange={(e) => setAddKey(e.target.value)} disabled={busy}
-          className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
-          {allMods.map((m) => <option key={m.key} value={m.key}>{m.label}{m.kind === 'modify' ? ' · modify' : ''}</option>)}
-        </select>
-        <Btn variant="default" onClick={addLayer} disabled={busy}>+ Add</Btn>
-      </div>
-
-      {/* Selected layer's parameters */}
-      {sel && selMod && (
-        <div className="mt-4 border-t border-ink-800 pt-3">
-          {selMod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{selMod.description}</p>}
-          <ParamPanel sections={selMod.sections} values={sel.params} onChange={setParam} />
-        </div>
-      )}
-
-      {/* Live preview + drawing-order scrubber */}
-      <div className="mt-4 border-t border-ink-800 pt-3">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Preview</span>
-          <span className="font-mono text-[11px] text-ink-500">order {orderPct}%</span>
-        </div>
-        <FramePreview bounds={bounds} frame={previewFrame} />
-        <input type="range" min={0} max={100} step={1} value={orderPct} onChange={(e) => setOrderPct(Number(e.target.value))}
-          className="mt-2 w-full" title="Scrub the drawing order" />
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-x-4 text-[12px] text-ink-400">
-        <span><span className="text-ink-500">draws</span> <span className="font-semibold">{draws}</span></span>
-        <span><span className="text-ink-500">travels</span> <span className="font-semibold">{travels}</span></span>
-        <span><span className="text-ink-500">ops</span> <span className="font-semibold">{queries.length}</span></span>
-      </div>
-
-      <div className="mt-3 flex items-center gap-2">
-        {!busy
-          ? <Btn variant="go" onClick={start} disabled={draws === 0}>▶ Run</Btn>
-          : <Btn variant="danger" onClick={abort}>Abort</Btn>}
-        <Btn variant="default" onClick={resetSel} disabled={busy || !selMod}>⟲ Reset layer</Btn>
-      </div>
-
-      {run.status !== 'idle' && run.total > 0 && (
-        <div className="mt-3">
-          <div className="flex justify-between text-[11px] text-ink-500 mb-1">
-            <span>{busy ? 'Streaming…' : 'Done'}</span>
-            <span>{run.sent} / {run.total}</span>
+            <div className="flex-1 min-h-0 rounded-lg border border-ink-800 bg-ink-950 overflow-hidden">
+              <FramePreview bounds={bounds} frame={previewFrame} contain />
+            </div>
+            <div className="mt-3 flex items-center gap-3 shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 shrink-0">Order</span>
+              <input type="range" min={0} max={100} step={1} value={orderPct} onChange={(e) => setOrderPct(Number(e.target.value))}
+                className="flex-1" title="Scrub the drawing order" />
+              <span className="w-10 text-right font-mono text-[11px] text-ink-500">{orderPct}%</span>
+            </div>
           </div>
-          <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
-            <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`} style={{ width: `${pct}%` }} />
+
+          {/* run + machine controls */}
+          <div className="shrink-0 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {!busy
+                ? <Btn variant="go" onClick={start} disabled={draws === 0}>▶ Run</Btn>
+                : <Btn variant="danger" onClick={abort}>Abort feed</Btn>}
+              <Btn variant="default" onClick={resetSel} disabled={busy || !selMod}>⟲ Reset layer</Btn>
+              <div className="ml-auto flex items-center gap-1">
+                <PauseButton paused={!!status?.paused} onPause={P.pause} onResume={P.resume} />
+                <StopButton onClick={P.stop} moving={moving} />
+                <ClearButton onClick={P.clearQueue} pending={status?.pending ?? 0} />
+              </div>
+            </div>
+            {run.status !== 'idle' && run.total > 0 && (
+              <div className="mt-3">
+                <div className="flex justify-between text-[11px] text-ink-500 mb-1">
+                  <span>{busy ? 'Streaming…' : 'Done'}</span>
+                  <span>{run.sent} / {run.total}</span>
+                </div>
+                <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
+                  <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+
+        {/* ====== RIGHT: controls (scroll) ====== */}
+        <div className="flex flex-col min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 flex flex-col gap-4">
+
+            {/* Documents */}
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Design</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={docName} onChange={(e) => setDocName(e.target.value)} disabled={busy}
+                  className="flex-1 min-w-[120px] rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+                  <option value="">— saved designs —</option>
+                  {docs.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                </select>
+                <Btn variant="default" onClick={() => docName && loadDoc(docName)} disabled={busy || !docName}>Load</Btn>
+                <Btn variant="default" onClick={() => docName && setDocModal({ mode: 'rename', initial: docName, target: docName })} disabled={busy || !docName}>✎</Btn>
+                <Btn variant="default" onClick={() => docName && deleteDoc(docName)} disabled={busy || !docName}>✕</Btn>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Btn variant="default" onClick={() => setDocModal({ mode: 'save', initial: docName })} disabled={busy || layers.length === 0}>💾 Save as…</Btn>
+                <Btn variant="default" onClick={exportDoc} disabled={layers.length === 0}>⤓ Export</Btn>
+                <input ref={importRef} type="file" accept=".json,application/json" className="hidden"
+                  onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) importDoc(fl); }} />
+                <Btn variant="default" onClick={() => importRef.current?.click()} disabled={busy}>⤒ Import</Btn>
+              </div>
+            </div>
+
+            {/* Source image — only when an Image module is in the stack */}
+            {needsImage && (
+              <div className="flex items-center gap-2 border-t border-ink-800 pt-4">
+                <input ref={imgRef} type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const fl = e.target.files?.[0]; e.target.value = '';
+                    if (!fl) return;
+                    try { setImage(await loadImageToGray(fl)); setImageName(fl.name); pushLog('ok', `[studio] image ${fl.name}`); }
+                    catch (err) { pushLog('err', `[studio] image: ${(err as Error).message}`); }
+                  }} />
+                <Btn variant="primary" onClick={() => imgRef.current?.click()} disabled={busy}>🖼 Source image…</Btn>
+                {imageName ? <span className="font-mono text-[11px] text-ink-500 truncate max-w-[160px]">{imageName} {image && `(${image.width}×${image.height})`}</span>
+                           : <span className="text-[11px] text-amber-400">load an image</span>}
+              </div>
+            )}
+
+            {/* Sequence (layer stack) — evaluated bottom→top; a modifier sees the layers below it. */}
+            <div className="border-t border-ink-800 pt-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Sequence</p>
+              <div className="space-y-1">
+                {layers.map((l, i) => {
+                  const m = getModule(l.moduleKey);
+                  const active = l.id === sel?.id;
+                  return (
+                    <div key={l.id} className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                      <button onClick={() => setSelId(l.id)} className={`flex-1 text-left text-[12px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                        {m?.label ?? l.moduleKey}
+                        {m?.kind === 'modify' && <span className="ml-1 text-[10px] text-ink-500">modify</span>}
+                      </button>
+                      <button onClick={() => move(l.id, -1)} disabled={i === 0 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
+                      <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
+                      <button onClick={() => removeLayer(l.id)} disabled={busy} className="text-ink-500 hover:text-stop disabled:opacity-30 text-[12px]" title="Remove">✕</button>
+                    </div>
+                  );
+                })}
+                {layers.length === 0 && <p className="text-[11px] text-ink-600">No layers — add one below.</p>}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <select value={addKey} onChange={(e) => setAddKey(e.target.value)} disabled={busy}
+                  className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+                  {allMods.map((m) => <option key={m.key} value={m.key}>{m.label}{m.kind === 'modify' ? ' · modify' : ''}</option>)}
+                </select>
+                <Btn variant="default" onClick={addLayer} disabled={busy}>+ Add</Btn>
+              </div>
+            </div>
+
+            {/* Selected layer's parameters */}
+            {sel && selMod && (
+              <div className="border-t border-ink-800 pt-4">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">{selMod.label}</p>
+                {selMod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{selMod.description}</p>}
+                <ParamPanel sections={selMod.sections} values={sel.params} onChange={setParam} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {docModal && (
         <TextPromptModal
@@ -1286,7 +1310,7 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
             setDocModal(null);
           }} />
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -1472,6 +1496,7 @@ export default function App() {
   const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
+  const [view, setView]     = useState<'console' | 'studio'>('console');
   const [paperModal, setPaperModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
   const [matrixModal, setMatrixModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
 
@@ -1509,6 +1534,13 @@ export default function App() {
               <p className="hidden font-mono text-[11px] text-ink-500 sm:block">V-plotter console · Pico 2 W · TMC5072</p>
             </div>
           </div>
+          {/* product switcher: Console (v1.2 panels) vs Studio (full-page design app) */}
+          <div className="flex rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
+            {([['console', 'Console'], ['studio', 'Studio']] as ['console' | 'studio', string][]).map(([id, lbl]) => (
+              <button key={id} onClick={() => setView(id)}
+                className={`rounded-lg px-4 py-1.5 text-[12px] font-semibold transition-colors ${view === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
+            ))}
+          </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {status?.estop && (
               <button onClick={P.clearFault}
@@ -1524,6 +1556,9 @@ export default function App() {
       </header>
 
       <main className="flex-1 min-h-0 overflow-hidden">
+        {view === 'studio' ? (
+          <StudioPage P={P} status={status} moving={moving} bounds={bounds} />
+        ) : (
         <div className="h-full mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
         <div className="h-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
 
@@ -1897,8 +1932,6 @@ export default function App() {
 
                 <GcodeTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
-                <StudioTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
-
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />
                 </LogCard>
@@ -1910,6 +1943,7 @@ export default function App() {
           </div>
         </div>
         </div>
+        )}
       </main>
 
       {paperModal && (
