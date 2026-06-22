@@ -132,9 +132,9 @@ building anything fancy.*
 ---
 
 ## Phase 6 — Preview, polish, optional firmware
-- [ ] **Day 23 — Live Frame preview** — render the active Frame to the existing canvas
+- [x] **Day 23 — Live Frame preview** ✅ (S17, branch `v1.3-s1`) — render the active Frame to the existing canvas
   before sending. (See `07-preview-progress.md`.)
-- [ ] **Day 24 — Drawing-order scrubber** — `buildProgressPaths(frame, pct)` reveals the
+- [x] **Day 24 — Drawing-order scrubber** ✅ (S17, branch `v1.3-s1`) — `buildProgressPaths(frame, pct)` reveals the
   toolpath by arc length; a slider scrubs it.
 - [ ] **Day 25 — Save/load documents** — serialize `Layer[]` + params to localStorage /
   JSON file (extends the papers/matrices preset pattern).

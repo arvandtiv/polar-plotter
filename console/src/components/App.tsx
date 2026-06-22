@@ -19,7 +19,8 @@ import {
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
 import { compile } from '../lib/compile';
-import { optimizeOrder, simplifyFrame } from '../lib/toolpath';
+import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
+import type { Frame } from '../lib/frame';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer } from '../lib/pipeline';
 import { loadImageToGray } from '../lib/image';
@@ -1008,6 +1009,30 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
 // v1.3 / S4 (Day 5): the Studio — pick a generator, tweak its schema-driven params,
 // and Run it through Frame → compile → streamQueries. Auto-lists every registered
 // "make" module, so new generators (S5+) appear here with zero UI wiring.
+// v1.3 / S17 (Day 23-24): live Frame preview with a drawing-order scrubber. Draws the
+// active (optimised, progress-sliced) frame in plotter coords. Self-contained SVG.
+function FramePreview({ bounds, frame }: { bounds: PlotterBounds; frame: Frame }) {
+  const { left, right, up, down } = bounds;
+  const pad = Math.max(20, (left + right) * 0.06);
+  const vbX = -left - pad, vbY = -down - pad, vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
+  const sw = vbW / 400;
+  const CAP = 6000;   // guard against pathological path counts freezing the SVG
+  const shown = frame.paths.slice(0, CAP);
+  return (
+    <div className="rounded-lg border border-ink-800 bg-ink-950 overflow-hidden">
+      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full"
+        style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block' }} preserveAspectRatio="xMidYMid meet">
+        <rect x={-left} y={-down} width={left + right} height={up + down} fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.2} rx={sw} />
+        {shown.map((p, i) => {
+          const pts = p.closed && p.points.length > 2 ? [...p.points, p.points[0]] : p.points;
+          return <polyline key={i} points={pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ')}
+            fill="none" stroke="#7c3aed" strokeWidth={sw * 1.2} strokeLinejoin="round" strokeLinecap="round" />;
+        })}
+      </svg>
+    </div>
+  );
+}
+
 // ---- Studio layer-stack persistence (localStorage) ----
 const STUDIO_KEY = 'plotterStudioLayers';
 let _layerSeq = 0;
@@ -1062,9 +1087,12 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
   const sel = layers.find((l) => l.id === selId) ?? layers[0];
   const selMod = sel ? getModule(sel.moduleKey) : undefined;
 
+  const [orderPct, setOrderPct] = useState(100);   // drawing-order scrubber (% revealed)
   const frame = useMemo(() => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, image),
     [layers, bounds.left, bounds.right, bounds.up, bounds.down, image]);
-  const queries = useMemo(() => compile(optimizeOrder(simplifyFrame(frame))), [frame]);
+  const optFrame = useMemo(() => optimizeOrder(simplifyFrame(frame)), [frame]);
+  const queries = useMemo(() => compile(optFrame), [optFrame]);
+  const previewFrame = useMemo(() => buildProgressPaths(optFrame, orderPct / 100), [optFrame, orderPct]);
   const draws = queries.filter((q) => q.startsWith('line?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
@@ -1160,6 +1188,17 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
           <ParamPanel sections={selMod.sections} values={sel.params} onChange={setParam} />
         </div>
       )}
+
+      {/* Live preview + drawing-order scrubber */}
+      <div className="mt-4 border-t border-ink-800 pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Preview</span>
+          <span className="font-mono text-[11px] text-ink-500">order {orderPct}%</span>
+        </div>
+        <FramePreview bounds={bounds} frame={previewFrame} />
+        <input type="range" min={0} max={100} step={1} value={orderPct} onChange={(e) => setOrderPct(Number(e.target.value))}
+          className="mt-2 w-full" title="Scrub the drawing order" />
+      </div>
 
       <div className="mt-3 flex flex-wrap gap-x-4 text-[12px] text-ink-400">
         <span><span className="text-ink-500">draws</span> <span className="font-semibold">{draws}</span></span>

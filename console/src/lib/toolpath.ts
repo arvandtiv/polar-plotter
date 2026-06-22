@@ -2,8 +2,45 @@
 // generators, imported G-code) plots with less pen-up travel. Geometry is never
 // changed: paths are only reordered and optionally reversed. See docs/v1.3/04-*.md.
 
-import { dist, simplifyRDP } from "./geom";
+import { dist, simplifyRDP, polylineLength } from "./geom";
 import { clonePath, type Frame, type Path, type Pt } from "./frame";
+
+// total drawn length of a path (incl. the closing segment for closed paths)
+function pathLength(p: Path): number {
+  let len = polylineLength(p.points);
+  if (p.closed && p.points.length > 2) len += dist(p.points[p.points.length - 1], p.points[0]);
+  return len;
+}
+
+/** Reveal the toolpath up to `pct` (0..1) of its total drawn length — preview scrubber.
+ *  Pure; does not change what gets streamed. */
+export function buildProgressPaths(frame: Frame, pct: number): Frame {
+  if (pct >= 1) return frame;
+  if (pct <= 0) return { ...frame, paths: [] };
+  const total = frame.paths.reduce((s, p) => s + pathLength(p), 0);
+  let budget = total * pct;
+  const out: Path[] = [];
+  for (const p of frame.paths) {
+    const len = pathLength(p);
+    if (budget >= len) { out.push(p); budget -= len; continue; }
+    if (budget <= 1e-6) break;
+    const ring = p.closed && p.points.length > 2 ? [...p.points, p.points[0]] : p.points;
+    const partial: Pt[] = [{ ...ring[0] }];
+    let acc = 0;
+    for (let i = 1; i < ring.length; i++) {
+      const d = dist(ring[i - 1], ring[i]);
+      if (acc + d >= budget) {
+        const t = d > 1e-9 ? (budget - acc) / d : 0;
+        partial.push({ x: ring[i - 1].x + (ring[i].x - ring[i - 1].x) * t, y: ring[i - 1].y + (ring[i].y - ring[i - 1].y) * t });
+        break;
+      }
+      partial.push({ ...ring[i] }); acc += d;
+    }
+    if (partial.length >= 2) out.push({ points: partial });
+    break;
+  }
+  return { ...frame, paths: out };
+}
 
 /** Simplify every path in the frame (RDP) within `tol` mm. Default 0.2 mm (sub-pen).
  *  Closed paths keep their closure flag; fewer points → fewer firmware jobs. */
