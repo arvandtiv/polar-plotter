@@ -136,7 +136,7 @@ building anything fancy.*
   before sending. (See `07-preview-progress.md`.)
 - [x] **Day 24 — Drawing-order scrubber** ✅ (S17, branch `v1.3-s1`) — `buildProgressPaths(frame, pct)` reveals the
   toolpath by arc length; a slider scrubs it.
-- [ ] **Day 25 — Save/load documents** — serialize `Layer[]` + params to localStorage /
+- [x] **Day 25 — Save/load documents** ✅ (S18, branch `v1.3-s1`) — serialize `Layer[]` + params to localStorage /
   JSON file (extends the papers/matrices preset pattern).
 - [ ] **Day 26 *(optional firmware)* — `arc` primitive** — add `do_draw_arc` + `/api/arc`
   so fitted arcs (Day 10) stream as one job instead of many `line`s. Isolated; flag-gated.

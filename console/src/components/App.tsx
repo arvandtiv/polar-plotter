@@ -25,6 +25,7 @@ import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer } from '../lib/pipeline';
 import { loadImageToGray } from '../lib/image';
 import type { GrayImage } from '../lib/registry';
+import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc } from '../lib/studioDoc';
 import '../lib/modules';   // side effect: registers all generators/modifiers
 import { ParamPanel } from './ParamPanel';
 
@@ -1115,6 +1116,35 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
     setLayers((ls) => ls.map((l) => (l.id === sel?.id ? { ...l, params: { ...l.params, [key]: val } } : l)));
   const resetSel = () => { if (selMod && sel) setLayers((ls) => ls.map((l) => (l.id === sel.id ? { ...l, params: defaultsOf(selMod) } : l))); };
 
+  // ---- named documents (save/load/rename/delete + JSON export/import) ----
+  const [docs, setDocs] = useState<StudioDoc[]>(() => loadStudioDocs());
+  const [docName, setDocName] = useState('');
+  const [docModal, setDocModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { saveStudioDocs(docs); }, [docs]);
+
+  const loadLayersFresh = (src: Layer[]) => {
+    const fresh = src.map((l) => ({ id: newLayerId(), moduleKey: l.moduleKey, params: { ...l.params } }));
+    setLayers(fresh); setSelId(fresh[0]?.id ?? ''); setRun((r) => ({ ...r, status: 'idle' }));
+  };
+  const saveDoc = (name: string) => {
+    const doc: StudioDoc = { name, layers: layers.map((l) => ({ id: l.id, moduleKey: l.moduleKey, params: { ...l.params } })) };
+    setDocs((ds) => [...ds.filter((d) => d.name !== name), doc]); setDocName(name);
+    pushLog('ok', `[studio] saved "${name}"`);
+  };
+  const loadDoc = (name: string) => { const d = docs.find((x) => x.name === name); if (d) { loadLayersFresh(d.layers); pushLog('ok', `[studio] loaded "${name}"`); } };
+  const renameDoc = (oldName: string, newName: string) => { if (newName.trim()) setDocs((ds) => ds.map((d) => (d.name === oldName ? { ...d, name: newName.trim() } : d))); setDocName(newName.trim()); };
+  const deleteDoc = (name: string) => setDocs((ds) => ds.filter((d) => d.name !== name));
+  const exportDoc = () => {
+    const blob = new Blob([serializeDoc(docName || 'design', layers)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.json`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const importDoc = async (file: File) => {
+    try { const d = parseDocFile(await file.text()); loadLayersFresh(d.layers); setDocName(d.name); pushLog('ok', `[studio] imported "${d.name}" (${d.layers.length} layers)`); }
+    catch (e) { pushLog('err', `[studio] import: ${(e as Error).message}`); }
+  };
+
   const start = useCallback(async () => {
     abortRef.current = false; runCancelRef.current = false;
     setRun({ status: 'running', sent: 0, total: queries.length, errors: 0 });
@@ -1136,6 +1166,26 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
 
   return (
     <Card title="Studio (v1.3)" icon="✦" accent="#7c3aed" defaultCollapsed={false}>
+      {/* Documents — save / load / rename / delete named stacks + JSON export/import */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select value={docName} onChange={(e) => setDocName(e.target.value)} disabled={busy}
+          className="flex-1 min-w-[120px] rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+          <option value="">— saved designs —</option>
+          {docs.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+        </select>
+        <Btn variant="default" onClick={() => docName && loadDoc(docName)} disabled={busy || !docName}>Load</Btn>
+        <Btn variant="default" onClick={() => docName && setDocModal({ mode: 'rename', initial: docName, target: docName })} disabled={busy || !docName}>✎</Btn>
+        <Btn variant="default" onClick={() => docName && deleteDoc(docName)} disabled={busy || !docName}>✕</Btn>
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Btn variant="default" onClick={() => setDocModal({ mode: 'save', initial: docName })} disabled={busy || layers.length === 0}>💾 Save as…</Btn>
+        <Btn variant="default" onClick={exportDoc} disabled={layers.length === 0}>⤓ Export</Btn>
+        <input ref={importRef} type="file" accept=".json,application/json" className="hidden"
+          onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) importDoc(fl); }} />
+        <Btn variant="default" onClick={() => importRef.current?.click()} disabled={busy}>⤒ Import</Btn>
+      </div>
+      <div className="mb-3 h-px bg-ink-800" />
+
       {/* Sequence (layer stack) — evaluated bottom→top; a modifier sees the layers below it. */}
       {/* Source image — only relevant when an Image module is in the stack */}
       {needsImage && (
@@ -1223,6 +1273,18 @@ function StudioTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
             <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`} style={{ width: `${pct}%` }} />
           </div>
         </div>
+      )}
+
+      {docModal && (
+        <TextPromptModal
+          title={docModal.mode === 'save' ? 'Save current design as…' : 'Rename design'}
+          label="Design name" initial={docModal.initial}
+          confirmText={docModal.mode === 'save' ? 'Save' : 'Rename'}
+          onCancel={() => setDocModal(null)}
+          onConfirm={(name) => {
+            if (name.trim()) { if (docModal.mode === 'save') saveDoc(name.trim()); else if (docModal.target) renameDoc(docModal.target, name); }
+            setDocModal(null);
+          }} />
       )}
     </Card>
   );
