@@ -15,4 +15,5 @@ import "./text";
 import "./image-linework";
 import "./image-halftone";
 import "./image-squiggle";
+import "./image-surface";
 export {};
