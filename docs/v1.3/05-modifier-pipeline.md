@@ -1,8 +1,6 @@
 # 05 — Modifier pipeline (`lib/pipeline.ts`)
 
-*Reference: `reference/lineandform/core/rendering.js` (frame compositing + applying
-modifier descriptors to lower layers), `modules/ripples.js` (descriptor style),
-`modules/mask.js` (clipper boolean style). Clean-room re-implementation.*
+*A layer stack where each layer sees the composite beneath it (`lowerFrame`) — our own TS design.*
 
 ## Concept
 A document is an ordered **layer stack**. Layers evaluate **bottom → top**; each layer

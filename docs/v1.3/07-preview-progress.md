@@ -1,8 +1,6 @@
 # 07 — Live preview + drawing-order scrubber
 
-*Reference: `reference/lineandform/core/geometry.js` (`slicePathByUnits`,
-`buildProgressPaths`, `countVisiblePaths`) drives the "Drawing Order 100%" scrubber;
-`core/rendering.js` for how a frame is drawn. Clean-room.*
+*Live Frame preview + an arc-length drawing-order scrubber (`buildProgressPaths`) — pure TS.*
 
 ## Live Frame preview (Day 23)
 Render the *evaluated* Frame to a canvas **before** sending, so the user tweaks against

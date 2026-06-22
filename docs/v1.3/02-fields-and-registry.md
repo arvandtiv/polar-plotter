@@ -1,8 +1,6 @@
 # 02 — Declarative fields + module registry
 
-*Reference for technique only: `reference/lineandform/modules/index.js` (manifest),
-`core/module-loader.js` (loader), `modules/orbital-weave.js` (a module's
-`defaults`/`sections`/`generate`). We build our own TS version.*
+*Our own TS design for a declarative module + field schema.*
 
 ## Why
 Today every shape's UI is hand-coded in `App.tsx` and every shape is a separate

@@ -63,7 +63,6 @@ So: **pure-lib days are cheap, UI-wiring days are expensive.** We schedule accor
    unless firmware changed.
 5. If you're low mid-session, say **"wrap and commit"** — I'll land what's green and
    stop, rather than start something new.
-6. Keep `reference/` for *my* lookups; I quote small snippets, never paste whole files.
 
 ## Tracking
 `ROADMAP.md` checkboxes = source of truth for progress. This file = how we pace it.

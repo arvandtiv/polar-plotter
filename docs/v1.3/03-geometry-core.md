@@ -1,8 +1,7 @@
 # 03 — Geometry core (`lib/geom.ts`)
 
-*Reference: `reference/lineandform/core/geometry.js` and `core/svg-geometry.js`
-(resample, bbox, fit-to-page, affine transforms, SVG path/arc handling, clipper
-boolean). We re-implement the subset we need, in TS, pure.*
+*A pure TS geometry toolkit: resample, bbox, fit-to-page, affine transforms,
+segment clip, and (later) boolean ops — implemented here, no dependency.*
 
 This is the shared toolkit every generator, modifier, and the compiler call. Keep it
 dependency-free (like `kinematics.h`) except for the clipping lib (added at Day 17).

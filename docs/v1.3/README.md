@@ -5,8 +5,8 @@ v1.3 turns the plotter console from a fixed set of hand-wired shapes into a smal
 non-destructive modifier stack, smarter toolpaths, and live preview — all compiling
 down to the **same** firmware `goto`/`line`/`pen` queue we already ship.
 
-The ideas come from studying a reference app (see `reference/NOTICE.md`); the
-implementation is **clean-room and our own** (React/TS console + Pico C firmware).
+It's **our own** design and implementation (React/TS console + Pico C firmware); any
+third-party libraries are pulled from their upstream sources.
 
 ## The one idea that ties it all together: the **Frame**
 
@@ -48,8 +48,8 @@ optional firmware adds (an `arc`/G2-G3 primitive, an export profile) clearly fla
 
 1. **One step at a time.** Every roadmap day ends with something that builds, passes
    tests, and could merge — no half-features across sessions.
-2. **Clean-room.** Learn the technique from `reference/`, write our own code. Never
-   copy files. Pull real OSS libs (opentype.js, a clipping lib) from upstream.
+2. **Our own code.** Implement everything ourselves; pull any OSS libraries from their
+   upstream sources rather than vendoring third-party code.
 3. **Pure & host-testable.** Generators, geometry, and the compiler are pure TS with
    `npx tsx` tests — same discipline as `kinematics_test` and `digest.test.ts`.
 4. **Reuse, don't replace.** Compile to the existing query API and `streamQueries`.

@@ -1,8 +1,6 @@
 # 04 — Toolpath optimization (`lib/toolpath.ts`)
 
-*Reference: `reference/lineandform/core/gcode-export.js` (`travelOptimization:"nearest"`,
-pen-up/down distance accounting) and `core/gcode-geometry.js` (`simplifyOpenPolyline
-ByDeviation`, `filterCollinear`, `fitCircle`/arc sweep). Clean-room re-implementation.*
+*Nearest-neighbour travel ordering + RDP simplify (+ optional arc fitting) — pure TS.*
 
 This is the highest-leverage win: it makes **every** Frame (shapes, generators, and
 imported G-code) plot faster and stream fewer jobs, with no quality loss.

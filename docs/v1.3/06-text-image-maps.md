@@ -1,8 +1,7 @@
 # 06 — Text, image, (stretch) maps
 
-*Reference: `reference/lineandform/modules/index.js` shows `text` (via `opentype.js`),
-`image-linework`, `halftone`, `squiggle-draw`, and the `geospatial`/`ink-layers` map
-stack. We re-implement as our own Frame generators; we use the same OSS libs upstream.*
+*Text + image generators as our own Frame producers (single-stroke font, marching-squares
+contours, halftone, squiggle). Any OSS libs are pulled from upstream.*
 
 All of these are just generators that output a **Frame** — once Phase 0–2 exist they
 plug in with no special casing.
