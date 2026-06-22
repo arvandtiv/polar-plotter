@@ -138,8 +138,7 @@ building anything fancy.*
   toolpath by arc length; a slider scrubs it.
 - [x] **Day 25 — Save/load documents** ✅ (S18, branch `v1.3-s1`) — serialize `Layer[]` + params to localStorage /
   JSON file (extends the papers/matrices preset pattern).
-- [ ] **Day 26 *(optional firmware)* — `arc` primitive** — add `do_draw_arc` + `/api/arc`
-  so fitted arcs (Day 10) stream as one job instead of many `line`s. Isolated; flag-gated.
+- [x] **Day 26 *(optional firmware)* — `arc` primitive** ✅ (branch `v1.2`) — do_draw_arc + /api/arc; console arc-fit is opt-in (Studio "Arcs" toggle, default off). NEEDS FLASH.
 - [ ] **Day 27 *(optional)* — Frame → G-code export** — profiles (GRBL/Mach4/generic),
   pen Z / M3-M5, for sending our designs to other machines. (ref: `core/gcode-*.js`.)
 

@@ -123,6 +123,7 @@ static void led_task(void *arg)
 /* Forward declarations */
 static void do_draw_goto(float x, float y);
 static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift);
+static void do_draw_arc(float cx, float cy, float r, float a0, float a1, bool cw, int cycles, bool lift);
 static void do_draw_square(float cx, float cy, float size, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_bullseye(float cx, float cy);
@@ -723,6 +724,34 @@ static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, boo
     for (int c = 0; c < cycles; c++) {
         if (c & 1) path_to(x0, y0);
         else       path_to(x1, y1);
+    }
+    path_end();
+    if (lift) pen_lift();
+}
+
+/* Draw a circular arc from angle a0 to a1 (radians), direction cw/ccw, streamed as
+ * sub-segments (anti-bow, continuous). lift behaves like do_draw_line. Lets the console
+ * collapse a fitted circular run into ONE job instead of many lines. */
+static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool cw, int cycles, bool lift)
+{
+    if (r <= 0.0f) return;
+    float span = a1 - a0;
+    if (cw)  { while (span >= 0.0f) span -= PLT_TWO_PI; }   /* clockwise → negative sweep */
+    else     { while (span <= 0.0f) span += PLT_TWO_PI; }   /* ccw → positive sweep */
+    int nfull = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    int n = (int)ceilf((float)nfull * fabsf(span) / PLT_TWO_PI);
+    if (n < 1) n = 1;
+    float sx = cx2 + r * cosf(a0), sy = cy2 + r * sinf(a0);
+
+    tmc5072_enable(&tmc, true);
+    if (lift) { pen_lift(); move_to_xy(sx, sy); pen_drop(); }
+    else      { move_to_xy(sx, sy); }
+    path_begin(sx, sy);
+    for (int c = 0; c < cycles; c++) {
+        for (int k = 1; k <= n; k++) {
+            float t = a0 + span * ((float)k / (float)n);
+            path_to(cx2 + r * cosf(t), cy2 + r * sinf(t));
+        }
     }
     path_end();
     if (lift) pen_lift();
@@ -1397,6 +1426,7 @@ static const char *wcmd_name(wcmd_type_t t)
     case WCMD_CIRCLE:   return "circle";
     case WCMD_SQUARE:   return "square";
     case WCMD_LINE:     return "line";
+    case WCMD_ARC:      return "arc";
     case WCMD_GOTO:     return "goto";
     case WCMD_HOME:     return "home";
     case WCMD_PEN_UP:   return "pen up";
@@ -1502,6 +1532,12 @@ static void web_draw_task(void *arg)
                     (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(int)cmd.p[4]);
             do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4], cmd.p[5]!=0.0f);
             emit_pos_event(); web_log("line done"); break;
+        case WCMD_ARC:
+            web_log("arc (%.1f,%.1f) r=%.1f %.2f→%.2f %s",
+                    (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(double)cmd.p[4],
+                    cmd.p[5]!=0.0f?"cw":"ccw");
+            do_draw_arc(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],cmd.p[4], cmd.p[5]!=0.0f, (int)cmd.p[6], cmd.p[7]!=0.0f);
+            emit_pos_event(); web_log("arc done"); break;
         case WCMD_GOTO:
             web_log("goto (%.1f, %.1f)",(double)cmd.p[0],(double)cmd.p[1]);
             do_draw_goto(cmd.p[0],cmd.p[1]); web_log("goto done"); break;

@@ -8,8 +8,37 @@
 // at the end. Closed paths also draw the last→first segment.
 
 import type { Frame, Path, Pt } from "./frame";
+import { fitArcs } from "./arcfit";
 
 const r = (n: number) => Math.round(n * 100) / 100;   // 0.01 mm precision, short URLs
+const r4 = (n: number) => Math.round(n * 10000) / 10000;   // angles need more precision
+
+export interface CompileOpts {
+  /** If > 0, fit circular runs to firmware `arc` jobs within this mm tolerance.
+   *  Requires firmware with /api/arc; default off → identical line-only output. */
+  arcTol?: number;
+}
+
+function emitArcPath(path: Path, tol: number, out: string[]): void {
+  const pts = path.points;
+  if (pts.length === 0) return;
+  const cycles = path.cycles && path.cycles > 0 ? Math.round(path.cycles) : 1;
+  const ring = path.closed && pts.length > 2 ? [...pts, pts[0]] : pts;
+  out.push(`goto?x=${r(ring[0].x)}&y=${r(ring[0].y)}`);
+  if (ring.length === 1) return;
+  out.push("pen?pos=down");
+  for (const prim of fitArcs(ring, tol)) {
+    if (prim.kind === "arc") {
+      out.push(`arc?cx=${r(prim.cx)}&cy=${r(prim.cy)}&r=${r(prim.r)}&a0=${r4(prim.a0)}&a1=${r4(prim.a1)}&cw=${prim.cw ? 1 : 0}&cycles=${cycles}&lift=0`);
+    } else {
+      for (let i = 1; i < prim.points.length; i++) {
+        const a = prim.points[i - 1], b = prim.points[i];
+        out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0`);
+      }
+    }
+  }
+  out.push("pen?pos=up");
+}
 
 function emitPath(path: Path, out: string[]): void {
   const pts = path.points;
@@ -29,9 +58,14 @@ function emitPath(path: Path, out: string[]): void {
   out.push("pen?pos=up");
 }
 
-/** Frame → ordered list of firmware query strings (feed straight to streamQueries). */
-export function compile(frame: Frame): string[] {
+/** Frame → ordered list of firmware query strings (feed straight to streamQueries).
+ *  With opts.arcTol > 0, circular runs collapse to `arc` jobs (needs firmware support). */
+export function compile(frame: Frame, opts: CompileOpts = {}): string[] {
   const out: string[] = ["pen?pos=up"];   // known-safe start
-  for (const path of frame.paths) emitPath(path, out);
+  const tol = opts.arcTol ?? 0;
+  for (const path of frame.paths) {
+    if (tol > 0) emitArcPath(path, tol, out);
+    else emitPath(path, out);
+  }
   return out;
 }

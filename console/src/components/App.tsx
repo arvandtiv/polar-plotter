@@ -1091,10 +1091,11 @@ function StudioPage({ P, status, moving, bounds }: {
   const selMod = sel ? getModule(sel.moduleKey) : undefined;
 
   const [orderPct, setOrderPct] = useState(100);   // drawing-order scrubber (% revealed)
+  const [useArcs, setUseArcs] = useState(false);   // collapse circular runs to arc jobs (needs firmware flash)
   const frame = useMemo(() => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, image),
     [layers, bounds.left, bounds.right, bounds.up, bounds.down, image]);
   const optFrame = useMemo(() => optimizeOrder(simplifyFrame(frame)), [frame]);
-  const queries = useMemo(() => compile(optFrame), [optFrame]);
+  const queries = useMemo(() => compile(optFrame, useArcs ? { arcTol: 0.3 } : {}), [optFrame, useArcs]);
   const previewFrame = useMemo(() => buildProgressPaths(optFrame, orderPct / 100), [optFrame, orderPct]);
   const draws = queries.filter((q) => q.startsWith('line?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
@@ -1195,6 +1196,11 @@ function StudioPage({ P, status, moving, bounds }: {
                 ? <Btn variant="go" onClick={start} disabled={draws === 0}>▶ Run</Btn>
                 : <Btn variant="danger" onClick={abort}>Abort feed</Btn>}
               <Btn variant="default" onClick={resetSel} disabled={busy || !selMod}>⟲ Reset layer</Btn>
+              <button onClick={() => setUseArcs((v) => !v)} disabled={busy}
+                title="Collapse circular runs into single arc jobs (needs firmware with /api/arc — flash first)"
+                className={`rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 ${useArcs ? 'bg-cyanx/15 text-cyanx border border-cyanx/40' : 'text-ink-500 hover:text-ink-300 border border-ink-700'}`}>
+                ◜ Arcs {useArcs ? 'on' : 'off'}
+              </button>
               <div className="ml-auto flex items-center gap-1">
                 <PauseButton paused={!!status?.paused} onPause={P.pause} onResume={P.resume} />
                 <StopButton onClick={P.stop} moving={moving} />

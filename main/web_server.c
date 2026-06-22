@@ -441,6 +441,20 @@ static void handle_matrix(int sock, const char *qs)
     resp_json(sock, "ok", "matrix applied");
 }
 
+static void handle_arc(int sock, const char *qs)
+{
+    wcmd_t c = { .type = WCMD_ARC };
+    c.p[0] = qf(qs, "cx", 0.0f);
+    c.p[1] = qf(qs, "cy", 0.0f);
+    c.p[2] = qf(qs, "r",  10.0f);
+    c.p[3] = qf(qs, "a0", 0.0f);     /* start angle (rad) */
+    c.p[4] = qf(qs, "a1", 0.0f);     /* end angle (rad) */
+    c.p[5] = qf(qs, "cw", 0.0f);     /* 1 = clockwise */
+    c.p[6] = qf(qs, "cycles", 1.0f);
+    c.p[7] = qf(qs, "lift", 1.0f);   /* 0 = continuous (no pen bob) */
+    resp_enqueue(sock, "arc queued", &c);
+}
+
 static void handle_speed(int sock, const char *qs)
 {
     wcmd_t c = { .type = WCMD_SPEED };
@@ -675,6 +689,7 @@ static const route_t s_routes[] = {
     { "/api/circle",     handle_circle     },
     { "/api/square",     handle_square     },
     { "/api/line",       handle_line       },
+    { "/api/arc",        handle_arc        },
     { "/api/goto",       handle_goto       },
     { "/api/home",       handle_home       },
     { "/api/stop",       handle_stop       },
