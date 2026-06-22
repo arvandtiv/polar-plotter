@@ -26,6 +26,7 @@ import { evaluate, type Layer } from '../lib/pipeline';
 import { loadImageToGray } from '../lib/image';
 import type { GrayImage } from '../lib/registry';
 import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc } from '../lib/studioDoc';
+import { exportGcode, DEFAULT_EXPORT, type GcodeProfile } from '../lib/gcode-export';
 import '../lib/modules';   // side effect: registers all generators/modifiers
 import { ParamPanel } from './ParamPanel';
 
@@ -1143,6 +1144,13 @@ function StudioPage({ P, status, moving, bounds }: {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.json`; a.click(); URL.revokeObjectURL(a.href);
   };
+  const [gcodeProfile, setGcodeProfile] = useState<GcodeProfile>('generic');
+  const exportGcodeFile = () => {
+    const text = exportGcode(optFrame, { ...DEFAULT_EXPORT, profile: gcodeProfile });
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.gcode`; a.click(); URL.revokeObjectURL(a.href);
+  };
   const importDoc = async (file: File) => {
     try { const d = parseDocFile(await file.text()); loadLayersFresh(d.layers); setDocName(d.name); pushLog('ok', `[studio] imported "${d.name}" (${d.layers.length} layers)`); }
     catch (e) { pushLog('err', `[studio] import: ${(e as Error).message}`); }
@@ -1244,6 +1252,17 @@ function StudioPage({ P, status, moving, bounds }: {
                 <input ref={importRef} type="file" accept=".json,application/json" className="hidden"
                   onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) importDoc(fl); }} />
                 <Btn variant="default" onClick={() => importRef.current?.click()} disabled={busy}>⤒ Import</Btn>
+              </div>
+              {/* Export the design as G-code for OTHER machines (our plotter draws from the Frame directly). */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">G-code</span>
+                <select value={gcodeProfile} onChange={(e) => setGcodeProfile(e.target.value as GcodeProfile)}
+                  className="rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50">
+                  <option value="generic">Generic</option>
+                  <option value="grbl">GRBL</option>
+                  <option value="mach4">Mach4</option>
+                </select>
+                <Btn variant="default" onClick={exportGcodeFile} disabled={draws === 0}>⤓ Export .gcode</Btn>
               </div>
             </div>
 

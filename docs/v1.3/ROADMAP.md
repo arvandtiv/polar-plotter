@@ -139,8 +139,7 @@ building anything fancy.*
 - [x] **Day 25 — Save/load documents** ✅ (S18, branch `v1.3-s1`) — serialize `Layer[]` + params to localStorage /
   JSON file (extends the papers/matrices preset pattern).
 - [x] **Day 26 *(optional firmware)* — `arc` primitive** ✅ (branch `v1.2`) — do_draw_arc + /api/arc; console arc-fit is opt-in (Studio "Arcs" toggle, default off). NEEDS FLASH.
-- [ ] **Day 27 *(optional)* — Frame → G-code export** — profiles (GRBL/Mach4/generic),
-  pen Z / M3-M5, for sending our designs to other machines. (ref: `core/gcode-*.js`.)
+- [x] **Day 27 *(optional)* — Frame → G-code export** ✅ (branch `v1.2`) — generic/GRBL/Mach4 profiles, pen Z or M3/M5, Y-flip; Studio "Export .gcode" button.
 
 ---
 
