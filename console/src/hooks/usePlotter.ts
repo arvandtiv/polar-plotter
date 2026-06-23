@@ -896,16 +896,16 @@ export function usePlotter() {
       setPen((p) => ({ ...p, x: s.x, y: s.y, down: s.pen_down ?? p.down }));
       setMoving(!s.idle && !s.paused);
 
-      // On first connect, SELECT the default paper (first in the list): set it in
-      // the console and push it to the firmware so the board matches.
-      if (!boundsSeeded.current) {
+      // On first connect, ADOPT the firmware's CURRENT bounds (read-only). We must NOT
+      // auto-push /api/bounds here: if this seed ever fires after a stream has started
+      // (reconnect, a late first-successful poll, or a dev HMR reload mid-run) the pushed
+      // bounds land as a job MID-PLOT and clamp every later goto/line to the new
+      // boundary — the "gcode stops ~1/4 in + a stray '#NNNN bounds' job" bug. Papers and
+      // the Work-area card still push bounds, but those are explicit & user-initiated.
+      if (!boundsSeeded.current && s.bounds) {
         boundsSeeded.current = true;
-        const p = papersRef.current[0];
-        const b: PlotterBounds = p
-          ? { left: p.left, right: p.right, up: p.up, down: p.down, shape: 'rect' }
-          : { ...DEFAULTS.bounds };
-        setBoundsState(b);
-        apiGet(ip, boundsToQuery(b)).catch(() => {});
+        const fb = s.bounds;   // firmware sends xn=-left, xp=right, yn=-down, yp=up
+        setBoundsState({ left: -fb.xn, right: fb.xp, up: fb.yp, down: -fb.yn, shape: fb.ellipse ? 'ellipse' : 'rect' });
       }
       if (!motionSeeded.current && s.motion) {
         motionSeeded.current = true;
