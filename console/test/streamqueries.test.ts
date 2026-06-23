@@ -43,6 +43,37 @@ async function main() {
     ok("sent 5, 0 errors", r.sent === 5 && r.errors === 0);
   }
 
+  console.log("[4] batch path: enqueues in one request, retries transient");
+  {
+    const big = Array.from({ length: 200 }, (_, k) => ({ query: `line${k}` }));
+    let calls = 0; let total = 0; let failOnce = true;
+    const r = await streamQueries(big, {
+      sendRaw: async () => "ok",
+      getPending: async () => 0,
+      isCancelled: () => false,
+      pushLog: () => {},
+      sendBatch: async (q) => {
+        calls++;
+        if (failOnce && calls === 2) { failOnce = false; return "error"; }   // one transient blip
+        total += q.length;
+        return { accepted: q.length, rejected: 0 };
+      },
+    });
+    ok("all 200 sent", r.sent === 200, `sent=${r.sent}`);
+    ok("used few requests (batched)", calls < 20, `calls=${calls}`);
+    ok("transient blip didn't drop any", total === 200, `total=${total}`);
+  }
+
+  console.log("[5] batch path: counts genuine rejections, advances");
+  {
+    const r = await streamQueries(items, {
+      sendRaw: async () => "ok", getPending: async () => 0, isCancelled: () => false, pushLog: () => {},
+      sendBatch: async (q) => ({ accepted: q.length - 1, rejected: 1 }),   // one genuine reject in the batch
+    });
+    ok("advanced past whole batch", r.sent === 5);
+    ok("rejection counted", r.errors === 1, `errors=${r.errors}`);
+  }
+
   console.log(`\n${fails ? `TESTS FAILED (${fails})` : "ALL TESTS PASSED"}`);
   process.exit(fails ? 1 : 0);
 }

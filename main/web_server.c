@@ -680,6 +680,90 @@ static const char s_html[] =
     "};"
     "</script></body></html>";
 
+/* ---- Batch endpoint (POST /api/batch) ----
+ * Body = newline-separated draw ops ("line?x0=..", "goto?x=..", "pen?pos=up", "arc?..").
+ * Enqueues them all in ONE request → ~80x fewer TCP connections than one request per op,
+ * which is what makes large streamed designs (tens of thousands of segments) practical. */
+#define BATCH_BODY_MAX 8192
+static char s_batch_body[BATCH_BODY_MAX + 1];
+
+static int hdr_content_length(const char *req)
+{
+    const char *p = strstr(req, "Content-Length:");
+    if (!p) p = strstr(req, "content-length:");
+    if (!p) return -1;
+    p += 15;
+    while (*p == ' ') p++;
+    return atoi(p);
+}
+
+static bool batch_build_cmd(const char *path, const char *qs, wcmd_t *c)
+{
+    memset(c, 0, sizeof(*c));
+    if (strcmp(path, "line") == 0) {
+        c->type = WCMD_LINE;
+        c->p[0] = qf(qs, "x0", 0); c->p[1] = qf(qs, "y0", 0);
+        c->p[2] = qf(qs, "x1", 0); c->p[3] = qf(qs, "y1", 0);
+        c->p[4] = qf(qs, "cycles", 1); c->p[5] = qf(qs, "lift", 1);
+        return true;
+    }
+    if (strcmp(path, "goto") == 0) {
+        c->type = WCMD_GOTO; c->p[0] = qf(qs, "x", 0); c->p[1] = qf(qs, "y", 0); return true;
+    }
+    if (strcmp(path, "arc") == 0) {
+        c->type = WCMD_ARC;
+        c->p[0] = qf(qs, "cx", 0); c->p[1] = qf(qs, "cy", 0); c->p[2] = qf(qs, "r", 10);
+        c->p[3] = qf(qs, "a0", 0); c->p[4] = qf(qs, "a1", 0); c->p[5] = qf(qs, "cw", 0);
+        c->p[6] = qf(qs, "cycles", 1); c->p[7] = qf(qs, "lift", 1);
+        return true;
+    }
+    if (strcmp(path, "pen") == 0) {
+        char pos[16] = ""; qs_str(qs, "pos", pos, sizeof(pos));
+        if (strcmp(pos, "down") == 0)      c->type = WCMD_PEN_DOWN;
+        else if (strcmp(pos, "up") == 0)   c->type = WCMD_PEN_UP;
+        else { c->type = WCMD_PEN_DEG; c->p[0] = qf(qs, "deg", 90.0f); }
+        return true;
+    }
+    return false;
+}
+
+static void handle_batch(int sock, const char *req, int total)
+{
+    int clen = hdr_content_length(req);
+    const char *bstart = strstr(req, "\r\n\r\n");
+    int have = 0;
+    if (bstart) { bstart += 4; have = total - (int)(bstart - req); }
+    if (clen < 0) clen = have;
+    if (clen > BATCH_BODY_MAX) { resp_json(sock, "error", "batch too large"); return; }
+    int n = have > clen ? clen : have;
+    if (n > 0) memcpy(s_batch_body, bstart, (size_t)n);
+    while (n < clen) {
+        int r = recv(sock, s_batch_body + n, clen - n, 0);
+        if (r <= 0) break;
+        n += r;
+    }
+    s_batch_body[n] = '\0';
+
+    uint32_t accepted = 0, rejected = 0, lastId = 0;
+    char *save = NULL;
+    for (char *line = strtok_r(s_batch_body, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
+        size_t L = strlen(line);
+        if (L && line[L - 1] == '\r') line[--L] = '\0';
+        if (L == 0) continue;
+        char *q = strchr(line, '?');
+        const char *qs = "";
+        if (q) { *q = '\0'; qs = q + 1; }
+        wcmd_t c;
+        if (!batch_build_cmd(line, qs, &c)) { rejected++; continue; }
+        uint32_t id = enqueue(&c);
+        if (id == 0) rejected++; else { accepted++; lastId = id; }
+    }
+    char out[112];
+    snprintf(out, sizeof(out), "{\"status\":\"ok\",\"accepted\":%lu,\"rejected\":%lu,\"id\":%lu}\n",
+             (unsigned long)accepted, (unsigned long)rejected, (unsigned long)lastId);
+    send_response(sock, 200, "application/json", out);
+}
+
 /* ---- Route table ---- */
 
 typedef void (*handler_fn_t)(int sock, const char *qs);
@@ -784,6 +868,13 @@ static void http_server_task(void *arg)
         /* SSE: transfer socket to sse_task — do NOT close it here. */
         if (strcmp(url, "/events") == 0) {
             handle_events(client_sock);
+            continue;
+        }
+
+        /* Batch enqueue: needs the raw request (POST body), not just the query string. */
+        if (strcmp(url, "/api/batch") == 0) {
+            handle_batch(client_sock, req_buf, total);
+            close(client_sock);
             continue;
         }
 

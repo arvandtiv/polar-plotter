@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { apiGet, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
+import { apiGet, apiBatch, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
 import { loadPapers, savePapers, type Paper } from '../lib/papers';
 export type { Paper } from '../lib/papers';
 import { loadMatrices, saveMatrices, type Matrix } from '../lib/matrices';
@@ -268,6 +268,9 @@ export type SendResult = 'ok' | 'rejected' | 'error';
 export interface StreamItem { query: string; raw?: string; }
 export interface StreamHandlers {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  /** Optional: enqueue many ops in one request. When present, streamQueries uses it
+   *  (≈80× fewer connections); otherwise it falls back to one request per op. */
+  sendBatch?: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
   isCancelled: () => boolean;
   onProgress?: (sent: number, errors: number) => void;
@@ -275,11 +278,23 @@ export interface StreamHandlers {
   label?: string;
 }
 export async function streamQueries(items: StreamItem[], h: StreamHandlers): Promise<{ sent: number; errors: number; stopped: boolean }> {
-  const CAP = 256, HIGH = 220;
+  const CAP = 256, HIGH = 220, BATCH = 64;
   const MAX_NET_FAILS = 60;          // consecutive transient failures before we give up
   const label = h.label ?? 'stream';
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   let errors = 0, i = 0, warned = false, netFails = 0;
+
+  const onTransient = async (): Promise<boolean> => {
+    // returns true if we should give up
+    if (++netFails >= MAX_NET_FAILS) {
+      h.pushLog('err', `[${label}] aborting — ${netFails} straight network failures (connection lost?). ${i}/${items.length} sent.`);
+      return true;
+    }
+    if (netFails === 1) h.pushLog('sys', `[${label}] network busy — backing off & retrying (not dropping jobs)…`);
+    await sleep(Math.min(2000, 150 * netFails));
+    return false;
+  };
+
   while (i < items.length && !h.isCancelled()) {
     const pend = await h.getPending();
     if (pend === null || pend >= HIGH) {
@@ -291,25 +306,27 @@ export async function streamQueries(items: StreamItem[], h: StreamHandlers): Pro
       continue;                       // do NOT send while full / unknown
     }
     warned = false;
-    // Room for (HIGH - pend) jobs. Assume the board doesn't drain during the
-    // burst (conservative → can't overflow), then re-read pending next loop.
-    let budget = HIGH - pend;
+    const room = HIGH - pend;         // room reserved → a batch sized ≤ room can't overflow
+
+    if (h.sendBatch) {
+      // Batch path: one request enqueues up to `n` ops (sized to fit the reserved room).
+      const n = Math.min(room, BATCH, items.length - i);
+      const res = await h.sendBatch(items.slice(i, i + n).map((it) => it.query));
+      if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; continue; }
+      netFails = 0;
+      errors += res.rejected;         // sized to fit → rejections are genuine (skip them)
+      i += n;                         // all n were processed (accepted or rejected)
+      h.onProgress?.(i, errors);
+      continue;
+    }
+
+    // Per-op fallback (no batch support).
+    let budget = room;
     while (budget > 0 && i < items.length && !h.isCancelled()) {
       const res = await h.sendRaw(items[i].query, items[i].raw);
-      if (res === 'error') {
-        // Transient — the request didn't complete (e.g. the board's TCP pool is
-        // saturated under a big stream). NEVER drop the job: back off and retry the
-        // SAME item. This self-throttles to the sustainable connection rate.
-        if (++netFails >= MAX_NET_FAILS) {
-          h.pushLog('err', `[${label}] aborting — ${netFails} straight network failures (connection lost?). ${i}/${items.length} sent.`);
-          return { sent: i, errors, stopped: true };
-        }
-        if (netFails === 1) h.pushLog('sys', `[${label}] network busy — backing off & retrying (not dropping jobs)…`);
-        await sleep(Math.min(2000, 150 * netFails));
-        break;                        // re-read pending, then retry items[i]
-      }
+      if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; break; }
       netFails = 0;
-      if (res === 'rejected') errors++;   // genuine rejection (bounds/syntax) — skip it
+      if (res === 'rejected') errors++;
       i++;
       budget--;
       h.onProgress?.(i, errors);
@@ -980,6 +997,18 @@ export function usePlotter() {
     }
   }, []);
 
+  // Batch many draw ops into one HTTP request (≈80× fewer connections → big streams
+  // become practical). Returns enqueue counts, or 'error' on a transient network fail.
+  const sendBatch = useCallback(async (queries: string[]): Promise<{ accepted: number; rejected: number } | 'error'> => {
+    if (!ipRef.current) return 'error';
+    try {
+      const d = await apiBatch(ipRef.current, queries.join('\n'));
+      return { accepted: Number(d.accepted) || 0, rejected: Number(d.rejected) || 0 };
+    } catch {
+      return 'error';
+    }
+  }, []);
+
   const stop = useCallback(() => {
     cancelRef.current = true;
     runCancelRef.current = true;   // also halt any running script batch so it stops feeding jobs
@@ -1134,7 +1163,7 @@ export function usePlotter() {
     applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
+    enqueue, sendRaw, sendBatch, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
     DEFAULTS,
   };
 }

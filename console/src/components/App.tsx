@@ -866,8 +866,9 @@ const SCRIPT_HINT = `[
   { "type": "home" }
 ]`;
 
-function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
+function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog }: {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
@@ -891,7 +892,7 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
     const cancelled = () => abortRef.current || runCancelRef.current;  // STOP/CLEAR halt the feed
     const { sent, errors, stopped } = await streamQueries(
       good.map(l => ({ query: l.query!, raw: l.raw })),
-      { sendRaw, getPending, isCancelled: cancelled, pushLog, label: 'script',
+      { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
         onProgress: (s, e) => setRun(r => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
@@ -1065,7 +1066,7 @@ function StudioPage({ P, status, moving, bounds }: {
   moving: boolean;
   bounds: PlotterBounds;
 }) {
-  const { sendRaw, getPending, runCancelRef, pushLog } = P;
+  const { sendRaw, sendBatch, getPending, runCancelRef, pushLog } = P;
   const allMods = useMemo(() => listModules(), []);
   const makes = useMemo(() => listModules('make'), []);
   const [layers, setLayers] = useState<Layer[]>(() => {
@@ -1163,7 +1164,7 @@ function StudioPage({ P, status, moving, bounds }: {
     pushLog('cmd', `> studio: ${layers.length} layer(s), ${queries.length} ops (${draws} draws, ${travels} travels)`);
     const { sent, errors, stopped } = await streamQueries(
       queries.map((q) => ({ query: q })),
-      { sendRaw, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
+      { sendRaw, sendBatch, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
         onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors ? 'warn' : 'ok'),
@@ -1340,8 +1341,9 @@ function StudioPage({ P, status, moving, bounds }: {
   );
 }
 
-function GcodeTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
+function GcodeTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: LogEntry['kind'], text: string) => void;
@@ -1401,7 +1403,7 @@ function GcodeTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
     const cancelled = () => abortRef.current || runCancelRef.current;
     const { sent, errors, stopped } = await streamQueries(
       result.queries.map((q) => ({ query: q })),
-      { sendRaw, getPending, isCancelled: cancelled, pushLog, label: 'gcode',
+      { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'gcode',
         onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
@@ -1954,9 +1956,9 @@ export default function App() {
                   </div>
                 </LogCard>
 
-                <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
+                <ScriptTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
 
-                <GcodeTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+                <GcodeTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />
