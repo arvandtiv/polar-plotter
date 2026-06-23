@@ -3,6 +3,7 @@ import {
   usePlotter,
   parseJsonScript,
   streamQueries,
+  type SendResult,
   type ParsedLine,
   type PlotterBounds,
   type MotionParams,
@@ -866,7 +867,7 @@ const SCRIPT_HINT = `[
 ]`;
 
 function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
-  sendRaw: (ep: string, json?: string) => Promise<boolean>;
+  sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
@@ -1340,7 +1341,7 @@ function StudioPage({ P, status, moving, bounds }: {
 }
 
 function GcodeTab({ sendRaw, getPending, runCancelRef, pushLog, bounds }: {
-  sendRaw: (ep: string, json?: string) => Promise<boolean>;
+  sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: LogEntry['kind'], text: string) => void;

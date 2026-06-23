@@ -264,9 +264,10 @@ export function boundsToQuery(b: PlotterBounds): string {
 // Crucially: if the status read fails OR the queue is full, WAIT rather than send
 // (a rejection must never look like "room available"). Used by both the JSON
 // Script tab and the G-code digester so they share identical back-pressure.
+export type SendResult = 'ok' | 'rejected' | 'error';
 export interface StreamItem { query: string; raw?: string; }
 export interface StreamHandlers {
-  sendRaw: (ep: string, json?: string) => Promise<boolean>;
+  sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   getPending: () => Promise<number | null>;
   isCancelled: () => boolean;
   onProgress?: (sent: number, errors: number) => void;
@@ -275,13 +276,15 @@ export interface StreamHandlers {
 }
 export async function streamQueries(items: StreamItem[], h: StreamHandlers): Promise<{ sent: number; errors: number; stopped: boolean }> {
   const CAP = 256, HIGH = 220;
+  const MAX_NET_FAILS = 60;          // consecutive transient failures before we give up
+  const label = h.label ?? 'stream';
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  let errors = 0, i = 0, warned = false;
+  let errors = 0, i = 0, warned = false, netFails = 0;
   while (i < items.length && !h.isCancelled()) {
     const pend = await h.getPending();
     if (pend === null || pend >= HIGH) {
       if (pend !== null && !warned) {
-        h.pushLog('sys', `[${h.label ?? 'stream'}] board busy (${pend}/${CAP} queued) — waiting for room…`);
+        h.pushLog('sys', `[${label}] board busy (${pend}/${CAP} queued) — waiting for room…`);
         warned = true;
       }
       await sleep(400);
@@ -291,10 +294,24 @@ export async function streamQueries(items: StreamItem[], h: StreamHandlers): Pro
     // Room for (HIGH - pend) jobs. Assume the board doesn't drain during the
     // burst (conservative → can't overflow), then re-read pending next loop.
     let budget = HIGH - pend;
-    while (budget-- > 0 && i < items.length && !h.isCancelled()) {
-      const ok = await h.sendRaw(items[i].query, items[i].raw);
-      if (!ok) errors++;              // real rejection (bounds/syntax) — skip, don't retry
+    while (budget > 0 && i < items.length && !h.isCancelled()) {
+      const res = await h.sendRaw(items[i].query, items[i].raw);
+      if (res === 'error') {
+        // Transient — the request didn't complete (e.g. the board's TCP pool is
+        // saturated under a big stream). NEVER drop the job: back off and retry the
+        // SAME item. This self-throttles to the sustainable connection rate.
+        if (++netFails >= MAX_NET_FAILS) {
+          h.pushLog('err', `[${label}] aborting — ${netFails} straight network failures (connection lost?). ${i}/${items.length} sent.`);
+          return { sent: i, errors, stopped: true };
+        }
+        if (netFails === 1) h.pushLog('sys', `[${label}] network busy — backing off & retrying (not dropping jobs)…`);
+        await sleep(Math.min(2000, 150 * netFails));
+        break;                        // re-read pending, then retry items[i]
+      }
+      netFails = 0;
+      if (res === 'rejected') errors++;   // genuine rejection (bounds/syntax) — skip it
       i++;
+      budget--;
       h.onProgress?.(i, errors);
     }
   }
@@ -950,14 +967,16 @@ export function usePlotter() {
 
   // Quiet raw send for bulk script execution — no individual log lines, returns
   // true on ok. Pass the item's JSON so the Position panel can show it while it runs.
-  const sendRaw = useCallback(async (endpoint: string, json?: string): Promise<boolean> => {
-    if (!ipRef.current) return false;
+  // 'ok' = queued; 'rejected' = the firmware refused it (bounds/syntax/queue-full) → skip;
+  // 'error' = the request didn't complete (network/connection) → caller should retry, not drop.
+  const sendRaw = useCallback(async (endpoint: string, json?: string): Promise<SendResult> => {
+    if (!ipRef.current) return 'error';
     try {
       const d = await apiGet(ipRef.current, endpoint);
       if (d.status === 'ok' && d.id != null && json) jobJson.current.set(d.id, json);
-      return d.status === 'ok';
+      return d.status === 'ok' ? 'ok' : 'rejected';
     } catch {
-      return false;
+      return 'error';
     }
   }, []);
 
