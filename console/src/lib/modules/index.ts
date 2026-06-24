@@ -6,6 +6,7 @@ import "./square";
 import "./wobbly";
 import "./spirograph";
 import "./orbital-weave";
+import "./random-walker";
 import "./moire-curtain";
 import "./pattern-maker";
 import "./mask";
