@@ -315,7 +315,15 @@ export async function streamQueries(items: StreamItem[], h: StreamHandlers): Pro
       if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; continue; }
       netFails = 0;
       errors += res.rejected;         // sized to fit → rejections are genuine (skip them)
-      i += n;                         // all n were processed (accepted or rejected)
+      const actual = res.accepted + res.rejected;
+      if (actual < n) {
+        // Firmware processed fewer ops than sent (body may have been truncated by a recv
+        // timeout). Advance only past the confirmed ops; the rest retry next iteration.
+        i += actual;
+        h.pushLog('warn', `[${label}] partial batch: sent ${n}, fw confirmed ${actual} — ${n - actual} retrying`);
+      } else {
+        i += n;                       // all n were processed (accepted or rejected)
+      }
       h.onProgress?.(i, errors);
       continue;
     }
@@ -1003,6 +1011,9 @@ export function usePlotter() {
     if (!ipRef.current) return 'error';
     try {
       const d = await apiBatch(ipRef.current, queries.join('\n'));
+      // Firmware-side errors (e.g. body too large) must trigger a retry, not a silent
+      // {accepted:0,rejected:0} which would advance i past all n ops without queuing them.
+      if (d.status !== 'ok') return 'error';
       return { accepted: Number(d.accepted) || 0, rejected: Number(d.rejected) || 0 };
     } catch {
       return 'error';

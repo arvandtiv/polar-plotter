@@ -236,7 +236,7 @@ static uint32_t enqueue(wcmd_t *cmd)
     if (!g_draw_queue) return 0;
     uint32_t id = ++g_job_enqueued;
     cmd->id = id;
-    if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200)) != pdTRUE) {
+    if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(50)) != pdTRUE) {
         --g_job_enqueued;
         ++g_job_rejected;   /* queue full — the exact firmware-side rejection */
         return 0;
@@ -743,6 +743,13 @@ static void handle_batch(int sock, const char *req, int total)
         n += r;
     }
     s_batch_body[n] = '\0';
+    if (n < clen) {
+        /* recv timed out or connection dropped before the full body arrived.
+         * Return an error so the client retries rather than silently losing ops. */
+        printf("[web] batch body truncated: got %d of %d bytes — returning error\n", n, clen);
+        resp_json(sock, "error", "body truncated");
+        return;
+    }
 
     uint32_t accepted = 0, rejected = 0, lastId = 0;
     char *save = NULL;
@@ -817,7 +824,7 @@ static void http_server_task(void *arg)
     if (bind(srv_sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         printf("[web] bind() failed\n"); close(srv_sock); vTaskDelete(NULL);
     }
-    listen(srv_sock, 5);
+    listen(srv_sock, 10);
     printf("[web] HTTP server on port %d\n", HTTP_PORT);
 
     char req_buf[1024];
@@ -871,9 +878,13 @@ static void http_server_task(void *arg)
             continue;
         }
 
-        /* Batch enqueue: needs the raw request (POST body), not just the query string. */
+        /* Batch enqueue: needs the headers + body, not just the query string.
+         * The request line has been null-terminated at *eol, so we pass eol+1
+         * (the '\n' that follows) as the start of the headers — strstr("\r\n\r\n")
+         * and strstr("Content-Length:") both work fine on the unmodified headers. */
         if (strcmp(url, "/api/batch") == 0) {
-            handle_batch(client_sock, req_buf, total);
+            int hdr_off = (int)(eol + 1 - req_buf);
+            handle_batch(client_sock, eol + 1, total - hdr_off);
             close(client_sock);
             continue;
         }

@@ -74,6 +74,26 @@ async function main() {
     ok("rejection counted", r.errors === 1, `errors=${r.errors}`);
   }
 
+  console.log("[6] batch path: partial batch (accepted+rejected < n) retries missing ops");
+  {
+    const big = Array.from({ length: 10 }, (_, k) => ({ query: `line${k}` }));
+    let calls = 0;
+    const r = await streamQueries(big, {
+      sendRaw: async () => "ok",
+      getPending: async () => 0,
+      isCancelled: () => false,
+      pushLog: () => {},
+      sendBatch: async (q) => {
+        calls++;
+        // First call: simulate truncation — only 3 of q.length ops confirmed
+        if (calls === 1) return { accepted: 3, rejected: 0 };
+        return { accepted: q.length, rejected: 0 };
+      },
+    });
+    ok("all 10 eventually sent", r.sent === 10, `sent=${r.sent}`);
+    ok("needed >1 calls because first was partial (retried truncated)", calls >= 2, `calls=${calls}`);
+  }
+
   console.log(`\n${fails ? `TESTS FAILED (${fails})` : "ALL TESTS PASSED"}`);
   process.exit(fails ? 1 : 0);
 }

@@ -43,6 +43,49 @@ export interface GcodeResult {
 // One parsed motion/pen event in SOURCE (mm) coordinates.
 type Op = { kind: 'move'; x: number; y: number } | { kind: 'pen'; down: boolean };
 
+// Matches firmware CIRCLE_CHORD_ERR_MM (board_config.h).  Used both for
+// tessellation (below) and for fitArcs reconstruction (arcTol in compile()).
+const CHORD_ERR_MM = 0.3;
+
+// Tessellate a G2/G3 arc into intermediate points in G-code (source) space.
+// Returns all points from just-after-start up to and including the end point.
+// Uses the same chord-error formula as the firmware (plt_arc_segments) so the
+// tessellation density matches what the firmware would draw.
+function tessellateArc(
+  sx: number, sy: number,     // start (current pos in source mm)
+  ex: number, ey: number,     // end (X Y on the gcode line)
+  I: number, J: number,       // center offset from start (source mm)
+  clockwise: boolean,          // true = G2 CW, false = G3 CCW
+): { x: number; y: number }[] {
+  const ccx = sx + I, ccy = sy + J;
+  const r = Math.hypot(sx - ccx, sy - ccy);
+  if (r < 1e-6) return [{ x: ex, y: ey }];   // degenerate → straight line endpoint
+
+  const a0 = Math.atan2(sy - ccy, sx - ccx);
+  const a1 = Math.atan2(ey - ccy, ex - ccx);
+  let span = a1 - a0;
+  if (clockwise) {
+    while (span > 1e-9) span -= 2 * Math.PI;
+    if (Math.abs(span) < 1e-9) span = -2 * Math.PI;  // full circle CW
+  } else {
+    while (span < -1e-9) span += 2 * Math.PI;
+    if (Math.abs(span) < 1e-9) span = 2 * Math.PI;   // full circle CCW
+  }
+
+  // Firmware formula: r(1 - cos(θ/2)) = CHORD_ERR_MM  →  θ = 2·arccos(1 - err/r)
+  const ratio = Math.max(-1, Math.min(1, 1 - CHORD_ERR_MM / r));
+  const stepAngle = 2 * Math.acos(ratio);
+  const N = Math.max(3, Math.ceil(Math.abs(span) / stepAngle));
+
+  const pts: { x: number; y: number }[] = [];
+  for (let k = 1; k <= N; k++) {
+    const a = a0 + span * (k / N);
+    pts.push({ x: ccx + r * Math.cos(a), y: ccy + r * Math.sin(a) });
+  }
+  pts[pts.length - 1] = { x: ex, y: ey };   // snap to declared target
+  return pts;
+}
+
 const NUM = (s: string | undefined): number | undefined => {
   if (s === undefined) return undefined;
   const v = parseFloat(s);
@@ -116,6 +159,7 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
   let cx = 0, cy = 0, cz = 0;   // current position (mm)
   let ox = 0, oy = 0;      // G92 offsets (mm)
   let penDown = false;
+  let hasArcs = false;     // set if any G2/G3 found (enables arcTol in compile)
   const ops: Op[] = [];
   const setPen = (d: boolean) => { if (d !== penDown) { penDown = d; ops.push({ kind: 'pen', down: d }); } };
 
@@ -154,10 +198,13 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
       if (s !== undefined) setPen(s <= 150);
     }
 
-    const isMove = /(^|[^A-Z])G0?[01](\D|$)/.test(u);
+    const isG2 = /(^|[^A-Z])G0?2(\D|$)/.test(u);
+    const isG3 = /(^|[^A-Z])G0?3(\D|$)/.test(u);
+    const isMove = isG2 || isG3 || /(^|[^A-Z])G0?[01](\D|$)/.test(u);
     if (!isMove) continue;
 
-    const g1 = /(^|[^A-Z])G0?1(\D|$)/.test(u);
+    // G2/G3 arcs are feed-rate (pen-down) moves like G1
+    const g1 = isG2 || isG3 || /(^|[^A-Z])G0?1(\D|$)/.test(u);
     const fx = NUM(field('X', u)), fy = NUM(field('Y', u)), fz = NUM(field('Z', u));
 
     if (fz !== undefined) cz = abs ? fz * unit : cz + fz * unit;
@@ -167,8 +214,17 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
     if (fx === undefined && fy === undefined) continue;   // Z-only / pen line, no XY move
     const nx = fx !== undefined ? (abs ? fx * unit + ox : cx + fx * unit) : cx;
     const ny = fy !== undefined ? (abs ? fy * unit + oy : cy + fy * unit) : cy;
+
+    if (isG2 || isG3) {
+      const I = (NUM(field('I', u)) ?? 0) * unit;
+      const J = (NUM(field('J', u)) ?? 0) * unit;
+      hasArcs = true;
+      for (const p of tessellateArc(cx, cy, nx, ny, I, J, isG2))
+        ops.push({ kind: 'move', x: p.x, y: p.y });
+    } else {
+      ops.push({ kind: 'move', x: nx, y: ny });
+    }
     cx = nx; cy = ny;
-    ops.push({ kind: 'move', x: nx, y: ny });
   }
 
   // ---- bbox over all moves ----
@@ -207,8 +263,9 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
   flush();
 
   const frame: Frame = { widthMm: opts.bounds.left + opts.bounds.right, heightMm: opts.bounds.up + opts.bounds.down, paths };
-  const queries = compile(optimizeOrder(simplifyFrame(frame)));
-  const draws = queries.filter((q) => q.startsWith('line?')).length;
+  const queries = compile(optimizeOrder(simplifyFrame(frame)), hasArcs ? { arcTol: CHORD_ERR_MM } : {});
+  // arc? queries are drawn segments just like line? — fold them into draws
+  const draws = queries.filter((q) => q.startsWith('line?') || q.startsWith('arc?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
   if (!bbox) warnings.push('no X/Y moves found — nothing to draw');

@@ -1,6 +1,101 @@
-# Bug: G-code / large streams stop part-way (stray `bounds` job) — RESOLVED
+# Bug: G-code / large streams stop part-way — multi-root investigation
 
-**Date:** 2026-06-23 · **Branch:** `v1.2` · **Status:** ✅ fixed (console-only) — flash not required for this fix.
+**Date:** 2026-06-23 · **Branch:** `v1.2` · **Status:** ✅ fixed — **FLASH REQUIRED** for the batch-body fix.
+
+---
+
+## Bug 3 (2026-06-24): stream stops at ~70% — body truncation + silent error bypass
+
+**Symptom:** After the batch-body fix (Bug 2), streaming 28,674-move gcode stops at firmware
+job #20,348 with ~8,443 ops silently missing.  The plotter executes those 20,348 jobs and
+stops.
+
+**Two root causes found (both console-only, no flash required):**
+
+### 3a — firmware error response treated as {accepted:0, rejected:0}
+
+When the firmware returns `{status:"error","msg":"..."}` (e.g. for a future body-truncation
+error), `Number(d.accepted) || 0` converts `undefined → NaN → 0`.  `streamQueries` sees
+`{accepted:0, rejected:0}` instead of a retryable `'error'`, advances `i += n`, and silently
+skips all `n` ops.
+
+**Fix (`console/src/hooks/usePlotter.ts`):**
+```ts
+// BEFORE:
+return { accepted: Number(d.accepted) || 0, rejected: Number(d.rejected) || 0 };
+
+// AFTER:
+if (d.status !== 'ok') return 'error';  // firmware error → retry, not silent skip
+return { accepted: Number(d.accepted) || 0, rejected: Number(d.rejected) || 0 };
+```
+
+### 3b — partial batch (accepted + rejected < n) silently skips unprocessed ops
+
+If the firmware processes fewer ops than the console believes it sent (e.g. because a recv
+timeout truncated the HTTP body), the firmware returns `{accepted:K, rejected:J}` where
+`K+J < n`.  The old code did `i += n` (advance past all n, including the missing `n - K - J`
+that were never queued), silently dropping them.
+
+**Fix (`console/src/hooks/usePlotter.ts`):**
+```ts
+// BEFORE:
+i += n;  // advance by n regardless
+
+// AFTER:
+const actual = res.accepted + res.rejected;
+if (actual < n) {
+    i += actual;  // advance only past confirmed ops; rest retry next iteration
+    h.pushLog('warn', `partial batch: sent ${n}, fw confirmed ${actual} — ${n - actual} retrying`);
+} else {
+    i += n;
+}
+```
+
+**Firmware safety net (`main/web_server.c`):** Added recv-truncation detection in
+`handle_batch`: if `n < clen` after the recv loop, returns `{status:"error","msg":"body
+truncated"}` so the console's `sendBatch` retries the whole batch.  Also: reduced `xQueueSend`
+timeout 200 ms → 50 ms (shorter HTTP-task blocking if queue briefly fills) and increased
+`listen()` backlog 5 → 10.  **Requires a firmware flash.**
+
+---
+
+## Bug 2 (2026-06-24): `/api/batch` body never read — stream silently sends nothing
+
+**Symptom:** After the bounds fix, streaming a large G-code file shows job numbers increasing
+in the console progress bar, but nothing appears in the firmware job queue and the plotter
+does not move.
+
+**Root cause:** `http_server_task` null-terminates the request line
+(`*eol = '\0'`, where `eol` points to the `\r` of the first `\r\n`) before calling
+`handle_batch(client_sock, req_buf, total)`.  Inside `handle_batch`, both
+`strstr(req, "\r\n\r\n")` and `strstr(req, "Content-Length:")` use `req_buf` as a C string —
+which now terminates at the null, so they never see the headers or the body.
+As a result `clen = 0`, `n = 0`, `s_batch_body = ""`, and the parse loop finds no lines.
+The response is `{"accepted":0,"rejected":0}` — not an error, so the console's
+`streamQueries` counts the batch as sent and advances `i += n` without putting anything
+in the firmware draw queue.
+
+**Fix (`main/web_server.c`):** pass the headers portion (starting at `eol + 1`,
+the `\n` immediately after the null-terminated request line) with the correct byte count:
+
+```c
+// BEFORE (body invisible — req_buf string terminates at *eol):
+handle_batch(client_sock, req_buf, total);
+
+// AFTER (headers + body fully visible):
+int hdr_off = (int)(eol + 1 - req_buf);
+handle_batch(client_sock, eol + 1, total - hdr_off);
+```
+
+`hdr_content_length` and `strstr("\r\n\r\n")` now scan the unmodified headers and the
+partial body already in `req_buf`; the `recv()` loop in `handle_batch` then reads the
+remainder.  **Requires a firmware flash.**
+
+---
+
+## Bug 1 (2026-06-23): stray `bounds` job — RESOLVED (console-only fix)
+
+**Date:** 2026-06-23 · **Status:** ✅ fixed (console-only) — no flash required for this fix.
 
 ## Symptom (as reported)
 - A large exported design (`design (2).gcode`, ~28.9k lines → ~21.8k ops) is run through
