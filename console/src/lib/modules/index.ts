@@ -8,6 +8,7 @@ import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";
 import "./noised-hatches";
+import "./noise-orbit";
 import "./moire-curtain";
 import "./pattern-maker";
 import "./mask";
