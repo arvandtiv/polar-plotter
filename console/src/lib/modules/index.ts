@@ -7,6 +7,7 @@ import "./wobbly";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";
+import "./noised-hatches";
 import "./moire-curtain";
 import "./pattern-maker";
 import "./mask";
