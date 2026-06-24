@@ -24,10 +24,11 @@ export const randomWalkerModule: Module = {
       { key: "maxVel",  label: "Max speed",  type: "range", min: 0.5, max: 20,    step: 0.5, unit: "mm", default: 4   },
       { key: "seed",    label: "Seed",       type: "range", min: 0,   max: 9999,  step: 1,   default: 42  },
     ]},
-    { title: "Origin", fields: [
-      { key: "cx",     label: "Start X",  type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
-      { key: "cy",     label: "Start Y",  type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
-      { key: "spread", label: "Spread",   type: "range", min: 0,    max: 100, step: 1, unit: "mm", default: 0 },
+    { title: "Start line", fields: [
+      { key: "x1", label: "X1", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "y1", label: "Y1", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "x2", label: "X2", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "y2", label: "Y2", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
     ]},
     { title: "Ink", fields: [
       { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "×", default: 1 },
@@ -40,9 +41,10 @@ export const randomWalkerModule: Module = {
     const velStep = num(params, "velStep", 0.5);
     const maxVel  = Math.max(velStep, num(params, "maxVel", 4));
     const seed    = Math.round(num(params, "seed", 42));
-    const cx0     = num(params, "cx", 0);
-    const cy0     = num(params, "cy", 0);
-    const spread  = num(params, "spread", 0);
+    const x1      = num(params, "x1", 0);
+    const y1      = num(params, "y1", 0);
+    const x2      = num(params, "x2", 0);
+    const y2      = num(params, "y2", 0);
     const cycles  = Math.max(1, Math.round(num(params, "cycles", 1)));
 
     const rng = seededRandom(seed);
@@ -58,11 +60,11 @@ export const randomWalkerModule: Module = {
     const paths: Path[] = [];
 
     for (let wi = 0; wi < count; wi++) {
-      // Start at (cx0, cy0) plus a uniform random offset within the spread radius
-      const angle = rng() * 2 * Math.PI;
-      const r     = spread > 0 ? Math.sqrt(rng()) * spread : 0;  // sqrt = uniform disk
-      let x = cx0 + r * Math.cos(angle);
-      let y = cy0 + r * Math.sin(angle);
+      // Pick a random position along the start line (t=0 → (x1,y1), t=1 → (x2,y2)).
+      // Collapsed line (x1=x2, y1=y2) = single origin; longer line = sparser starts.
+      const t = rng();
+      let x = x1 + t * (x2 - x1);
+      let y = y1 + t * (y2 - y1);
       let vx = 0, vy = 0;
 
       const pts: Pt[] = [{ x, y }];
