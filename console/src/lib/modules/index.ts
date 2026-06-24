@@ -9,6 +9,7 @@ import "./orbital-weave";
 import "./random-walker";
 import "./noised-hatches";
 import "./noise-orbit";
+import "./sheets";
 import "./moire-curtain";
 import "./pattern-maker";
 import "./mask";
