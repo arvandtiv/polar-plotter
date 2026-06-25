@@ -1068,12 +1068,7 @@ function StudioPage({ P, status, moving, bounds }: {
   const { sendRaw, sendBatch, getPending, runCancelRef, pushLog } = P;
   const allMods = useMemo(() => listModules(), []);
   const makes = useMemo(() => listModules('make'), []);
-  const [layers, setLayers] = useState<Layer[]>(() => {
-    const stored = loadStudioLayers();
-    if (stored.length) return stored;
-    const m = makes[0];
-    return m ? [{ id: newLayerId(), moduleKey: m.key, params: defaultsOf(m) }] : [];
-  });
+  const [layers, setLayers] = useState<Layer[]>(() => loadStudioLayers());
   const [selId, setSelId] = useState<string>(() => layers[0]?.id ?? '');
   const [addKey, setAddKey] = useState<string>(makes[0]?.key ?? '');
   const abortRef = useRef(false);
