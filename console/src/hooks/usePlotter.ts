@@ -63,6 +63,28 @@ export const DEFAULTS = {
   bounds: { left: 260, right: 260, up: 274, down: 105, shape: 'rect' as BoundsShape },
 };
 
+// ---- bounds localStorage persistence --------------------------------
+// The firmware is always authoritative when connected; this just gives a better
+// offline default than the hardcoded fallback above.
+const BOUNDS_KEY = 'plotterBounds';
+function loadBounds(): PlotterBounds {
+  try {
+    const raw = localStorage.getItem(BOUNDS_KEY);
+    if (raw) {
+      const b = JSON.parse(raw);
+      if (typeof b.left === 'number' && typeof b.right === 'number' &&
+          typeof b.up   === 'number' && typeof b.down  === 'number') {
+        return { left: b.left, right: b.right, up: b.up, down: b.down,
+                 shape: b.shape === 'ellipse' ? 'ellipse' : 'rect' };
+      }
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULTS.bounds };
+}
+function saveBounds(b: PlotterBounds): void {
+  try { localStorage.setItem(BOUNDS_KEY, JSON.stringify(b)); } catch { /* ignore */ }
+}
+
 // Light-theme stroke palette (deepened for contrast on white) — Claude Design tokens.
 const PALETTE = ['#0284c7', '#059669', '#d97706', '#db2777', '#7c3aed', '#ea580c'];
 
@@ -763,7 +785,7 @@ export function usePlotter() {
   const [moving, setMoving]        = useState(false);
   const [connected, setConnected]  = useState(false);
   const [motion, setMotionState]   = useState<MotionParams>({ ...DEFAULTS.motion });
-  const [bounds, setBoundsState]   = useState<PlotterBounds>({ ...DEFAULTS.bounds });
+  const [bounds, setBoundsState]   = useState<PlotterBounds>(() => loadBounds());
   const [queue, setQueue]          = useState<string[]>([]);
   const [log, setLog]              = useState<LogEntry[]>([mkLog('sys', 'console ready')]);
   const [status, setStatus]        = useState<PlotterStatus | null>(null);
@@ -804,6 +826,10 @@ export function usePlotter() {
   const ipRef     = useRef(ip);        ipRef.current     = ip;
   const cancelRef = useRef(false);     // set true by stop()/clearQueue() to cancel client-side work
   const runCancelRef = useRef(false);  // set true by stop()/clearQueue() to halt a running script batch
+
+  // Persist bounds whenever they change — gives a better offline default than the
+  // hardcoded fallback. Firmware bounds always win on connect (line ~938).
+  useEffect(() => { saveBounds(bounds); }, [bounds]);
 
   const pushLog = useCallback((kind: LogEntry['kind'], text: string) => {
     setLog((l) => [...l.slice(-199), mkLog(kind, text)]);
