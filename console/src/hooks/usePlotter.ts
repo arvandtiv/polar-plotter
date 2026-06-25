@@ -60,12 +60,12 @@ export const DEFAULTS = {
   // run de-rated 600→400 mA to match the firmware default (board_config.h) — a pen
   // gondola needs little torque and run current is the multi-hour-plot heat source.
   motion: { vmax: 350000, amax: 1690, run: 940, hold: 440 },
-  bounds: { left: 260, right: 260, up: 274, down: 105, shape: 'rect' as BoundsShape },
+  bounds: { left: 276, right: 263, up: 115, down: 273, shape: 'rect' as BoundsShape },
 };
 
 // ---- bounds localStorage persistence --------------------------------
-// The firmware is always authoritative when connected; this just gives a better
-// offline default than the hardcoded fallback above.
+// The UI is the source of truth for bounds — firmware resets on every reboot.
+// On connect the UI pushes its stored bounds to the firmware (see boundsSeeded logic).
 const BOUNDS_KEY = 'plotterBounds';
 function loadBounds(): PlotterBounds {
   try {
@@ -163,11 +163,21 @@ export function cmdLabel(cmd: PlotCmd): string {
 // them under a "commands" (or "script") key — e.g. { "commands": [ … ] } — and
 // converts each to an API query string. Same object shape as plot_script in the
 // MCP, so scripts are copy-pasteable between Claude Desktop and this console.
+import type { GeneratorSpec } from '../lib/runPipeline';
+export type { GeneratorSpec };
+
 export interface ParsedLine {
   idx: number;      // 0-based index in the JSON array (-1 = top-level error)
   raw: string;      // compact JSON of the item (for display)
-  query?: string;   // present when ok
+  query?: string;   // present for regular firmware commands
+  generator?: GeneratorSpec;  // present for "generate" items — expanded at run time
   error?: string;   // present when validation failed
+}
+
+// Grid context accumulated from outer metadata or grid_plan commands.
+interface GridCtx {
+  cols: number; rows: number; padding_mm: number;
+  full_xn: number; full_xp: number; full_yn: number; full_yp: number;
 }
 
 export function parseJsonScript(text: string): ParsedLine[] {
@@ -175,13 +185,30 @@ export function parseJsonScript(text: string): ParsedLine[] {
   if (!t) return [];
 
   let arr: unknown[];
+  let gridCtx: GridCtx | null = null;
+  const rn = (n: number) => Math.round(n * 100) / 100;
+
   try {
     const parsed = JSON.parse(t);
     if (Array.isArray(parsed)) {
       arr = parsed;
     } else if (parsed && typeof parsed === 'object') {
       // Unwrap { commands: [ … ] } or { script: [ … ] }.
+      // Also extract grid context from outer metadata (klee-style composition files).
       const wrap = parsed as Record<string, unknown>;
+      const meta = wrap.metadata as Record<string, unknown> | undefined;
+      if (meta) {
+        const wa = meta.work_area as Record<string, number> | undefined;
+        const grid = meta.grid as Record<string, number> | undefined;
+        if (wa && grid) {
+          const xn = Number(wa.x_min), xp = Number(wa.x_max);
+          const yn = Number(wa.y_min), yp = Number(wa.y_max);
+          const cols = Number(grid.cols), rows = Number(grid.rows);
+          if ([xn, xp, yn, yp, cols, rows].every(isFinite) && cols > 0 && rows > 0) {
+            gridCtx = { cols, rows, padding_mm: Number(grid.padding_mm ?? 5), full_xn: xn, full_xp: xp, full_yn: yn, full_yp: yp };
+          }
+        }
+      }
       const inner = Array.isArray(wrap.commands) ? wrap.commands
                   : Array.isArray(wrap.script)   ? wrap.script
                   : null;
@@ -195,10 +222,14 @@ export function parseJsonScript(text: string): ParsedLine[] {
     return [{ idx: -1, raw: '', error: `JSON syntax: ${(e as Error).message}` }];
   }
 
-  return arr.map((item, idx) => {
+  const results: ParsedLine[] = [];
+
+  arr.forEach((item, idx) => {
     const raw = JSON.stringify(item);
-    if (!item || typeof item !== 'object' || Array.isArray(item))
-      return { idx, raw, error: 'each item must be an object' };
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      results.push({ idx, raw, error: 'each item must be an object' });
+      return;
+    }
 
     const o = item as Record<string, unknown>;
     const type = String(o.type ?? '').toLowerCase();
@@ -211,72 +242,172 @@ export function parseJsonScript(text: string): ParsedLine[] {
       return null;
     };
 
+    // Silently skip comment-only objects (no type), preflight status checks, and
+    // planning-only commands — they carry no executable firmware action.
+    if (!type || type === 'status' || type === 'grid_plan') return;
+
     switch (type) {
       case 'goto': {
-        const e = req('x', 'y'); if (e) return { idx, raw, error: `goto: ${e}` };
-        return { idx, raw, query: `goto?x=${num('x',0)}&y=${num('y',0)}` };
+        const e = req('x', 'y'); if (e) { results.push({ idx, raw, error: `goto: ${e}` }); return; }
+        results.push({ idx, raw, query: `goto?x=${num('x',0)}&y=${num('y',0)}` });
+        return;
       }
       case 'pen': {
         const pos = String(o.position ?? o.pos ?? '').toLowerCase();
-        if (pos !== 'up' && pos !== 'down')
-          return { idx, raw, error: 'pen: "position" must be "up" or "down"' };
-        return { idx, raw, query: `pen?pos=${pos}` };
+        if (pos !== 'up' && pos !== 'down') { results.push({ idx, raw, error: 'pen: "position" must be "up" or "down"' }); return; }
+        results.push({ idx, raw, query: `pen?pos=${pos}` });
+        return;
       }
-      case 'home':    return { idx, raw, query: 'home' };
-      case 'sethome': return { idx, raw, query: 'sethome' };
-      case 'stop':    return { idx, raw, query: 'stop' };
-      case 'border':  return { idx, raw, query: 'border' };
+      case 'home':    results.push({ idx, raw, query: 'home' });    return;
+      case 'sethome': results.push({ idx, raw, query: 'sethome' }); return;
+      case 'stop':    results.push({ idx, raw, query: 'stop' });    return;
+      case 'border':  results.push({ idx, raw, query: 'border' });  return;
       case 'line': {
-        const e = req('x0','y0','x1','y1'); if (e) return { idx, raw, error: `line: ${e}` };
-        return { idx, raw, query:
-          `line?x0=${num('x0',0)}&y0=${num('y0',0)}&x1=${num('x1',0)}&y1=${num('y1',0)}&cycles=${num('cycles',1)}` };
+        const e = req('x0','y0','x1','y1'); if (e) { results.push({ idx, raw, error: `line: ${e}` }); return; }
+        results.push({ idx, raw, query:
+          `line?x0=${num('x0',0)}&y0=${num('y0',0)}&x1=${num('x1',0)}&y1=${num('y1',0)}&cycles=${num('cycles',1)}` });
+        return;
       }
       case 'circle': {
-        const e = req('cx','cy','r'); if (e) return { idx, raw, error: `circle: ${e}` };
+        const e = req('cx','cy','r'); if (e) { results.push({ idx, raw, error: `circle: ${e}` }); return; }
         const ol = o.outline === false || o.outline === 0 ? 0 : 1;
-        return { idx, raw, query:
-          `circle?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+        results.push({ idx, raw, query:
+          `circle?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
+        return;
       }
       case 'square': {
-        const e = req('cx','cy','size'); if (e) return { idx, raw, error: `square: ${e}` };
+        const e = req('cx','cy','size'); if (e) { results.push({ idx, raw, error: `square: ${e}` }); return; }
         const ol = o.outline === false || o.outline === 0 ? 0 : 1;
-        return { idx, raw, query:
-          `square?cx=${num('cx',0)}&cy=${num('cy',0)}&size=${num('size',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+        results.push({ idx, raw, query:
+          `square?cx=${num('cx',0)}&cy=${num('cy',0)}&size=${num('size',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
+        return;
       }
       case 'wobbly': {
-        const e = req('cx','cy','r'); if (e) return { idx, raw, error: `wobbly: ${e}` };
+        const e = req('cx','cy','r'); if (e) { results.push({ idx, raw, error: `wobbly: ${e}` }); return; }
         const ol = o.outline === false || o.outline === 0 ? 0 : 1;
-        return { idx, raw, query:
-          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+        results.push({ idx, raw, query:
+          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
+        return;
       }
       case 'truchet': {
-        return { idx, raw, query:
-          `truchet?n=${num('n',4)}&spacing=${num('spacing',3)}&angle=${num('angle',45)}&seed=${num('seed',42)}&motifs=${num('motifs',0)}` };
+        results.push({ idx, raw, query:
+          `truchet?n=${num('n',4)}&spacing=${num('spacing',3)}&angle=${num('angle',45)}&seed=${num('seed',42)}&motifs=${num('motifs',0)}` });
+        return;
       }
       case 'bullseye':
-        return { idx, raw, query: `bullseye?cx=${num('cx',0)}&cy=${num('cy',0)}` };
-      case 'speed': {
-        const e = req('vmax'); if (e) return { idx, raw, error: `speed: ${e}` };
-        return { idx, raw, query: `speed?vmax=${num('vmax',0)}` };
+        results.push({ idx, raw, query: `bullseye?cx=${num('cx',0)}&cy=${num('cy',0)}` }); return;
+      case 'grid':
+        results.push({ idx, raw, query: `grid?cx=${num('cx',0)}&cy=${num('cy',0)}` }); return;
+      case 'arc': {
+        const e = req('cx','cy','r','a0','a1'); if (e) { results.push({ idx, raw, error: `arc: ${e}` }); return; }
+        results.push({ idx, raw, query:
+          `arc?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',10)}&a0=${num('a0',0)}&a1=${num('a1',0)}&cw=${num('cw',0)}&cycles=${num('cycles',1)}&lift=${num('lift',1)}` });
+        return;
+      }
+      case 'bounds': {
+        const e = req('xn','xp','yn','yp'); if (e) { results.push({ idx, raw, error: `bounds: ${e}` }); return; }
+        results.push({ idx, raw, query:
+          `bounds?xn=${num('xn',0)}&xp=${num('xp',0)}&yn=${num('yn',0)}&yp=${num('yp',0)}&shape=${num('shape',0)}` });
+        return;
+      }
+      case 'matrix': {
+        results.push({ idx, raw, query:
+          `matrix?a=${num('a',1)}&b=${num('b',0)}&c=${num('c',0)}&d=${num('d',1)}&tx=${num('tx',0)}&ty=${num('ty',0)}` });
+        return;
+      }
+      case 'speed':
+      case 'set_speed': {
+        const e = req('vmax'); if (e) { results.push({ idx, raw, error: `${type}: ${e}` }); return; }
+        results.push({ idx, raw, query: `speed?vmax=${num('vmax',0)}` });
+        return;
       }
       case 'accel': {
-        const e = req('amax'); if (e) return { idx, raw, error: `accel: ${e}` };
-        return { idx, raw, query: `accel?amax=${num('amax',0)}` };
+        const e = req('amax'); if (e) { results.push({ idx, raw, error: `accel: ${e}` }); return; }
+        results.push({ idx, raw, query: `accel?amax=${num('amax',0)}` });
+        return;
       }
       case 'cur':
-      case 'current': {
-        const e = req('run'); if (e) return { idx, raw, error: `cur: ${e}` };
-        return { idx, raw, query: `cur?run=${num('run',0)}&hold=${num('hold',200)}` };
+      case 'current':
+      case 'set_current': {
+        // Accept both 'run'/'hold' (console style) and 'run_ma'/'hold_ma' (MCP/klee style).
+        const runVal = isFinite(Number(o.run_ma)) ? Number(o.run_ma) : num('run', 0);
+        const holdVal = isFinite(Number(o.hold_ma)) ? Number(o.hold_ma) : num('hold', 200);
+        if (!isFinite(runVal) || runVal === 0) { results.push({ idx, raw, error: `${type}: missing "run" or "run_ma"` }); return; }
+        results.push({ idx, raw, query: `cur?run=${runVal}&hold=${holdVal}` });
+        return;
       }
+      case 'grid_select': {
+        // Build grid context: prefer per-item fields (full plot_script format), fall back to outer metadata ctx.
+        let gc: GridCtx | null = gridCtx;
+        if (isFinite(Number(o.cols)) && isFinite(Number(o.full_xn))) {
+          gc = {
+            cols: num('cols', 1), rows: num('rows', 1), padding_mm: num('padding_mm', 5),
+            full_xn: num('full_xn', 0), full_xp: num('full_xp', 0),
+            full_yn: num('full_yn', 0), full_yp: num('full_yp', 0),
+          };
+        }
+        if (!gc) { results.push({ idx, raw, error: 'grid_select: need cols/rows/full_xn/xp/yn/yp or outer metadata.grid + metadata.work_area' }); return; }
+        const col = num('col', 0), row = num('row', 0);
+        if (col >= gc.cols) { results.push({ idx, raw, error: `grid_select: col ${col} ≥ cols ${gc.cols}` }); return; }
+        if (row >= gc.rows) { results.push({ idx, raw, error: `grid_select: row ${row} ≥ rows ${gc.rows}` }); return; }
+        const cellW = ((gc.full_xp - gc.full_xn) - (gc.cols - 1) * gc.padding_mm) / gc.cols;
+        const cellH = ((gc.full_yp - gc.full_yn) - (gc.rows - 1) * gc.padding_mm) / gc.rows;
+        const lx = gc.full_xn + col * (cellW + gc.padding_mm);
+        const ty = gc.full_yn + row * (cellH + gc.padding_mm);
+        const cx = rn(lx + cellW / 2), cy = rn(ty + cellH / 2);
+        // Emits two config queries: clip bounds to this cell, then translate origin to its centre.
+        results.push({ idx, raw, query: `bounds?xn=${rn(-cellW/2)}&xp=${rn(cellW/2)}&yn=${rn(-cellH/2)}&yp=${rn(cellH/2)}&shape=0` });
+        results.push({ idx, raw, query: `matrix?a=1&b=0&c=0&d=1&tx=${cx}&ty=${cy}` });
+        return;
+      }
+      case 'grid_clear': {
+        // Restore full work area bounds and reset the matrix to identity.
+        let gc: GridCtx | null = gridCtx;
+        if (isFinite(Number(o.full_xn))) {
+          gc = { cols: 1, rows: 1, padding_mm: 5, full_xn: num('full_xn', 0), full_xp: num('full_xp', 0), full_yn: num('full_yn', 0), full_yp: num('full_yp', 0) };
+        }
+        if (!gc) { results.push({ idx, raw, error: 'grid_clear: need full_xn/xp/yn/yp or outer metadata.work_area' }); return; }
+        results.push({ idx, raw, query: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0` });
+        results.push({ idx, raw, query: `matrix?a=1&b=0&c=0&d=1&tx=0&ty=0` });
+        return;
+      }
+      case 'generate': {
+        const key = String(o.generator ?? o.key ?? '');
+        if (!key) { results.push({ idx, raw, error: 'generate: missing "generator" key' }); return; }
+        const params: Record<string, number | string | boolean> = {};
+        const rawParams = o.params && typeof o.params === 'object' && !Array.isArray(o.params)
+          ? o.params as Record<string, unknown> : {};
+        for (const [k, v] of Object.entries(rawParams)) {
+          if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') params[k] = v;
+        }
+        let warp: GeneratorSpec['warp'] | undefined;
+        if (o.warp && typeof o.warp === 'object' && !Array.isArray(o.warp)) {
+          const w = o.warp as Record<string, unknown>;
+          const mode = String(w.mode ?? 'water');
+          const wp: Record<string, number> = {};
+          if (w.params && typeof w.params === 'object') {
+            for (const [k, v] of Object.entries(w.params as Record<string, unknown>)) {
+              if (typeof v === 'number') wp[k] = v;
+            }
+          }
+          warp = { mode, params: wp };
+        }
+        results.push({ idx, raw, generator: { key, params, warp } });
+        return;
+      }
+
       default:
-        return { idx, raw, error: `unknown type "${type}"` };
+        results.push({ idx, raw, error: `unknown type "${type}"` });
     }
   });
+
+  return results;
 }
 
 export function boundsToQuery(b: PlotterBounds): string {
   // Firmware params: xn = X−, xp = X+, yn = Y−, yp = Y+, shape 0=rect 1=ellipse
-  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.down}&yp=${b.up}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
+  // up = distance above origin (|yn|), down = distance below origin (yp)
+  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.up}&yp=${b.down}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
 }
 
 // ---- shared flow-controlled query streamer -----------------------
@@ -863,6 +994,10 @@ export function usePlotter() {
     es.onmessage = (e) => {
       // Unnamed events = log messages from web_log()
       const text = e.data as string;
+      // Suppress per-sub-segment line/goto chatter — one per segment floods the log
+      // and pushes out the higher-level cmd/sys entries. Arc, circle, square, pen,
+      // errors etc. are kept because they're coarse-grained and meaningful.
+      if (/^(line|goto) (done|\()/.test(text)) return;
       const kind: LogEntry['kind'] = text.startsWith('!! ') ? 'warn' : 'fw';
       pushLog(kind, text);
     };
@@ -930,16 +1065,14 @@ export function usePlotter() {
       setPen((p) => ({ ...p, x: s.x, y: s.y, down: s.pen_down ?? p.down }));
       setMoving(!s.idle && !s.paused);
 
-      // On first connect, ADOPT the firmware's CURRENT bounds (read-only). We must NOT
-      // auto-push /api/bounds here: if this seed ever fires after a stream has started
-      // (reconnect, a late first-successful poll, or a dev HMR reload mid-run) the pushed
-      // bounds land as a job MID-PLOT and clamp every later goto/line to the new
-      // boundary — the "gcode stops ~1/4 in + a stray '#NNNN bounds' job" bug. Papers and
-      // the Work-area card still push bounds, but those are explicit & user-initiated.
-      if (!boundsSeeded.current && s.bounds) {
+      // On first idle connect, PUSH our stored bounds to the firmware — never adopt the
+      // firmware's values. The firmware resets bounds on every reboot; the UI's
+      // localStorage value is the durable source of truth. We use apiGet directly (not
+      // the job queue) so this is a config write, never a draw job. We gate on s.idle
+      // to avoid landing a bounds config mid-plot on a reconnect.
+      if (!boundsSeeded.current && s.bounds && s.idle) {
         boundsSeeded.current = true;
-        const fb = s.bounds;   // firmware sends xn=-left, xp=right, yn=-down, yp=up
-        setBoundsState({ left: -fb.xn, right: fb.xp, up: fb.yp, down: -fb.yn, shape: fb.ellipse ? 'ellipse' : 'rect' });
+        if (ipRef.current) apiGet(ipRef.current, boundsToQuery(boundsRef.current)).catch(() => {});
       }
       if (!motionSeeded.current && s.motion) {
         motionSeeded.current = true;

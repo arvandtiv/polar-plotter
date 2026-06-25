@@ -5,10 +5,15 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "build:core": "node build-core.mjs",
+    "prestart": "npm run build:core",
     "start": "node index.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }

@@ -5,6 +5,7 @@ import {
   streamQueries,
   type SendResult,
   type ParsedLine,
+  type GeneratorSpec,
   type PlotterBounds,
   type MotionParams,
   type FillMode,
@@ -16,14 +17,17 @@ import {
   DEFAULTS,
   TRUCHET_MOTIF_NAMES,
   TRUCHET_DEFAULT_MASK,
+  matrixToQuery,
+  IDENTITY_PARAMS,
 } from '../hooks/usePlotter';
+import { apiGet } from '../lib/api';
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
-import { compile } from '../lib/compile';
 import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
+import { compileFrame, expandGenerator } from '../lib/runPipeline';
 import type { Frame } from '../lib/frame';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
-import { evaluate, type Layer } from '../lib/pipeline';
+import { evaluate, type Layer, type LayerGroup } from '../lib/pipeline';
 import { loadImageToGray } from '../lib/image';
 import type { GrayImage } from '../lib/registry';
 import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc } from '../lib/studioDoc';
@@ -388,7 +392,7 @@ function PlotterCanvas({ bounds, pen, moving }: {
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-ink-800 bg-ink-950">
       <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full"
-        style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block' }} preserveAspectRatio="xMidYMid meet">
+        style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block', transform: 'rotate(180deg)' }} preserveAspectRatio="xMidYMid meet">
         {bounds.shape === 'ellipse' ? (
           <>
             {/* faint bounding box (what the inputs edit) + the actual drawable ellipse */}
@@ -414,10 +418,10 @@ function PlotterCanvas({ bounds, pen, moving }: {
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 font-mono text-[10px] text-ink-600">
-        <span className="absolute left-2 top-2">−Y {down}</span>
-        <span className="absolute left-2 bottom-2">+Y {up}</span>
-        <span className="absolute right-2 top-1/2 -translate-y-1/2">+X {right}</span>
-        <span className="absolute left-2 top-1/2 -translate-y-1/2">−X {left}</span>
+        <span className="absolute left-2 top-2">+Y {down}</span>
+        <span className="absolute left-2 bottom-2">−Y {up}</span>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2">−X {left}</span>
+        <span className="absolute left-2 top-1/2 -translate-y-1/2">+X {right}</span>
       </div>
     </div>
   );
@@ -808,16 +812,16 @@ const TMC5072_SPECS = [
   { label: 'Home belt',      value: '715 mm each side',          note: 'Belt length motor→gondola at the midpoint origin' },
 ];
 
-function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
+function ChipInfoContent({ status }: { status: PlotterStatus | null }) {
   const m = status?.motion;
   const live = m ? [
-    { label: 'Run current',  value: `${m.run_ma} mA`,                    note: 'IRUN — active during motion' },
-    { label: 'Hold current', value: `${m.hold_ma} mA`,                   note: 'IHOLD — gondola must hold while idle' },
-    { label: 'VMAX',         value: m.vmax.toLocaleString(),              note: 'µsteps/s target velocity' },
-    { label: 'AMAX',         value: m.amax.toLocaleString(),             note: 'µsteps/s² peak acceleration' },
+    { label: 'Run current',  value: `${m.run_ma} mA`,       note: 'IRUN — active during motion' },
+    { label: 'Hold current', value: `${m.hold_ma} mA`,      note: 'IHOLD — gondola must hold while idle' },
+    { label: 'VMAX',         value: m.vmax.toLocaleString(), note: 'µsteps/s target velocity' },
+    { label: 'AMAX',         value: m.amax.toLocaleString(), note: 'µsteps/s² peak acceleration' },
   ] : null;
   return (
-    <Card title="Hardware · TMC5072" icon="⚙" accent="#7c3aed">
+    <>
       <div className="space-y-1">
         {TMC5072_SPECS.map(({ label, value, note }) => (
           <div key={label} className="grid grid-cols-[130px_1fr] gap-2 py-1 border-b border-ink-800/60 last:border-0">
@@ -843,7 +847,7 @@ function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
           </div>
         </>
       )}
-    </Card>
+    </>
   );
 }
 
@@ -853,6 +857,8 @@ function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
 // ScriptTab — bulk CSV command entry
 // ================================================================
 
+// Bare-array format — paste directly into the textarea or load via "Load JSON" button.
+// Also accepted: { "metadata": {...}, "commands": [...] } wrapper (klee-style composition files).
 const SCRIPT_HINT = `[
   { "type": "pen", "position": "up" },
   { "type": "goto", "x": 0, "y": 0 },
@@ -861,46 +867,106 @@ const SCRIPT_HINT = `[
   { "type": "line", "x0": -80, "y0": 0, "x1": 80, "y1": 0, "cycles": 2 },
   { "type": "wobbly", "cx": 0, "cy": 50, "r": 60, "wobble": 0.4, "harmonics": 3 },
   { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42 },
+  { "type": "generate", "generator": "spirograph", "params": { "R": 80, "r": 30, "d": 50 } },
+  { "type": "generate", "generator": "noiseOrbit", "params": { "numCircles": 20, "maxRadius": 100 },
+    "warp": { "mode": "water", "params": { "amplitude": 10, "wavelength": 80 } } },
+  { "type": "set_speed", "vmax": 150000 },
+  { "type": "set_current", "run_ma": 400, "hold_ma": 200 },
+  { "type": "bounds", "xn": -260, "xp": 260, "yn": -115, "yp": 273 },
+  { "type": "matrix", "a": 1, "b": 0, "c": 0, "d": 1, "tx": 0, "ty": 0 },
   { "type": "speed", "vmax": 200000 },
   { "type": "home" }
-]`;
+]
 
-function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog }: {
+// Grid-composition format (metadata provides work_area + grid for grid_select / grid_clear):
+// {
+//   "metadata": {
+//     "work_area": { "x_min": -260, "x_max": 260, "y_min": -115, "y_max": 273 },
+//     "grid": { "cols": 3, "rows": 2, "padding_mm": 5 }
+//   },
+//   "commands": [
+//     { "type": "set_speed", "vmax": 150000 },
+//     { "type": "grid_select", "col": 0, "row": 0 },
+//     { "type": "generate", "generator": "spirograph", "params": { "R": 50, "r": 10, "d": 40 } },
+//     { "type": "grid_select", "col": 1, "row": 0 },
+//     { "type": "generate", "generator": "noiseOrbit", "params": { "numCircles": 8 } },
+//     { "type": "grid_clear" },
+//     { "type": "home" }
+//   ]
+// }`;
+
+function plotterBounds(b: PlotterBounds) {
+  return { left: b.left, right: b.right, up: b.up, down: b.down };
+}
+
+function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
+  bounds: PlotterBounds;
 }) {
   const [text, setText] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef(false);
   const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; errors: number; total: number }>({
     status: 'idle', sent: 0, errors: 0, total: 0,
   });
 
+  const loadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setText(ev.target?.result as string ?? '');
+      setRun({ status: 'idle', sent: 0, errors: 0, total: 0 });
+    };
+    reader.readAsText(file);
+    e.target.value = '';   // reset so the same file can be re-loaded
+  };
+
   const parsed = useMemo(() => parseJsonScript(text), [text]);
-  const good   = parsed.filter(l => l.query);
+  const good   = parsed.filter(l => l.query || l.generator);
   const bad    = parsed.filter(l => l.error);
 
   const start = useCallback(async () => {
     if (!good.length) return;
     abortRef.current = false;
-    runCancelRef.current = false;   // clear any prior STOP/CLEAR signal before a fresh run
-    setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
-    pushLog('cmd', `> script: queuing ${good.length} commands (flow-controlled)`);
-    const cancelled = () => abortRef.current || runCancelRef.current;  // STOP/CLEAR halt the feed
+    runCancelRef.current = false;
+    // Expand generator items into flat query lists before streaming.
+    const items: { query: string; raw: string }[] = [];
+    for (const line of good) {
+      if (line.generator) {
+        let queries: string[];
+        try {
+          queries = expandGenerator(line.generator, plotterBounds(bounds));
+        } catch (e) {
+          pushLog('err', `[script] generate "${line.generator.key}" failed: ${(e as Error).message}`);
+          continue;
+        }
+        pushLog('sys', `[script] generate "${line.generator.key}" → ${queries.length} commands`);
+        for (const q of queries) items.push({ query: q, raw: line.raw });
+      } else if (line.query) {
+        items.push({ query: line.query, raw: line.raw });
+      }
+    }
+    if (!items.length) { setRun(r => ({ ...r, status: 'done' })); return; }
+    setRun({ status: 'running', sent: 0, errors: 0, total: items.length });
+    pushLog('cmd', `> script: queuing ${items.length} commands (flow-controlled)`);
+    const cancelled = () => abortRef.current || runCancelRef.current;
     const { sent, errors, stopped } = await streamQueries(
-      good.map(l => ({ query: l.query!, raw: l.raw })),
+      items,
       { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
         onProgress: (s, e) => setRun(r => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
             stopped
-              ? `[script] halted by STOP/CLEAR — ${sent}/${good.length} sent, ${good.length - sent} not queued`
+              ? `[script] halted by STOP/CLEAR — ${sent}/${items.length} sent, ${items.length - sent} not queued`
               : `[script] done — ${sent - errors} queued` +
                 (errors ? `, ${errors} rejected (NOT queue-full — check bounds/syntax)` : ', no rejections'));
     setRun(r => ({ ...r, status: 'done' }));
-  }, [good, sendRaw, getPending, runCancelRef, pushLog]);
+  }, [good, bounds, sendRaw, sendBatch, getPending, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
 
@@ -908,6 +974,7 @@ function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog }: {
 
   return (
     <Card title="Script" icon="≡" accent="#0891b2" defaultCollapsed={false}>
+      <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={loadFile} />
       <textarea
         className="w-full h-56 resize-y rounded bg-ink-900 border border-ink-700 p-2 font-mono text-[12px] text-ink-300 placeholder-ink-600 focus:outline-none focus:border-cyan-600"
         placeholder={SCRIPT_HINT}
@@ -921,12 +988,19 @@ function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog }: {
       <div className="mt-2 flex items-center gap-3 text-[12px]">
         <span className="text-ink-400">
           {parsed.length === 0
-            ? <span className="text-ink-600">paste commands above</span>
+            ? <span className="text-ink-600">paste JSON or load a .json file</span>
             : <><span className="text-ink-300 font-semibold">{good.length}</span> commands</>}
           {bad.length > 0 && <span className="ml-2 text-red-400 font-semibold">· {bad.length} error{bad.length > 1 ? 's' : ''}</span>}
         </span>
+        <button
+          className="ml-auto text-[11px] text-ink-500 hover:text-cyanx transition-colors"
+          onClick={() => fileRef.current?.click()}
+          title="Load a .json script file"
+        >
+          Load JSON
+        </button>
         {text && (
-          <button className="ml-auto text-[11px] text-ink-600 hover:text-ink-400" onClick={() => { setText(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
+          <button className="text-[11px] text-ink-600 hover:text-ink-400" onClick={() => { setText(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
             Clear
           </button>
         )}
@@ -1041,19 +1115,48 @@ function FramePreview({ bounds, frame, contain = false }: { bounds: PlotterBound
 // ---- Studio layer-stack persistence (localStorage) ----
 const STUDIO_KEY = 'plotterStudioLayers';
 let _layerSeq = 0;
-const newLayerId = () => `L${Date.now().toString(36)}${(_layerSeq++).toString(36)}`;
-function loadStudioLayers(): Layer[] {
+const newLayerId  = () => `L${Date.now().toString(36)}${(_layerSeq++).toString(36)}`;
+const newGroupId  = () => `G${Date.now().toString(36)}${(_layerSeq++).toString(36)}`;
+
+interface StudioData { layers: Layer[]; groups: LayerGroup[]; }
+
+function loadStudioData(): StudioData {
   try {
     const raw = localStorage.getItem(STUDIO_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        return arr.filter((l) => l && getModule(l.moduleKey))
-                  .map((l) => ({ id: l.id || newLayerId(), moduleKey: l.moduleKey, params: l.params || {} }));
-      }
-    }
+    if (!raw) return { layers: [], groups: [] };
+    const parsed = JSON.parse(raw);
+    // Migration: old format was a bare Layer[] array
+    const rawLayers: unknown[] = Array.isArray(parsed) ? parsed : (parsed?.layers ?? []);
+    const rawGroups: unknown[] = Array.isArray(parsed) ? [] : (parsed?.groups ?? []);
+    const layers = rawLayers.flatMap((l): Layer[] => {
+      if (!l || typeof (l as Layer).moduleKey !== 'string') return [];
+      const x = l as Partial<Layer>;
+      // Keep layer even if module is not registered yet — don't silently drop and
+      // immediately overwrite localStorage with the shorter list.
+      if (!x.moduleKey) return [];
+      return [{ id: x.id || newLayerId(), moduleKey: x.moduleKey, params: x.params || {}, groupId: typeof x.groupId === 'string' ? x.groupId : undefined }];
+    });
+    const groups = rawGroups.flatMap((g): LayerGroup[] => {
+      if (!g || typeof (g as LayerGroup).id !== 'string') return [];
+      const x = g as Partial<LayerGroup>;
+      return [{ id: x.id!, name: x.name ?? 'Group', tx: x.tx ?? 0, ty: x.ty ?? 0, rotateDeg: x.rotateDeg ?? 0 }];
+    });
+    return { layers, groups };
   } catch { /* ignore */ }
-  return [];
+  return { layers: [], groups: [] };
+}
+
+function saveStudioData(layers: Layer[], groups: LayerGroup[]): void {
+  // Guard: never save an empty stack over existing data (e.g. during SSR or a bad
+  // re-render before localStorage has been read). Only save if we have layers, or if
+  // the key is already empty/absent.
+  try {
+    if (layers.length === 0 && groups.length === 0) {
+      const existing = localStorage.getItem(STUDIO_KEY);
+      if (existing && existing !== '{"v":2,"layers":[],"groups":[]}') return;
+    }
+    localStorage.setItem(STUDIO_KEY, JSON.stringify({ v: 2, layers, groups }));
+  } catch { /* ignore */ }
 }
 
 // v1.3: the Studio is its own full-page product — a layer STACK (generators + modifiers,
@@ -1068,15 +1171,18 @@ function StudioPage({ P, status, moving, bounds }: {
   const { sendRaw, sendBatch, getPending, runCancelRef, pushLog } = P;
   const allMods = useMemo(() => listModules(), []);
   const makes = useMemo(() => listModules('make'), []);
-  const [layers, setLayers] = useState<Layer[]>(() => loadStudioLayers());
-  const [selId, setSelId] = useState<string>(() => layers[0]?.id ?? '');
+  const [studioData] = useState<StudioData>(() => loadStudioData());
+  const [layers, setLayers] = useState<Layer[]>(() => studioData.layers);
+  const [groups, setGroups] = useState<LayerGroup[]>(() => studioData.groups);
+  const [selId, setSelId] = useState<string>(() => studioData.layers[0]?.id ?? '');
   const [addKey, setAddKey] = useState<string>(makes[0]?.key ?? '');
+  const [checkedLayerIds, setCheckedLayerIds] = useState<Set<string>>(new Set());
   const abortRef = useRef(false);
   const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; total: number; errors: number }>({
     status: 'idle', sent: 0, total: 0, errors: 0,
   });
 
-  useEffect(() => { try { localStorage.setItem(STUDIO_KEY, JSON.stringify(layers)); } catch { /* ignore */ } }, [layers]);
+  useEffect(() => { saveStudioData(layers, groups); }, [layers, groups]);
 
   // Source image for image modules (loaded in the UI, fed to evaluate via ctx.image).
   const [image, setImage] = useState<GrayImage | undefined>(undefined);
@@ -1084,15 +1190,21 @@ function StudioPage({ P, status, moving, bounds }: {
   const imgRef = useRef<HTMLInputElement>(null);
   const needsImage = layers.some((l) => getModule(l.moduleKey)?.group === 'Image');
 
-  const sel = layers.find((l) => l.id === selId) ?? layers[0];
+  const sel = layers.find((l) => l.id === selId);
+  const selGroup = groups.find((g) => g.id === selId);
   const selMod = sel ? getModule(sel.moduleKey) : undefined;
 
   const [orderPct, setOrderPct] = useState(100);   // drawing-order scrubber (% revealed)
   const [useArcs, setUseArcs] = useState(false);   // collapse circular runs to arc jobs (needs firmware flash)
-  const frame = useMemo(() => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, image),
-    [layers, bounds.left, bounds.right, bounds.up, bounds.down, image]);
+  const frame = useMemo(
+    () => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, groups, image),
+    [layers, groups, bounds.left, bounds.right, bounds.up, bounds.down, image],
+  );
   const optFrame = useMemo(() => optimizeOrder(simplifyFrame(frame)), [frame]);
-  const queries = useMemo(() => compile(optFrame, useArcs ? { arcTol: 0.3 } : {}), [optFrame, useArcs]);
+  const queries = useMemo(
+    () => compileFrame(frame, plotterBounds(bounds), { arcTol: useArcs ? 0.3 : undefined }),
+    [frame, useArcs, bounds.left, bounds.right, bounds.up, bounds.down],
+  );
   const previewFrame = useMemo(() => buildProgressPaths(optFrame, orderPct / 100), [optFrame, orderPct]);
   const draws = queries.filter((q) => q.startsWith('line?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
@@ -1116,6 +1228,27 @@ function StudioPage({ P, status, moving, bounds }: {
     setLayers((ls) => ls.map((l) => (l.id === sel?.id ? { ...l, params: { ...l.params, [key]: val } } : l)));
   const resetSel = () => { if (selMod && sel) setLayers((ls) => ls.map((l) => (l.id === sel.id ? { ...l, params: defaultsOf(selMod) } : l))); };
 
+  // ---- group operations ----
+  const createGroup = (layerIds: string[]) => {
+    const gid = newGroupId();
+    const g: LayerGroup = { id: gid, name: 'Group', tx: 0, ty: 0, rotateDeg: 0 };
+    setGroups((gs) => [...gs, g]);
+    setLayers((ls) => ls.map((l) => (layerIds.includes(l.id) ? { ...l, groupId: gid } : l)));
+    setCheckedLayerIds(new Set());
+    setSelId(gid);
+  };
+  const disbandGroup = (gid: string) => {
+    setGroups((gs) => gs.filter((g) => g.id !== gid));
+    setLayers((ls) => ls.map((l) => (l.groupId === gid ? { ...l, groupId: undefined } : l)));
+    if (selId === gid) setSelId('');
+  };
+  const removeFromGroup = (lid: string) =>
+    setLayers((ls) => ls.map((l) => (l.id === lid ? { ...l, groupId: undefined } : l)));
+  const updateGroup = (gid: string, key: keyof Omit<LayerGroup, 'id'>, val: string | number) =>
+    setGroups((gs) => gs.map((g) => (g.id === gid ? { ...g, [key]: val } : g)));
+  const toggleLayerCheck = (id: string) =>
+    setCheckedLayerIds((s) => { const ns = new Set(s); if (ns.has(id)) ns.delete(id); else ns.add(id); return ns; });
+
   // ---- named documents (save/load/rename/delete + JSON export/import) ----
   const [docs, setDocs] = useState<StudioDoc[]>(() => loadStudioDocs());
   const [docName, setDocName] = useState('');
@@ -1123,20 +1256,29 @@ function StudioPage({ P, status, moving, bounds }: {
   const importRef = useRef<HTMLInputElement>(null);
   useEffect(() => { saveStudioDocs(docs); }, [docs]);
 
-  const loadLayersFresh = (src: Layer[]) => {
-    const fresh = src.map((l) => ({ id: newLayerId(), moduleKey: l.moduleKey, params: { ...l.params } }));
-    setLayers(fresh); setSelId(fresh[0]?.id ?? ''); setRun((r) => ({ ...r, status: 'idle' }));
+  const loadLayersFresh = (src: Layer[], srcGroups: LayerGroup[] = []) => {
+    const fresh = src.map((l) => ({ id: newLayerId(), moduleKey: l.moduleKey, params: { ...l.params }, groupId: l.groupId }));
+    // Remap group IDs to match the new layer IDs
+    const idMap = new Map(src.map((l, i) => [l.id, fresh[i].id]));
+    const freshGroups = srcGroups.map((g) => ({ ...g, id: newGroupId() }));
+    const groupIdMap = new Map(srcGroups.map((g, i) => [g.id, freshGroups[i].id]));
+    fresh.forEach((l) => { if (l.groupId) l.groupId = groupIdMap.get(l.groupId) ?? l.groupId; void idMap; });
+    setLayers(fresh); setGroups(freshGroups); setSelId(fresh[0]?.id ?? ''); setRun((r) => ({ ...r, status: 'idle' }));
   };
   const saveDoc = (name: string) => {
-    const doc: StudioDoc = { name, layers: layers.map((l) => ({ id: l.id, moduleKey: l.moduleKey, params: { ...l.params } })) };
+    const doc: StudioDoc = {
+      name,
+      layers: layers.map((l) => ({ id: l.id, moduleKey: l.moduleKey, params: { ...l.params }, groupId: l.groupId })),
+      groups: groups.map((g) => ({ ...g })),
+    };
     setDocs((ds) => [...ds.filter((d) => d.name !== name), doc]); setDocName(name);
     pushLog('ok', `[studio] saved "${name}"`);
   };
-  const loadDoc = (name: string) => { const d = docs.find((x) => x.name === name); if (d) { loadLayersFresh(d.layers); pushLog('ok', `[studio] loaded "${name}"`); } };
+  const loadDoc = (name: string) => { const d = docs.find((x) => x.name === name); if (d) { loadLayersFresh(d.layers, d.groups); pushLog('ok', `[studio] loaded "${name}"`); } };
   const renameDoc = (oldName: string, newName: string) => { if (newName.trim()) setDocs((ds) => ds.map((d) => (d.name === oldName ? { ...d, name: newName.trim() } : d))); setDocName(newName.trim()); };
   const deleteDoc = (name: string) => setDocs((ds) => ds.filter((d) => d.name !== name));
   const exportDoc = () => {
-    const blob = new Blob([serializeDoc(docName || 'design', layers)], { type: 'application/json' });
+    const blob = new Blob([serializeDoc(docName || 'design', layers, groups)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.json`; a.click(); URL.revokeObjectURL(a.href);
   };
@@ -1147,14 +1289,16 @@ function StudioPage({ P, status, moving, bounds }: {
     a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.gcode`; a.click(); URL.revokeObjectURL(a.href);
   };
   const importDoc = async (file: File) => {
-    try { const d = parseDocFile(await file.text()); loadLayersFresh(d.layers); setDocName(d.name); pushLog('ok', `[studio] imported "${d.name}" (${d.layers.length} layers)`); }
+    try { const d = parseDocFile(await file.text()); loadLayersFresh(d.layers, d.groups); setDocName(d.name); pushLog('ok', `[studio] imported "${d.name}" (${d.layers.length} layers, ${d.groups.length} groups)`); }
     catch (e) { pushLog('err', `[studio] import: ${(e as Error).message}`); }
   };
 
   const start = useCallback(async () => {
     abortRef.current = false; runCancelRef.current = false;
     setRun({ status: 'running', sent: 0, total: queries.length, errors: 0 });
-    pushLog('cmd', `> studio: ${layers.length} layer(s), ${queries.length} ops (${draws} draws, ${travels} travels)`);
+    const layerNames = layers.map((l) => getModule(l.moduleKey)?.label ?? l.moduleKey).join(', ');
+    const arcCount = queries.filter((q) => q.startsWith('arc?')).length;
+    pushLog('cmd', `> studio: [${layerNames}] → ${queries.length} ops (${draws} lines, ${travels} travels${arcCount ? `, ${arcCount} arcs` : ''})`);
     const { sent, errors, stopped } = await streamQueries(
       queries.map((q) => ({ query: q })),
       { sendRaw, sendBatch, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
@@ -1164,7 +1308,7 @@ function StudioPage({ P, status, moving, bounds }: {
       stopped ? `[studio] halted — ${sent}/${queries.length} sent`
               : `[studio] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
     setRun((r) => ({ ...r, status: 'done' }));
-  }, [queries, layers.length, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
+  }, [queries, layers, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
   const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
@@ -1274,34 +1418,107 @@ function StudioPage({ P, status, moving, bounds }: {
             <div className="border-t border-ink-800 pt-4">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Sequence</p>
               <div className="space-y-1">
-                {layers.map((l, i) => {
-                  const m = getModule(l.moduleKey);
-                  const active = l.id === sel?.id;
-                  return (
-                    <div key={l.id} className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
-                      <button onClick={() => setSelId(l.id)} className={`flex-1 text-left text-[12px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
-                        {m?.label ?? l.moduleKey}
-                        {m?.kind === 'modify' && <span className="ml-1 text-[10px] text-ink-500">modify</span>}
-                      </button>
-                      <button onClick={() => move(l.id, -1)} disabled={i === 0 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
-                      <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy} className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
-                      <button onClick={() => removeLayer(l.id)} disabled={busy} className="text-ink-500 hover:text-stop disabled:opacity-30 text-[12px]" title="Remove">✕</button>
-                    </div>
-                  );
-                })}
+                {(() => {
+                  const seenGroups = new Set<string>();
+                  return layers.flatMap((l, i) => {
+                    const m = getModule(l.moduleKey);
+                    const active = l.id === selId;
+                    const grp = l.groupId ? groups.find((g) => g.id === l.groupId) : undefined;
+                    const rows: React.ReactNode[] = [];
+
+                    // Insert group header on first encounter
+                    if (grp && !seenGroups.has(grp.id)) {
+                      seenGroups.add(grp.id);
+                      const grpActive = selId === grp.id;
+                      rows.push(
+                        <div key={`grp-${grp.id}`} className={`rounded-t-md border-x border-t px-2 py-1 ${grpActive ? 'border-violet-500/40 bg-violet-500/10' : 'border-ink-700 bg-ink-800'}`}>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => setSelId(grp.id)} className="flex-1 flex items-center gap-1.5 text-left">
+                              <span className="text-[10px] text-ink-500">▼</span>
+                              <input
+                                type="text" value={grp.name}
+                                onClick={(e) => { e.stopPropagation(); setSelId(grp.id); }}
+                                onChange={(e) => updateGroup(grp.id, 'name', e.target.value)}
+                                className="flex-1 bg-transparent text-[12px] font-semibold text-violet-300 outline-none min-w-0 focus:text-violet-200" />
+                            </button>
+                            <button onClick={() => disbandGroup(grp.id)} disabled={busy}
+                              className="text-ink-500 hover:text-stop disabled:opacity-30 text-[11px]" title="Disband group">✕</button>
+                          </div>
+                          {/* Inline transform controls */}
+                          <div className="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap pb-1">
+                            {(['tx','ty','rotateDeg'] as const).map((k) => (
+                              <label key={k} className="flex items-center gap-1">
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-ink-500 w-6 text-right">
+                                  {k === 'tx' ? 'X' : k === 'ty' ? 'Y' : 'R°'}
+                                </span>
+                                <input type="number" step={k === 'rotateDeg' ? 1 : 0.5}
+                                  value={grp[k]}
+                                  onChange={(e) => updateGroup(grp.id, k, parseFloat(e.target.value) || 0)}
+                                  className="w-16 rounded bg-ink-950 border border-ink-700 px-1.5 py-0.5 text-[11px] text-ink-100 font-mono focus:outline-none focus:border-violet-500/50" />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Is this the last layer in its group?
+                    const nextInGroup = grp && layers[i + 1]?.groupId === grp.id;
+                    const rowBase = grp
+                      ? `flex items-center gap-1.5 border-x px-2 py-1 pl-5 bg-ink-850 ${nextInGroup ? 'border-ink-700' : 'rounded-b-md border-b border-ink-700'}`
+                      : `flex items-center gap-1.5 rounded-md border px-2 py-1 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`;
+
+                    rows.push(
+                      <div key={l.id} className={rowBase}>
+                        {!grp && (
+                          <input type="checkbox" checked={checkedLayerIds.has(l.id)}
+                            onChange={() => toggleLayerCheck(l.id)}
+                            className="accent-cyanx shrink-0" title="Select for grouping" />
+                        )}
+                        <button onClick={() => { setSelId(l.id); setCheckedLayerIds(new Set()); }}
+                          className={`flex-1 text-left text-[12px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                          {m?.label ?? l.moduleKey}
+                          {m?.kind === 'modify' && <span className="ml-1 text-[10px] text-ink-500">modify</span>}
+                        </button>
+                        <button onClick={() => move(l.id, -1)} disabled={i === 0 || busy}
+                          className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
+                        <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy}
+                          className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
+                        {grp ? (
+                          <button onClick={() => removeFromGroup(l.id)} disabled={busy}
+                            className="text-ink-500 hover:text-amber-400 disabled:opacity-30 text-[11px]" title="Remove from group">⊗</button>
+                        ) : (
+                          <button onClick={() => removeLayer(l.id)} disabled={busy}
+                            className="text-ink-500 hover:text-stop disabled:opacity-30 text-[12px]" title="Remove">✕</button>
+                        )}
+                      </div>
+                    );
+
+                    return rows;
+                  });
+                })()}
                 {layers.length === 0 && <p className="text-[11px] text-ink-600">No layers — add one below.</p>}
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <select value={addKey} onChange={(e) => setAddKey(e.target.value)} disabled={busy}
-                  className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
-                  {allMods.map((m) => <option key={m.key} value={m.key}>{m.label}{m.kind === 'modify' ? ' · modify' : ''}</option>)}
-                </select>
-                <Btn variant="default" onClick={addLayer} disabled={busy}>+ Add</Btn>
+
+              {/* Group-selected button + add picker */}
+              <div className="mt-2 flex flex-col gap-2">
+                {checkedLayerIds.size >= 2 && (
+                  <Btn variant="go" onClick={() => createGroup([...checkedLayerIds])}>
+                    Group {checkedLayerIds.size} selected
+                  </Btn>
+                )}
+                <div className="flex items-center gap-2">
+                  <select value={addKey} onChange={(e) => setAddKey(e.target.value)} disabled={busy}
+                    className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+                    {allMods.map((m) => <option key={m.key} value={m.key}>{m.label}{m.kind === 'modify' ? ' · modify' : ''}</option>)}
+                  </select>
+                  <Btn variant="default" onClick={addLayer} disabled={busy}>+ Add</Btn>
+                </div>
               </div>
             </div>
 
-            {/* Selected layer's parameters */}
-            {sel && selMod && (
+            {/* Selected layer's parameters — hidden when a group header is selected */}
+            {sel && selMod && !selGroup && (
               <div className="border-t border-ink-800 pt-4">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">{selMod.label}</p>
                 {selMod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{selMod.description}</p>}
@@ -1498,6 +1715,46 @@ type Tab = 'area' | 'draw' | 'ai';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
+// ---- Grid tiling state -------------------------------------------------------
+
+interface GridState {
+  cols: number;
+  rows: number;
+  paddingMm: number;
+  selCol: number;
+  selRow: number;
+  active: boolean;
+  fullBounds: PlotterBounds | null;
+}
+
+const GRID_KEY = 'plotterGrid';
+const GRID_DEFAULTS: GridState = { cols: 2, rows: 2, paddingMm: 5, selCol: 0, selRow: 0, active: false, fullBounds: null };
+
+function loadGrid(): GridState {
+  try {
+    const raw = localStorage.getItem(GRID_KEY);
+    if (raw) { const g = JSON.parse(raw); return { ...GRID_DEFAULTS, ...g }; }
+  } catch { /* ignore */ }
+  return { ...GRID_DEFAULTS };
+}
+
+function saveGrid(g: GridState): void {
+  try { localStorage.setItem(GRID_KEY, JSON.stringify(g)); } catch { /* ignore */ }
+}
+
+/** Returns the cell centre (cx, cy in global coords) and cell dimensions for grid cell (col, row). */
+function cellGeom(g: GridState, fb: PlotterBounds, col: number, row: number) {
+  const tw = fb.left + fb.right;
+  const th = fb.up   + fb.down;
+  const cellW = (tw - (g.cols - 1) * g.paddingMm) / g.cols;
+  const cellH = (th - (g.rows - 1) * g.paddingMm) / g.rows;
+  const lx = -fb.left + col * (cellW + g.paddingMm);
+  const ty = -fb.up   + row * (cellH + g.paddingMm);
+  return { cellW, cellH, cx: lx + cellW / 2, cy: ty + cellH / 2 };
+}
+
+// ------------------------------------------------------------------------------
+
 export default function App() {
   const P = usePlotter();
   const { pen, moving, connected, motion, bounds, log, status, jobs, papers, matrix, matrices } = P;
@@ -1511,8 +1768,34 @@ export default function App() {
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
   const [view, setView]     = useState<'console' | 'studio'>('console');
+  const [showHwInfo, setShowHwInfo] = useState(false);
   const [paperModal, setPaperModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
   const [matrixModal, setMatrixModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
+
+  // Grid tiling
+  const [grid, setGridState] = useState<GridState>(() => loadGrid());
+  useEffect(() => { saveGrid(grid); }, [grid]);
+
+  const applyGridCell = useCallback((col: number, row: number) => {
+    const fb = grid.active ? grid.fullBounds! : bounds;   // full work area bounds
+    const { cellW, cellH, cx, cy } = cellGeom(grid, fb, col, row);
+    const cellBounds: PlotterBounds = { left: cellW / 2, right: cellW / 2, up: cellH / 2, down: cellH / 2, shape: 'rect' };
+    const newGrid: GridState = { ...grid, selCol: col, selRow: row, active: true, fullBounds: grid.active ? grid.fullBounds : bounds };
+    setGridState(newGrid);
+    P.setBounds(cellBounds);
+    P.commitBounds(cellBounds);
+    if (P.ip) apiGet(P.ip, matrixToQuery({ a: 1, b: 0, c: 0, d: 1, tx: cx, ty: cy })).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grid, bounds, P.ip]);
+
+  const clearGridCell = useCallback(() => {
+    const fb = grid.fullBounds ?? bounds;
+    setGridState((g) => ({ ...g, active: false, fullBounds: null }));
+    P.setBounds(fb);
+    P.commitBounds(fb);
+    if (P.ip) apiGet(P.ip, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grid.fullBounds, bounds, P.ip]);
 
   const fg = f(gotoF, setGoto);
   const fc = f(circle, setCircle);
@@ -1545,7 +1828,10 @@ export default function App() {
                 <h1 className="text-[15px] font-bold tracking-tight text-ink-100">Polar Plotter</h1>
                 <span className="hidden sm:inline-flex items-center rounded-md border border-cyanx/30 bg-cyanx/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyanx tracking-wide">{FW_VERSION}</span>
               </div>
-              <p className="hidden font-mono text-[11px] text-ink-500 sm:block">V-plotter console · Pico 2 W · TMC5072</p>
+              <button onClick={() => setShowHwInfo(true)}
+                className="hidden font-mono text-[11px] text-ink-500 hover:text-cyanx transition-colors sm:block">
+                V-plotter console · Pico 2 W · TMC5072
+              </button>
             </div>
           </div>
           {/* product switcher: Console (v1.2 panels) vs Studio (full-page design app) */}
@@ -1595,6 +1881,31 @@ export default function App() {
                   {P.currentJob || '— idle —'}
                 </div>
               </div>
+
+              {/* Driver health — inline, no extra card wrapper */}
+              <div className="mt-3">
+                <DriverBanner status={status} onClearFault={P.clearFault} />
+              </div>
+
+              {/* Move to point */}
+              <div className="mt-3">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Move to point</div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
+                  <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
+                  <Btn variant="primary" className="col-span-2 sm:col-span-1"
+                    onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
+                </div>
+                <div className="mt-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
+                  <JogPad onJog={(dx, dy) => {
+                    const nx = pen.x + dx, ny = pen.y + dy;
+                    setGoto({ x: nx, y: ny });
+                    P.enqueue({ type: 'goto', x: nx, y: ny });
+                  }} />
+                </div>
+              </div>
+
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
                 <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
@@ -1613,16 +1924,6 @@ export default function App() {
                 </div>
               </div>
             </Card>
-
-            <Card title="Driver health" icon="❤" accent="#059669">
-              <DriverBanner status={status} onClearFault={P.clearFault} />
-              <p className="mt-3 text-[12px] leading-relaxed text-ink-500">
-                The MCP halts the running job and pauses the script on a real TMC5072 fault
-                (over-temp, coil short). Fix the cause, then <span className="text-ink-300">Clear</span> to resume.
-              </p>
-            </Card>
-
-            <ChipInfoCard status={status} />
 
           </div>
 
@@ -1769,26 +2070,9 @@ export default function App() {
               </>
             )}
 
-            {/* ---- Work area tab (work area + move + calibration) ---- */}
+            {/* ---- Work area tab (work area + calibration) ---- */}
             {tab === 'area' && (
               <>
-                <Card title="Move to point" icon="↗" accent="#0284c7" defaultCollapsed={false}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                    <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
-                    <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
-                    <Btn variant="primary" className="col-span-2 sm:col-span-1"
-                      onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
-                  </div>
-                  <div className="mt-4">
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
-                    <JogPad onJog={(dx, dy) => {
-                      const nx = pen.x + dx, ny = pen.y + dy;
-                      setGoto({ x: nx, y: ny });
-                      P.enqueue({ type: 'goto', x: nx, y: ny });
-                    }} />
-                  </div>
-                </Card>
-
                 <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
                   <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
                     Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
@@ -1819,6 +2103,74 @@ export default function App() {
                     })}
                     {papers.length === 0 && <p className="text-[11px] text-ink-600">No papers saved yet.</p>}
                   </div>
+
+                  {/* ---- Grid tiling ---- */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Grid tiling</p>
+                  <p className="mb-3 text-[11px] leading-relaxed text-ink-500">
+                    Subdivide the work area into cells. Selecting a cell remaps <span className="font-mono text-ink-300">(0,0)</span> to its
+                    centre and clips all jobs to its bounds.
+                  </p>
+
+                  {/* Active cell banner */}
+                  {grid.active && (
+                    <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                      <span className="flex-1 text-[11px] font-semibold text-amber-300">
+                        Cell col {grid.selCol + 1} · row {grid.selRow + 1} active
+                        {grid.fullBounds && <span className="ml-2 font-normal text-amber-500/70">
+                          ({Math.round(grid.fullBounds.left + grid.fullBounds.right)}×{Math.round(grid.fullBounds.up + grid.fullBounds.down)} mm full area)
+                        </span>}
+                      </span>
+                      <Btn onClick={clearGridCell}>↩ Full area</Btn>
+                    </div>
+                  )}
+
+                  {/* Cols / Rows / Padding */}
+                  <div className="mb-3 grid grid-cols-3 gap-3">
+                    <FieldInline label="Cols" value={grid.cols} min={1} max={12} step={1}
+                      onChange={(v) => setGridState((g) => ({ ...g, cols: Math.max(1, Math.round(v as number)) }))} />
+                    <FieldInline label="Rows" value={grid.rows} min={1} max={12} step={1}
+                      onChange={(v) => setGridState((g) => ({ ...g, rows: Math.max(1, Math.round(v as number)) }))} />
+                    <FieldInline label="Gap" unit="mm" value={grid.paddingMm} min={0} max={50} step={0.5}
+                      onChange={(v) => setGridState((g) => ({ ...g, paddingMm: Math.max(0, v as number) }))} />
+                  </div>
+
+                  {/* Visual cell picker */}
+                  {(() => {
+                    const fb = grid.active ? grid.fullBounds! : bounds;
+                    const tw = fb.left + fb.right;
+                    const th = fb.up + fb.down;
+                    // Show cell dimensions in the picker tooltip
+                    const cellW = Math.round((tw - (grid.cols - 1) * grid.paddingMm) / grid.cols);
+                    const cellH = Math.round((th - (grid.rows - 1) * grid.paddingMm) / grid.rows);
+                    return (
+                      <div>
+                        <div className="inline-grid gap-1 w-full"
+                          style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}>
+                          {Array.from({ length: grid.rows * grid.cols }).map((_, i) => {
+                            const col = i % grid.cols;
+                            const row = Math.floor(i / grid.cols);
+                            const isActive = grid.active && grid.selCol === col && grid.selRow === row;
+                            return (
+                              <button key={`${col}-${row}`}
+                                onClick={() => applyGridCell(col, row)}
+                                title={`Col ${col + 1}, Row ${row + 1} · ${cellW}×${cellH} mm`}
+                                className={`h-9 rounded border text-[10px] font-mono transition-colors ${
+                                  isActive
+                                    ? 'border-cyanx bg-cyanx/20 text-cyanx font-bold'
+                                    : 'border-ink-700 bg-ink-900 text-ink-500 hover:border-cyanx/50 hover:bg-ink-850 hover:text-ink-200'
+                                }`}>
+                                {col + 1},{row + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-[10px] text-ink-600">
+                          Each cell ≈ {cellW} × {cellH} mm · click a cell to activate
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </Card>
 
                 <Card title="Helper" icon="✛" accent="#db2777" collapsible>
@@ -1910,7 +2262,7 @@ export default function App() {
                   </div>
                 </Card>
 
-                <LogCard title="Log" icon="❯" accent="#059669" defaultSize="collapsed"
+                <LogCard title="Log" icon="❯" accent="#059669" defaultSize="minimized"
                   right={
                     <button onClick={() => P.pushLog('sys', '— cleared —')}
                       className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
@@ -1942,7 +2294,7 @@ export default function App() {
                   </div>
                 </LogCard>
 
-                <ScriptTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
+                <ScriptTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <GcodeTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
@@ -1988,6 +2340,27 @@ export default function App() {
             setMatrixModal(null);
           }}
         />
+      )}
+
+      {/* Hardware info popup — triggered by clicking the header subtitle */}
+      {showHwInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowHwInfo(false)}>
+          <div className="w-full max-w-lg rounded-2xl border border-ink-750 bg-ink-900 shadow-2xl overflow-y-auto max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-800">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px]" style={{ color: '#7c3aed' }}>⚙</span>
+                <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-400">Hardware · TMC5072</h2>
+              </div>
+              <button onClick={() => setShowHwInfo(false)}
+                className="text-ink-500 hover:text-ink-200 text-[18px] leading-none px-1">×</button>
+            </div>
+            <div className="p-5">
+              <ChipInfoContent status={status} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
