@@ -1177,17 +1177,17 @@ function StudioPage({ P, status, moving, bounds }: {
   const busy = run.status === 'running';
 
   return (
-    <div className="h-full mx-auto max-w-[1500px] px-4 py-4 sm:px-6 sm:py-6">
-      <div className="h-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:[grid-template-rows:minmax(0,1fr)]">
+    <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6 sm:py-6 lg:h-full">
+      <div className="grid grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_400px] lg:[grid-template-rows:minmax(0,1fr)]">
 
         {/* ====== LEFT: live preview canvas + run/scrub/machine controls ====== */}
-        <div className="flex flex-col gap-4 min-h-0">
-          <div className="flex-1 min-h-0 flex flex-col rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4">
+        <div className="flex flex-col gap-4 lg:min-h-0">
+          <div className="flex flex-col rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 lg:flex-1 lg:min-h-0">
             <div className="mb-3 flex items-center justify-between shrink-0">
               <h2 className="text-[13px] font-bold tracking-tight text-ink-100">Preview</h2>
               <span className="font-mono text-[11px] text-ink-500">{draws} draws · {travels} travels · {queries.length} ops</span>
             </div>
-            <div className="flex-1 min-h-0 rounded-lg border border-ink-800 bg-ink-950 overflow-hidden">
+            <div className="aspect-[4/3] rounded-lg border border-ink-800 bg-ink-950 overflow-hidden lg:aspect-auto lg:flex-1 lg:min-h-0">
               <FramePreview bounds={bounds} frame={previewFrame} contain />
             </div>
             <div className="mt-3 flex items-center gap-3 shrink-0">
@@ -1231,8 +1231,8 @@ function StudioPage({ P, status, moving, bounds }: {
         </div>
 
         {/* ====== RIGHT: controls (scroll) ====== */}
-        <div className="flex flex-col min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 flex flex-col gap-4">
+        <div className="flex flex-col lg:min-h-0">
+          <div className="rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 flex flex-col gap-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
 
             {/* Documents */}
             <div>
@@ -1536,7 +1536,7 @@ export default function App() {
   const fca = f(calib, setCalib);
 
   return (
-    <div className="h-screen flex flex-col bg-ink-950 text-ink-300 overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-ink-950 text-ink-300 lg:h-screen lg:overflow-hidden">
       {/* top bar */}
       <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6 flex-wrap">
@@ -1582,15 +1582,15 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-hidden">
+      <main className="flex-1 overflow-y-auto lg:min-h-0 lg:overflow-hidden">
         {view === 'studio' ? (
           <StudioPage P={P} status={status} moving={moving} bounds={bounds} />
         ) : (
-        <div className="h-full mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
-        <div className="h-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
+        <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6 lg:h-full">
+        <div className="grid grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
 
           {/* ====== LEFT: machine state ====== */}
-          <div className="space-y-4 overflow-y-auto">
+          <div className="space-y-4 lg:overflow-y-auto">
             <Card title="Position" icon="◎" accent="#0284c7" defaultCollapsed={false} right={
               <span className={`font-mono text-[12px] ${pen.down ? 'text-go' : 'text-ink-500'}`}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
             }>
@@ -1646,7 +1646,7 @@ export default function App() {
                so the Log can flex-1 to absorb any leftover height when the method
                cards are short, while keeping a usable min height and scrolling
                the whole region when content overflows. */}
-          <div className="flex flex-col gap-4 h-full min-h-0">
+          <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
             {/* Tab bar */}
             <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
               {([['area','Calibration'],['draw','Draw'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
@@ -1656,7 +1656,7 @@ export default function App() {
             </div>
 
             {/* Methods + Log scroll region (flows top→bottom) */}
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+            <div className="flex flex-col gap-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
             {/* Tab panels */}
             <div className="space-y-4">
             {/* ---- Draw tab ---- */}
