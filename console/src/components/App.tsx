@@ -1249,6 +1249,7 @@ function StudioPage({ P, status, moving, bounds }: {
                 <Btn variant="default" onClick={() => importRef.current?.click()} disabled={busy}>⤒ Import</Btn>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Btn variant="go" onClick={start} disabled={draws === 0 || busy}>▶ Plot now</Btn>
                 <Btn variant="default" onClick={exportGcodeFile} disabled={draws === 0}>⤓ Export .gcode</Btn>
               </div>
             </div>
