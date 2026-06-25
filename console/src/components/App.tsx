@@ -375,14 +375,13 @@ function PlotterCanvas({ bounds, pen, moving }: {
 }) {
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
-  const vbX = -left - pad, vbY = -down - pad;
+  const vbX = -left - pad, vbY = -up - pad;
   const vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
-  const py = (y: number) => y;  // +Y down in firmware and in display
 
   const gridStep = vbW > 800 ? 100 : 50;
   const gx: number[] = [], gy: number[] = [];
   for (let x = Math.ceil(-left / gridStep) * gridStep; x <= right; x += gridStep) gx.push(x);
-  for (let y = Math.ceil(-down / gridStep) * gridStep; y <= up; y += gridStep) gy.push(y);
+  for (let y = Math.ceil(-up / gridStep) * gridStep; y <= down; y += gridStep) gy.push(y);
 
   const sw = vbW / 400;
 
@@ -393,25 +392,25 @@ function PlotterCanvas({ bounds, pen, moving }: {
         {bounds.shape === 'ellipse' ? (
           <>
             {/* faint bounding box (what the inputs edit) + the actual drawable ellipse */}
-            <rect x={-left} y={-down} width={left + right} height={up + down}
+            <rect x={-left} y={-up} width={left + right} height={up + down}
               fill="none" stroke="#dce3ec" strokeWidth={sw} strokeDasharray={`${sw * 3} ${sw * 2}`} />
-            <ellipse cx={(right - left) / 2} cy={(up - down) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
+            <ellipse cx={(right - left) / 2} cy={(down - up) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
               fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} />
           </>
         ) : (
-          <rect x={-left} y={-down} width={left + right} height={up + down}
+          <rect x={-left} y={-up} width={left + right} height={up + down}
             fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} rx={sw} />
         )}
-        {gx.map((x) => <line key={`gx${x}`} x1={x} y1={py(up)} x2={x} y2={py(-down)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
-        {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={py(y)} x2={right} y2={py(y)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
+        {gx.map((x) => <line key={`gx${x}`} x1={x} y1={-up} x2={x} y2={down} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
+        {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={y} x2={right} y2={y} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
         <line x1={-left} y1={0} x2={right} y2={0} stroke="#cbd5e1" strokeWidth={sw} />
-        <line x1={0} y1={py(up)} x2={0} y2={py(-down)} stroke="#cbd5e1" strokeWidth={sw} />
+        <line x1={0} y1={-up} x2={0} y2={down} stroke="#cbd5e1" strokeWidth={sw} />
         <circle cx={0} cy={0} r={sw * 3} fill="none" stroke="#94a3b8" strokeWidth={sw} />
         <g>
-          {moving && <circle cx={pen.x} cy={py(pen.y)} r={sw * 9} fill={pen.down ? '#059669' : '#0284c7'} opacity="0.18" />}
-          <circle cx={pen.x} cy={py(pen.y)} r={sw * 4.5} fill={pen.down ? '#059669' : 'none'}
+          {moving && <circle cx={pen.x} cy={pen.y} r={sw * 9} fill={pen.down ? '#059669' : '#0284c7'} opacity="0.18" />}
+          <circle cx={pen.x} cy={pen.y} r={sw * 4.5} fill={pen.down ? '#059669' : 'none'}
             stroke={pen.down ? '#059669' : '#0284c7'} strokeWidth={sw * 1.6} />
-          <circle cx={pen.x} cy={py(pen.y)} r={sw * 1.2} fill={pen.down ? '#ffffff' : '#0284c7'} />
+          <circle cx={pen.x} cy={pen.y} r={sw * 1.2} fill={pen.down ? '#ffffff' : '#0284c7'} />
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 font-mono text-[10px] text-ink-600">
@@ -1018,7 +1017,7 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
 function FramePreview({ bounds, frame, contain = false }: { bounds: PlotterBounds; frame: Frame; contain?: boolean }) {
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
-  const vbX = -left - pad, vbY = -down - pad, vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
+  const vbX = -left - pad, vbY = -up - pad, vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
   const sw = vbW / 400;
   const CAP = 6000;   // guard against pathological path counts freezing the SVG
   const shown = frame.paths.slice(0, CAP);
@@ -1028,7 +1027,7 @@ function FramePreview({ bounds, frame, contain = false }: { bounds: PlotterBound
         className={contain ? 'h-full w-full' : 'w-full'}
         style={contain ? { display: 'block' } : { aspectRatio: `${vbW} / ${vbH}`, display: 'block' }}
         preserveAspectRatio="xMidYMid meet">
-        <rect x={-left} y={-down} width={left + right} height={up + down} fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.2} rx={sw} />
+        <rect x={-left} y={-up} width={left + right} height={up + down} fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.2} rx={sw} />
         {shown.map((p, i) => {
           const pts = p.closed && p.points.length > 2 ? [...p.points, p.points[0]] : p.points;
           return <polyline key={i} points={pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ')}

@@ -27,6 +27,10 @@ export const sheetsModule: Module = {
     { title: "Interpolation", fields: [
       { key: "interpSteps", label: "Steps between cols", type: "range", min: 0, max: 30, step: 1, default: 9 },
     ]},
+    { title: "Position", fields: [
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+    ]},
     { title: "Seed", fields: [
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 42 },
     ]},
@@ -38,6 +42,8 @@ export const sheetsModule: Module = {
     const xJitter     = num(params, "xJitter", 8);
     const yJitter     = num(params, "yJitter", 5);
     const interpSteps = Math.max(0, Math.round(num(params, "interpSteps", 9)));
+    const cx          = num(params, "cx", 0);
+    const cy          = num(params, "cy", 0);
     const seed        = Math.round(num(params, "seed", 42));
 
     const rng = seededRandom(seed);
@@ -57,8 +63,8 @@ export const sheetsModule: Module = {
       const column: Pt[] = [];
       for (let row = 0; row < rows; row++) {
         column.push({
-          x: xMin + col * cellW + (rng() - 0.5) * 2 * xJitter,
-          y: yMin + row * cellH + (rng() - 0.5) * 2 * yJitter,
+          x: xMin + col * cellW + (rng() - 0.5) * 2 * xJitter + cx,
+          y: yMin + row * cellH + (rng() - 0.5) * 2 * yJitter + cy,
         });
       }
       grid.push(column);
