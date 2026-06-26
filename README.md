@@ -40,10 +40,17 @@ Drive it three ways, all feeding the same draw queue:
 
 **Importing & transforms**
 - 📥 **G‑code digester** — paste a G‑code program *or* upload a `.gcode`/`.bgcode` file in the console's Autonomous tab; it translates to the plotter's `goto`/`line`/`pen` moves entirely in the browser and streams them flow‑controlled. A polar plotter has only X/Y + a pen, so Z/E/F are dropped: pen‑up → travel, pen‑down → drawn segment.
+  - **G2/G3 arc support** — circular arcs from slicers are tessellated using the same chord‑error formula as the firmware, then path‑optimised and re‑fitted to native `arc` firmware primitives via the Studio compile pipeline. Smooth circles from a slicer arrive at the machine as true arc moves, not polylines.
   - **Pen up/down** by selectable convention: auto‑detect · Z‑height · spindle `M3`/`M5` · servo `M280` · G0‑travel‑vs‑G1‑draw.
   - **Placement** into the active work area: auto‑fit + center + Y‑flip (default) · center · raw + Y‑flip · raw. (G‑code is corner‑origin Y‑up; the plotter is centre‑origin Y‑down.)
+  - **G20/G21** (inch/mm) units are honoured; coordinates converted to mm before fitting.
   - **Binary `.bgcode`** is decoded in‑browser — Prusa container + deflate, heatshrink (11/4 & 12/4), and MeatPack (a faithful port of libbgcode `unbinarize`).
-- 📋 **JSON Script** — paste or upload a JSON command list; supports all firmware primitives plus `generate` (run any Studio generator), `grid_select`/`grid_clear` (tiled grid compositions), `set_speed`/`set_current`, and comment objects.
+- 📋 **JSON Script** — paste or upload a JSON command list (`[…]`, `{"commands":[…]}`, or `{"script":[…]}`). Supports:
+  - All firmware primitives: `goto`, `pen`, `home`, `sethome`, `stop`, `line`, `arc` (chainable with `lift=0`), `circle`, `square`, `wobbly`, `truchet`, `bullseye`, `grid`, `border`
+  - Mid‑script config: `bounds` (work area), `matrix` (affine warp), `speed`/`set_speed`, `accel`, `current`/`set_current`
+  - `generate` — run any Studio generator with an optional `warp` modifier (`{"type":"generate","generator":"noiseOrbit","params":{…},"warp":{"mode":"water","params":{…}}}`)
+  - `grid_select`/`grid_clear` — tiled grid compositions; inline `full_xn/xp/yn/yp` or a `{"metadata":{"work_area":{…},"grid":{…}},"commands":[…]}` wrapper (generate indices cell bounds automatically)
+  - Comment objects (no `type`) and `grid_plan`/`status` (preview-only) are silently skipped
 - 🔁 **Affine warp** (exploration layer) — an optional 2×3 matrix `x' = a·x + b·y + tx ; y' = c·x + d·y + ty` applied to the logical command *before* the belt math, for exploring rotation/shear/scale/offset of the drawing space. **Session‑only**, default identity (resets on boot); an affine is linear so it can't fix the line‑bow. Set via the console Calibrate tab, `setmatrix`, `/api/matrix`, or MCP `plot_set_matrix`.
 
 **Run control**
