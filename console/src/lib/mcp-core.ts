@@ -5,6 +5,7 @@
 import "./modules/index";
 import { listModules, getModule, defaultsOf } from "./registry";
 import { compile } from "./compile";
+import type { Frame } from "./frame";
 import {
   compileFrame,
   expandGenerator,
@@ -15,6 +16,17 @@ import {
   type RunPipelineOpts,
 } from "./runPipeline";
 import type { Layer, LayerGroup } from "./pipeline";
+
+export {
+  gridCtxFromMetadata,
+  gridCtxFromPlotterBounds,
+  firmwareWorkAreaFromPlotter,
+  normalizeMetadataWorkArea,
+  computeCell,
+  gridClearQueries,
+  hydrateGridCommands,
+} from "./gridScript";
+export type { GridCtx, CellLayout } from "./gridScript";
 
 export {
   compile,
@@ -45,15 +57,16 @@ export function listGenerators(): {
 
 type RawPath = { points: { x: number; y: number }[]; closed?: boolean; cycles?: number };
 
-function pathsToFrame(paths: RawPath[], bounds: PipelineBounds) {
+function pathsToFrame(paths: RawPath[], bounds: PipelineBounds): Frame {
   return {
     widthMm: bounds.left + bounds.right,
     heightMm: bounds.up + bounds.down,
-    paths: paths.map((p) => ({
-      points: p.points,
-      closed: p.closed,
-      cycles: p.cycles,
-    })),
+    paths: paths.map((p) => {
+      const path: Frame['paths'][number] = { points: p.points };
+      if (p.closed !== undefined) path.closed = p.closed;
+      if (p.cycles !== undefined) path.cycles = p.cycles;
+      return path;
+    }),
   };
 }
 

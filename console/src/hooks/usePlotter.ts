@@ -164,6 +164,14 @@ export function cmdLabel(cmd: PlotCmd): string {
 // converts each to an API query string. Same object shape as plot_script in the
 // MCP, so scripts are copy-pasteable between Claude Desktop and this console.
 import type { GeneratorSpec } from '../lib/runPipeline';
+import {
+  gridCtxFromMetadata,
+  gridCtxFromPlotterBounds,
+  computeCell,
+  gridClearQueries,
+  hydrateGridCommands,
+  type GridCtx,
+} from '../lib/gridScript';
 export type { GeneratorSpec };
 
 export interface ParsedLine {
@@ -171,16 +179,15 @@ export interface ParsedLine {
   raw: string;      // compact JSON of the item (for display)
   query?: string;   // present for regular firmware commands
   generator?: GeneratorSpec;  // present for "generate" items — expanded at run time
+  gridSelect?: { col: number; row: number; gc: GridCtx };
+  gridClear?: { gc: GridCtx };
   error?: string;   // present when validation failed
 }
 
-// Grid context accumulated from outer metadata or grid_plan commands.
-interface GridCtx {
-  cols: number; rows: number; padding_mm: number;
-  full_xn: number; full_xp: number; full_yn: number; full_yp: number;
-}
-
-export function parseJsonScript(text: string): ParsedLine[] {
+export function parseJsonScript(
+  text: string,
+  opts?: { plotterBounds?: PlotterBounds },
+): ParsedLine[] {
   const t = text.trim();
   if (!t) return [];
 
@@ -196,25 +203,16 @@ export function parseJsonScript(text: string): ParsedLine[] {
       // Unwrap { commands: [ … ] } or { script: [ … ] }.
       // Also extract grid context from outer metadata (klee-style composition files).
       const wrap = parsed as Record<string, unknown>;
-      const meta = wrap.metadata as Record<string, unknown> | undefined;
-      if (meta) {
-        const wa = meta.work_area as Record<string, number> | undefined;
-        const grid = meta.grid as Record<string, number> | undefined;
-        if (wa && grid) {
-          const xn = Number(wa.x_min), xp = Number(wa.x_max);
-          const yn = Number(wa.y_min), yp = Number(wa.y_max);
-          const cols = Number(grid.cols), rows = Number(grid.rows);
-          if ([xn, xp, yn, yp, cols, rows].every(isFinite) && cols > 0 && rows > 0) {
-            gridCtx = { cols, rows, padding_mm: Number(grid.padding_mm ?? 5), full_xn: xn, full_xp: xp, full_yn: yn, full_yp: yp };
-          }
-        }
+      gridCtx = gridCtxFromMetadata(wrap as { metadata?: { work_area?: Record<string, number>; grid?: Record<string, number> } });
+      if (gridCtx && opts?.plotterBounds) {
+        gridCtx = gridCtxFromPlotterBounds(opts.plotterBounds, gridCtx);
       }
       const inner = Array.isArray(wrap.commands) ? wrap.commands
                   : Array.isArray(wrap.script)   ? wrap.script
                   : null;
       if (!inner)
         return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ] or an object with a "commands" array' }];
-      arr = inner as unknown[];
+      arr = hydrateGridCommands(inner as { type?: string }[], gridCtx) as unknown[];
     } else {
       return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ] or an object with a "commands" array' }];
     }
@@ -337,7 +335,6 @@ export function parseJsonScript(text: string): ParsedLine[] {
         return;
       }
       case 'grid_select': {
-        // Build grid context: prefer per-item fields (full plot_script format), fall back to outer metadata ctx.
         let gc: GridCtx | null = gridCtx;
         if (isFinite(Number(o.cols)) && isFinite(Number(o.full_xn))) {
           gc = {
@@ -348,27 +345,21 @@ export function parseJsonScript(text: string): ParsedLine[] {
         }
         if (!gc) { results.push({ idx, raw, error: 'grid_select: need cols/rows/full_xn/xp/yn/yp or outer metadata.grid + metadata.work_area' }); return; }
         const col = num('col', 0), row = num('row', 0);
-        if (col >= gc.cols) { results.push({ idx, raw, error: `grid_select: col ${col} ≥ cols ${gc.cols}` }); return; }
-        if (row >= gc.rows) { results.push({ idx, raw, error: `grid_select: row ${row} ≥ rows ${gc.rows}` }); return; }
-        const cellW = ((gc.full_xp - gc.full_xn) - (gc.cols - 1) * gc.padding_mm) / gc.cols;
-        const cellH = ((gc.full_yp - gc.full_yn) - (gc.rows - 1) * gc.padding_mm) / gc.rows;
-        const lx = gc.full_xn + col * (cellW + gc.padding_mm);
-        const ty = gc.full_yn + row * (cellH + gc.padding_mm);
-        const cx = rn(lx + cellW / 2), cy = rn(ty + cellH / 2);
-        // Emits two config queries: clip bounds to this cell, then translate origin to its centre.
-        results.push({ idx, raw, query: `bounds?xn=${rn(-cellW/2)}&xp=${rn(cellW/2)}&yn=${rn(-cellH/2)}&yp=${rn(cellH/2)}&shape=0` });
-        results.push({ idx, raw, query: `matrix?a=1&b=0&c=0&d=1&tx=${cx}&ty=${cy}` });
+        try {
+          computeCell(gc, col, row);
+          results.push({ idx, raw, gridSelect: { col, row, gc } });
+        } catch (e) {
+          results.push({ idx, raw, error: (e as Error).message });
+        }
         return;
       }
       case 'grid_clear': {
-        // Restore full work area bounds and reset the matrix to identity.
         let gc: GridCtx | null = gridCtx;
         if (isFinite(Number(o.full_xn))) {
           gc = { cols: 1, rows: 1, padding_mm: 5, full_xn: num('full_xn', 0), full_xp: num('full_xp', 0), full_yn: num('full_yn', 0), full_yp: num('full_yp', 0) };
         }
         if (!gc) { results.push({ idx, raw, error: 'grid_clear: need full_xn/xp/yn/yp or outer metadata.work_area' }); return; }
-        results.push({ idx, raw, query: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0` });
-        results.push({ idx, raw, query: `matrix?a=1&b=0&c=0&d=1&tx=0&ty=0` });
+        results.push({ idx, raw, gridClear: { gc } });
         return;
       }
       case 'generate': {
@@ -419,6 +410,11 @@ export function boundsToQuery(b: PlotterBounds): string {
 // Script tab and the G-code digester so they share identical back-pressure.
 export type SendResult = 'ok' | 'rejected' | 'error';
 export interface StreamItem { query: string; raw?: string; }
+/** Firmware /api/batch only accepts these ops — everything else must use sendRaw. */
+export const BATCH_OPS = new Set(['pen', 'goto', 'line', 'arc']);
+export function isBatchableQuery(query: string): boolean {
+  return BATCH_OPS.has(query.split('?')[0]);
+}
 export interface StreamHandlers {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   /** Optional: enqueue many ops in one request. When present, streamQueries uses it
@@ -461,9 +457,11 @@ export async function streamQueries(items: StreamItem[], h: StreamHandlers): Pro
     warned = false;
     const room = HIGH - pend;         // room reserved → a batch sized ≤ room can't overflow
 
-    if (h.sendBatch) {
-      // Batch path: one request enqueues up to `n` ops (sized to fit the reserved room).
-      const n = Math.min(room, BATCH, items.length - i);
+    if (h.sendBatch && isBatchableQuery(items[i].query)) {
+      // Batch only consecutive pen/goto/line/arc ops — circle/home/etc. use sendRaw below.
+      const maxN = Math.min(room, BATCH, items.length - i);
+      let n = 0;
+      while (n < maxN && isBatchableQuery(items[i + n].query)) n++;
       const res = await h.sendBatch(items.slice(i, i + n).map((it) => it.query));
       if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; continue; }
       netFails = 0;
@@ -477,6 +475,17 @@ export async function streamQueries(items: StreamItem[], h: StreamHandlers): Pro
       } else {
         i += n;                       // all n were processed (accepted or rejected)
       }
+      h.onProgress?.(i, errors);
+      continue;
+    }
+
+    if (h.sendBatch) {
+      // Non-batchable op (circle, square, home, …) — individual GET, same as MCP batchSend.
+      const res = await h.sendRaw(items[i].query, items[i].raw);
+      if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; continue; }
+      netFails = 0;
+      if (res === 'rejected') errors++;
+      i++;
       h.onProgress?.(i, errors);
       continue;
     }
@@ -1141,6 +1150,13 @@ export function usePlotter() {
     // Pen up/down is the one bit of state the firmware doesn't report back, so
     // reflect it locally for the indicator.
     if (cmd.type === 'pen') setPen((p) => ({ ...p, down: cmd.pos === 'down' }));
+    // Grid scripts leave aff_tx/aff_ty at a cell centre — home/sethome must reset
+    // the matrix or position reads ~cell offset at step 0 (firmware also resets).
+    if (cmd.type === 'home' || cmd.type === 'sethome') {
+      setMatrixState({ ...IDENTITY_PARAMS });
+      if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+      setPen((p) => ({ ...p, x: 0, y: 0 }));
+    }
     setQueue((q) => [...q, cmd.type]);
     const d = await send(ep);
     /* Register the job label + JSON at submit time so the job list shows the type
@@ -1159,6 +1175,26 @@ export function usePlotter() {
       const d = await apiGet(ipRef.current, endpoint);
       if (d.status === 'ok' && d.id != null && json) jobJson.current.set(d.id, json);
       return d.status === 'ok' ? 'ok' : 'rejected';
+    } catch {
+      return 'error';
+    }
+  }, []);
+
+  /** Enqueue a job and block until the firmware reports it done (for bounds etc.). */
+  const sendAndWait = useCallback(async (endpoint: string, json?: string): Promise<SendResult> => {
+    if (!ipRef.current) return 'error';
+    try {
+      const d = await apiGet(ipRef.current, endpoint);
+      if (d.status !== 'ok') return 'rejected';
+      if (d.id != null && json) jobJson.current.set(d.id, json);
+      if (d.id == null) return 'ok';
+      const deadline = Date.now() + 180_000;
+      for (;;) {
+        const s = await getStatus(ipRef.current);
+        if ((s.done ?? 0) >= d.id) return 'ok';
+        if (Date.now() > deadline) return 'error';
+        await new Promise((r) => setTimeout(r, 400));
+      }
     } catch {
       return 'error';
     }
@@ -1333,7 +1369,7 @@ export function usePlotter() {
     applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, sendBatch, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
+    enqueue, sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
     DEFAULTS,
   };
 }

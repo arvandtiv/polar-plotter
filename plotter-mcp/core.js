@@ -1772,6 +1772,102 @@ function boundsFromFirmware(b) {
   };
 }
 
+// ../console/src/lib/gridScript.ts
+var rn = (n) => Math.round(n * 100) / 100;
+function firmwareWorkAreaFromPlotter(b) {
+  return { xn: -b.left, xp: b.right, yn: -b.up, yp: b.down };
+}
+function normalizeMetadataWorkArea(wa) {
+  const xn = Number(wa.x_min ?? wa.xn);
+  const xp = Number(wa.x_max ?? wa.xp);
+  let yn = Number(wa.y_min ?? wa.yn);
+  let yp = Number(wa.y_max ?? wa.yp);
+  if (yn < 0 && yp > 0 && -yn > yp) {
+    return { xn, xp, yn: -yp, yp: -yn };
+  }
+  return { xn, xp, yn, yp };
+}
+function gridCtxFromPlotterBounds(b, grid) {
+  const wa = firmwareWorkAreaFromPlotter(b);
+  return {
+    cols: grid.cols,
+    rows: grid.rows,
+    padding_mm: Number(grid.padding_mm ?? 5),
+    full_xn: wa.xn,
+    full_xp: wa.xp,
+    full_yn: wa.yn,
+    full_yp: wa.yp
+  };
+}
+function gridCtxFromMetadata(doc) {
+  const meta = doc?.metadata;
+  if (!meta?.work_area || !meta?.grid) return null;
+  const wa = meta.work_area;
+  const grid = meta.grid;
+  const { xn, xp, yn, yp } = normalizeMetadataWorkArea(wa);
+  const cols = Number(grid.cols);
+  const rows = Number(grid.rows);
+  if (![xn, xp, yn, yp, cols, rows].every(isFinite) || cols < 1 || rows < 1) return null;
+  return {
+    cols,
+    rows,
+    padding_mm: Number(grid.padding_mm ?? 5),
+    full_xn: xn,
+    full_xp: xp,
+    full_yn: yn,
+    full_yp: yp
+  };
+}
+function computeCell(gc, col, row) {
+  if (col >= gc.cols) throw new Error(`grid_select: col ${col} \u2265 cols ${gc.cols}`);
+  if (row >= gc.rows) throw new Error(`grid_select: row ${row} \u2265 rows ${gc.rows}`);
+  const cellW = (gc.full_xp - gc.full_xn - (gc.cols - 1) * gc.padding_mm) / gc.cols;
+  const cellH = (gc.full_yp - gc.full_yn - (gc.rows - 1) * gc.padding_mm) / gc.rows;
+  if (cellW <= 0 || cellH <= 0) throw new Error("grid_select: padding_mm too large for this work area");
+  const lx = gc.full_xn + col * (cellW + gc.padding_mm);
+  const ty = gc.full_yn + row * (cellH + gc.padding_mm);
+  const cx = rn(lx + cellW / 2);
+  const cy = rn(ty + cellH / 2);
+  return {
+    cellW: rn(cellW),
+    cellH: rn(cellH),
+    cx,
+    cy,
+    boundsQuery: `bounds?xn=${rn(-cellW / 2)}&xp=${rn(cellW / 2)}&yn=${rn(-cellH / 2)}&yp=${rn(cellH / 2)}&shape=0`,
+    matrixQuery: `matrix?a=1&b=0&c=0&d=1&tx=${cx}&ty=${cy}`
+  };
+}
+function gridClearQueries(gc) {
+  return {
+    boundsQuery: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0`,
+    matrixQuery: "matrix?a=1&b=0&c=0&d=1&tx=0&ty=0"
+  };
+}
+function hydrateGridCommands(commands, gc) {
+  if (!gc) return commands;
+  return commands.map((cmd) => {
+    if (cmd.type === "grid_select") {
+      return {
+        ...gc,
+        ...cmd,
+        type: "grid_select"
+      };
+    }
+    if (cmd.type === "grid_clear" && !isFinite(Number(cmd.full_xn))) {
+      return {
+        ...gc,
+        ...cmd,
+        full_xn: gc.full_xn,
+        full_xp: gc.full_xp,
+        full_yn: gc.full_yn,
+        full_yp: gc.full_yp,
+        type: "grid_clear"
+      };
+    }
+    return cmd;
+  });
+}
+
 // ../console/src/lib/mcp-core.ts
 function listGenerators() {
   return listModules("make").map((m) => ({
@@ -1814,10 +1910,17 @@ export {
   compileFrame,
   compilePaths,
   compilePathsWithWarp,
+  computeCell,
   defaultsOf,
   expandGenerator,
+  firmwareWorkAreaFromPlotter,
   getModule,
+  gridClearQueries,
+  gridCtxFromMetadata,
+  gridCtxFromPlotterBounds,
+  hydrateGridCommands,
   listGenerators,
   listModules,
+  normalizeMetadataWorkArea,
   runLayerStack
 };

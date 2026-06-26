@@ -25,6 +25,7 @@ import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../
 import { decodeBgcode } from '../lib/bgcode';
 import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
 import { compileFrame, expandGenerator } from '../lib/runPipeline';
+import { computeCell, gridClearQueries } from '../lib/gridScript';
 import type { Frame } from '../lib/frame';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer, type LayerGroup } from '../lib/pipeline';
@@ -392,7 +393,7 @@ function PlotterCanvas({ bounds, pen, moving }: {
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-ink-800 bg-ink-950">
       <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} className="w-full"
-        style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block', transform: 'rotate(180deg)' }} preserveAspectRatio="xMidYMid meet">
+        style={{ aspectRatio: `${vbW} / ${vbH}`, display: 'block' }} preserveAspectRatio="xMidYMid meet">
         {bounds.shape === 'ellipse' ? (
           <>
             {/* faint bounding box (what the inputs edit) + the actual drawable ellipse */}
@@ -418,10 +419,10 @@ function PlotterCanvas({ bounds, pen, moving }: {
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 font-mono text-[10px] text-ink-600">
-        <span className="absolute left-2 top-2">+Y {down}</span>
-        <span className="absolute left-2 bottom-2">−Y {up}</span>
-        <span className="absolute right-2 top-1/2 -translate-y-1/2">−X {left}</span>
-        <span className="absolute left-2 top-1/2 -translate-y-1/2">+X {right}</span>
+        <span className="absolute left-2 top-2">−Y {down}</span>
+        <span className="absolute left-2 bottom-2">+Y {up}</span>
+        <span className="absolute left-2 top-1/2 -translate-y-1/2">−X {left}</span>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2">+X {right}</span>
       </div>
     </div>
   );
@@ -899,8 +900,9 @@ function plotterBounds(b: PlotterBounds) {
   return { left: b.left, right: b.right, up: b.up, down: b.down };
 }
 
-function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
+function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  sendAndWait: (ep: string, json?: string) => Promise<SendResult>;
   sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
@@ -926,15 +928,128 @@ function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, boun
     e.target.value = '';   // reset so the same file can be re-loaded
   };
 
-  const parsed = useMemo(() => parseJsonScript(text), [text]);
-  const good   = parsed.filter(l => l.query || l.generator);
+  const parsed = useMemo(
+    () => parseJsonScript(text, { plotterBounds: bounds }),
+    [text, bounds.left, bounds.right, bounds.up, bounds.down],
+  );
+  const good   = parsed.filter(l => l.query || l.generator || l.gridSelect || l.gridClear);
   const bad    = parsed.filter(l => l.error);
 
   const start = useCallback(async () => {
     if (!good.length) return;
     abortRef.current = false;
     runCancelRef.current = false;
-    // Expand generator items into flat query lists before streaming.
+    const cancelled = () => abortRef.current || runCancelRef.current;
+    // Grid scripts must run strictly in order: grid_select → draw → next cell.
+    // If we apply every grid_select first and queue all draws later, the matrix
+    // ends up on the last cell and every circle lands in the same place.
+    const gridMode = good.some(l => l.gridSelect);
+
+    const runGridSelect = async (line: typeof good[0]) => {
+      const { col, row, gc } = line.gridSelect!;
+      const cell = computeCell(gc, col, row);
+      pushLog('cmd', `> ${line.raw}`);
+      const bw = await sendAndWait(cell.boundsQuery, line.raw);
+      if (bw !== 'ok') { pushLog('err', `[script] grid_select bounds failed (${bw})`); return false; }
+      const mw = await sendRaw(cell.matrixQuery, line.raw);
+      if (mw !== 'ok') { pushLog('err', `[script] grid_select matrix failed (${mw})`); return false; }
+      pushLog('ok', `[script] cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm`);
+      return true;
+    };
+
+    const runGridClear = async (line: typeof good[0]) => {
+      const q = gridClearQueries(line.gridClear!.gc);
+      pushLog('cmd', `> ${line.raw}`);
+      const bw = await sendAndWait(q.boundsQuery, line.raw);
+      if (bw !== 'ok') { pushLog('err', `[script] grid_clear bounds failed (${bw})`); return false; }
+      const mw = await sendRaw(q.matrixQuery, line.raw);
+      if (mw !== 'ok') { pushLog('err', `[script] grid_clear matrix failed (${mw})`); return false; }
+      pushLog('ok', '[script] grid cleared');
+      return true;
+    };
+
+    if (gridMode) {
+      let sent = 0, errors = 0;
+      let gridTouched = false, gridCleared = false;
+      const gridGc =
+        good.find(l => l.gridSelect)?.gridSelect?.gc
+        ?? good.find(l => l.gridClear)?.gridClear?.gc;
+      setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
+      pushLog('cmd', `> script: grid mode — ${good.length} steps (flow-controlled draws)`);
+      pushLog('sys', `[script] work area from Work Area tab: yn=${-bounds.up} yp=${bounds.down} (metadata.work_area ignored)`);
+
+      // Draw commands are queued here and batch-streamed. sendAndWait(bounds) at each
+      // grid_select / grid_clear acts as a FIFO barrier: bounds is queued after all pending
+      // draws, so waiting for it implicitly means all previous draws have also completed.
+      const pendingDraws: { query: string; raw: string }[] = [];
+      const flushPendingDraws = async (): Promise<boolean> => {
+        if (!pendingDraws.length || cancelled()) return !cancelled();
+        const batch = pendingDraws.splice(0);
+        const { stopped, errors: errs } = await streamQueries(
+          batch,
+          { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
+            onProgress: () => setRun(r => ({ ...r, sent, errors })) },
+        );
+        errors += errs;
+        setRun(r => ({ ...r, sent, errors }));
+        return !stopped;
+      };
+
+      try {
+        for (const line of good) {
+          if (cancelled()) break;
+          if (line.gridSelect) {
+            if (!(await flushPendingDraws())) break;
+            gridTouched = true;
+            if (!(await runGridSelect(line))) break;
+            sent++; setRun(r => ({ ...r, sent }));
+            continue;
+          }
+          if (line.gridClear) {
+            if (!(await flushPendingDraws())) break;
+            gridCleared = true;
+            if (!(await runGridClear(line))) break;
+            sent++; setRun(r => ({ ...r, sent }));
+            continue;
+          }
+          if (line.generator) {
+            let queries: string[];
+            try {
+              queries = expandGenerator(line.generator, plotterBounds(bounds));
+            } catch (e) {
+              pushLog('err', `[script] generate "${line.generator.key}" failed: ${(e as Error).message}`);
+              errors++; setRun(r => ({ ...r, errors }));
+              continue;
+            }
+            pushLog('sys', `[script] generate "${line.generator.key}" → ${queries.length} commands`);
+            for (const q of queries) pendingDraws.push({ query: q, raw: line.raw });
+            sent++; setRun(r => ({ ...r, sent }));
+            continue;
+          }
+          if (line.query) {
+            pendingDraws.push({ query: line.query, raw: line.raw });
+            sent++; setRun(r => ({ ...r, sent }));
+          }
+        }
+        await flushPendingDraws();
+      } finally {
+        if (gridTouched && !gridCleared && gridGc) {
+          pushLog('sys', '[script] grid cleanup — restoring full bounds + matrix identity');
+          await flushPendingDraws();
+          await runGridClear({ idx: -1, raw: '{"type":"grid_clear"}', gridClear: { gc: gridGc } });
+        }
+      }
+      const stopped = cancelled();
+      pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
+              stopped
+                ? `[script] halted — ${sent - errors}/${good.length} completed`
+                : `[script] done — ${sent - errors} completed` +
+                  (errors ? `, ${errors} failed` : ', no failures'));
+      setRun(r => ({ ...r, status: 'done' }));
+      return;
+    }
+
+    // Non-grid scripts: expand generators, then flow-control the flat queue.
     const items: { query: string; raw: string }[] = [];
     for (const line of good) {
       if (line.generator) {
@@ -954,7 +1069,6 @@ function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, boun
     if (!items.length) { setRun(r => ({ ...r, status: 'done' })); return; }
     setRun({ status: 'running', sent: 0, errors: 0, total: items.length });
     pushLog('cmd', `> script: queuing ${items.length} commands (flow-controlled)`);
-    const cancelled = () => abortRef.current || runCancelRef.current;
     const { sent, errors, stopped } = await streamQueries(
       items,
       { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
@@ -966,7 +1080,7 @@ function ScriptTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, boun
               : `[script] done — ${sent - errors} queued` +
                 (errors ? `, ${errors} rejected (NOT queue-full — check bounds/syntax)` : ', no rejections'));
     setRun(r => ({ ...r, status: 'done' }));
-  }, [good, bounds, sendRaw, sendBatch, getPending, runCancelRef, pushLog]);
+  }, [good, bounds, sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
 
@@ -1874,6 +1988,12 @@ export default function App() {
                 <Readout label="Pending" value={status?.pending ?? 0} unit="job" />
                 <Readout label="Done" value={status?.done ?? 0} unit="" />
               </div>
+              {(Math.abs(matrix.tx) > 0.5 || Math.abs(matrix.ty) > 0.5) && (
+                <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/40 px-2.5 py-1.5 text-[11px] text-amber-200">
+                  Affine offset active (tx={matrix.tx.toFixed(1)}, ty={matrix.ty.toFixed(1)}) — position is cell-local.
+                  Click <button type="button" className="underline hover:text-amber-100" onClick={() => P.resetMatrix()}>↺ Identity</button> or Home to reset.
+                </div>
+              )}
               {/* Current job — its exact JSON while running (console + Script tab), else idle. */}
               <div className="mt-3">
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Current job</div>
@@ -2294,7 +2414,7 @@ export default function App() {
                   </div>
                 </LogCard>
 
-                <ScriptTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+                <ScriptTab sendRaw={P.sendRaw} sendAndWait={P.sendAndWait} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <GcodeTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 

@@ -23,6 +23,11 @@ import {
   expandGenerator,
   boundsFromFirmware,
   listGenerators,
+  gridCtxFromMetadata,
+  gridCtxFromPlotterBounds,
+  computeCell,
+  gridClearQueries,
+  hydrateGridCommands,
 } from './core.js';
 
 const PLOTTER_IP   = process.env.PLOTTER_IP   ?? '192.168.1.71';
@@ -40,7 +45,11 @@ async function api(endpoint) {
     throw new Error(`Network error reaching plotter at ${BASE}: ${err.message}`);
   }
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
-  return res.json();
+  const json = await res.json();
+  if ((json?.status ?? 'ok') !== 'ok') {
+    throw new Error(json?.msg ?? `firmware error from ${endpoint}`);
+  }
+  return json;
 }
 
 function ok(json) {
@@ -713,7 +722,13 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
     ),
   },
   async ({ commands: raw, stop_on_error }) => {
-    const { commands: all, gridCtx } = unwrapScriptCommands(raw);
+    let { commands: all, gridCtx } = unwrapScriptCommands(raw);
+    if (gridCtx) {
+      const s = await api('status');
+      const fb = boundsFromFirmware(s.bounds ?? {});
+      gridCtx = gridCtxFromPlotterBounds(fb, gridCtx);
+      all = hydrateGridCommands(all, gridCtx);
+    }
     const commands = all.filter((c) => c?.type && c.type !== 'status');
     const results = [];
 
@@ -739,6 +754,9 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
           // Configuration commands bypass the draw queue and execute immediately.
           json = await executeDirectCmd(cmd, gridCtx);
         } else {
+          if (cmd.type === 'home' || cmd.type === 'sethome') {
+            await api('matrix?a=1&b=0&c=0&d=1&tx=0&ty=0');
+          }
           const endpoint = buildEndpoint(cmd);
           json = await drawAndWait(endpoint);   // wait until this step physically finishes
         }
@@ -1106,15 +1124,19 @@ Typical single-session workflow:
     const ty = full_yn + row * (cellH + padding_mm);
     const cx = lx + cellW / 2;
     const cy = ty + cellH / 2;
-    await api(`bounds?xn=${-cellW / 2}&xp=${cellW / 2}&yn=${-cellH / 2}&yp=${cellH / 2}&shape=0`);
-    await api(`matrix?a=1&b=0&c=0&d=1&tx=${cx}&ty=${cy}`);
+    const cell = computeCell(
+      { cols, rows, padding_mm, full_xn, full_xp, full_yn, full_yp },
+      col, row,
+    );
+    await drawAndWait(cell.boundsQuery);
+    await api(cell.matrixQuery);
     const rnd = (n) => Math.round(n * 10) / 10;
     return {
       content: [{ type: 'text', text: [
         `Grid cell (col ${col}, row ${row}) activated.`,
-        `Cell size: ${rnd(cellW)} × ${rnd(cellH)} mm`,
-        `Cell centre in global coords: (${rnd(cx)}, ${rnd(cy)})`,
-        `Work area now clipped to x: ${rnd(-cellW/2)}..${rnd(cellW/2)}, y: ${rnd(-cellH/2)}..${rnd(cellH/2)}`,
+        `Cell size: ${rnd(cell.cellW)} × ${rnd(cell.cellH)} mm`,
+        `Cell centre in global coords: (${rnd(cell.cx)}, ${rnd(cell.cy)})`,
+        `Work area now clipped to x: ${rnd(-cell.cellW/2)}..${rnd(cell.cellW/2)}, y: ${rnd(-cell.cellH/2)}..${rnd(cell.cellH/2)}`,
         `(0,0) = cell centre. All draw commands use cell-local coordinates.`,
       ].join('\n') }],
     };
@@ -1134,7 +1156,8 @@ server.tool(
     ellipse: z.boolean().default(false).describe('Restore as ellipse clip (default false = rectangle)'),
   },
   async ({ full_xn, full_xp, full_yn, full_yp, ellipse }) => {
-    await api(`bounds?xn=${full_xn}&xp=${full_xp}&yn=${full_yn}&yp=${full_yp}&shape=${ellipse ? 1 : 0}`);
+    const boundsEp = `bounds?xn=${full_xn}&xp=${full_xp}&yn=${full_yn}&yp=${full_yp}&shape=${ellipse ? 1 : 0}`;
+    await drawAndWait(boundsEp);
     await api(`matrix?a=1&b=0&c=0&d=1&tx=0&ty=0`);
     return {
       content: [{ type: 'text', text: [
@@ -1148,31 +1171,12 @@ server.tool(
 
 // ── Script document helpers (console Script tab parity) ─────────────────────
 
-/** Extract grid context from a klee-style { metadata: { work_area, grid } } wrapper. */
-function gridCtxFromMetadata(doc) {
-  const meta = doc?.metadata;
-  if (!meta?.work_area || !meta?.grid) return null;
-  const wa = meta.work_area;
-  const grid = meta.grid;
-  const xn = Number(wa.x_min ?? wa.xn);
-  const xp = Number(wa.x_max ?? wa.xp);
-  const yn = Number(wa.y_min ?? wa.yn);
-  const yp = Number(wa.y_max ?? wa.yp);
-  const cols = Number(grid.cols);
-  const rows = Number(grid.rows);
-  if (![xn, xp, yn, yp, cols, rows].every(isFinite) || cols < 1 || rows < 1) return null;
-  return {
-    cols, rows,
-    padding_mm: Number(grid.padding_mm ?? 5),
-    full_xn: xn, full_xp: xp, full_yn: yn, full_yp: yp,
-  };
-}
-
 /** Accept a bare command array or { metadata, commands } — same as the console Script tab. */
 function unwrapScriptCommands(raw) {
   if (Array.isArray(raw)) return { commands: raw, gridCtx: null };
   if (raw && typeof raw === 'object' && Array.isArray(raw.commands)) {
-    return { commands: raw.commands, gridCtx: gridCtxFromMetadata(raw) };
+    const gridCtx = gridCtxFromMetadata(raw);
+    return { commands: hydrateGridCommands(raw.commands, gridCtx), gridCtx };
   }
   throw new Error('Expected a JSON command array or { metadata, commands } document');
 }
@@ -1200,34 +1204,31 @@ async function executeDirectCmd(cmd, gridCtx = null) {
         };
       }
       if (!gc) throw new Error('grid_select: need metadata.work_area+grid on the document, or cols/rows/full_xn…yp on the command');
-      const { cols, rows, padding_mm, full_xn, full_xp, full_yn, full_yp } = gc;
       const col = Number(p.col ?? 0);
       const row = Number(p.row ?? 0);
-      if (col >= cols) throw new Error(`col ${col} out of range`);
-      if (row >= rows) throw new Error(`row ${row} out of range`);
-      const cellW = ((full_xp - full_xn) - (cols - 1) * padding_mm) / cols;
-      const cellH = ((full_yp - full_yn) - (rows - 1) * padding_mm) / rows;
-      if (cellW <= 0 || cellH <= 0) throw new Error('padding_mm too large');
-      const lx = full_xn + col * (cellW + padding_mm);
-      const ty = full_yn + row * (cellH + padding_mm);
-      const cx = lx + cellW / 2;
-      const cy = ty + cellH / 2;
-      await api(`bounds?xn=${-cellW / 2}&xp=${cellW / 2}&yn=${-cellH / 2}&yp=${cellH / 2}&shape=0`);
-      await api(`matrix?a=1&b=0&c=0&d=1&tx=${cx}&ty=${cy}`);
-      return { status: 'ok', msg: `cell (${col},${row}) active — ${Math.round(cellW)}×${Math.round(cellH)} mm` };
+      const cell = computeCell(gc, col, row);
+      // Bounds is a queued job — wait until it lands before matrix (immediate).
+      await drawAndWait(cell.boundsQuery);
+      await api(cell.matrixQuery);
+      return { status: 'ok', msg: `cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm` };
     }
 
     case 'grid_clear': {
       const ellipse = p.ellipse ?? false;
-      const full_xn = isFinite(Number(p.full_xn)) ? Number(p.full_xn) : gridCtx?.full_xn;
-      const full_xp = isFinite(Number(p.full_xp)) ? Number(p.full_xp) : gridCtx?.full_xp;
-      const full_yn = isFinite(Number(p.full_yn)) ? Number(p.full_yn) : gridCtx?.full_yn;
-      const full_yp = isFinite(Number(p.full_yp)) ? Number(p.full_yp) : gridCtx?.full_yp;
-      if (![full_xn, full_xp, full_yn, full_yp].every(isFinite)) {
-        throw new Error('grid_clear: need metadata.work_area on the document, or full_xn…yp on the command');
+      let gc = gridCtx;
+      if (isFinite(Number(p.full_xn))) {
+        gc = {
+          cols: 1, rows: 1, padding_mm: 5,
+          full_xn: Number(p.full_xn), full_xp: Number(p.full_xp),
+          full_yn: Number(p.full_yn), full_yp: Number(p.full_yp),
+        };
       }
-      await api(`bounds?xn=${full_xn}&xp=${full_xp}&yn=${full_yn}&yp=${full_yp}&shape=${ellipse ? 1 : 0}`);
-      await api(`matrix?a=1&b=0&c=0&d=1&tx=0&ty=0`);
+      if (!gc) throw new Error('grid_clear: need metadata.work_area on the document, or full_xn…yp on the command');
+      const q = gridClearQueries(gc);
+      const shape = ellipse ? 1 : 0;
+      const boundsEp = q.boundsQuery.replace('shape=0', `shape=${shape}`);
+      await drawAndWait(boundsEp);
+      await api(q.matrixQuery);
       return { status: 'ok', msg: 'grid cleared, full area restored' };
     }
 

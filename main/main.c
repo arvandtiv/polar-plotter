@@ -306,6 +306,13 @@ static void home_gondola(void)
              (long)tmc5072_position(&tmc, MOTOR_RHO));
 }
 
+/* Grid scripts set aff_tx/aff_ty to a cell centre; home/sethome must restore
+ * identity or position reads (0,0) steps as that offset in logical coords. */
+static void reset_affine_matrix(void)
+{
+    plotter_set_matrix(1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+}
+
 static void set_origin_here(void)
 {
     int32_t stop_t = tmc5072_position(&tmc, MOTOR_THETA);
@@ -1542,7 +1549,7 @@ static void web_draw_task(void *arg)
             web_log("goto (%.1f, %.1f)",(double)cmd.p[0],(double)cmd.p[1]);
             do_draw_goto(cmd.p[0],cmd.p[1]); web_log("goto done"); break;
         case WCMD_HOME:
-            web_log("home"); home_gondola(); emit_pos_event(); web_log("home done"); break;
+            web_log("home"); reset_affine_matrix(); home_gondola(); emit_pos_event(); web_log("home done"); break;
         case WCMD_STOP:
             web_log("stop");
             tmc5072_stop(&tmc, MOTOR_THETA); tmc5072_stop(&tmc, MOTOR_RHO); break;
@@ -1575,7 +1582,7 @@ static void web_draw_task(void *arg)
                             cmd.p[4],(int)cmd.p[5],(uint32_t)cmd.p[6]);
             web_log("truchet done"); break;
         case WCMD_SETHOME:
-            web_log("sethome"); set_origin_here(); web_log("sethome done"); break;
+            web_log("sethome"); reset_affine_matrix(); set_origin_here(); emit_pos_event(); web_log("sethome done"); break;
         case WCMD_BOUNDS:
             g_x_min=cmd.p[0]; g_x_max=cmd.p[1]; g_y_min=cmd.p[2]; g_y_max=cmd.p[3];
             g_bounds_ellipse=(cmd.p[4]!=0.0f);
@@ -1640,7 +1647,7 @@ static int cmd_spiraw(int argc, char **argv)
     }
     return 0;
 }
-static int cmd_home(int argc, char **argv)   { (void)argc;(void)argv; home_gondola(); return 0; }
+static int cmd_home(int argc, char **argv)   { (void)argc;(void)argv; reset_affine_matrix(); home_gondola(); return 0; }
 static int cmd_stat(int argc, char **argv)   { (void)argc;(void)argv; print_status(MOTOR_THETA); print_status(MOTOR_RHO); return 0; }
 static int cmd_status(int argc, char **argv) { (void)argc;(void)argv; print_global_status(); print_full_status(MOTOR_THETA); print_full_status(MOTOR_RHO); return 0; }
 static int cmd_reinit(int argc, char **argv)
@@ -1915,7 +1922,7 @@ static int cmd_sethome(int argc, char **argv)
                (long)tmc5072_position(&tmc, m));
         return 0;
     }
-    set_origin_here(); return 0;
+    reset_affine_matrix(); set_origin_here(); return 0;
 }
 
 /* ---- Simple console REPL (replaces esp_console) ---- */
