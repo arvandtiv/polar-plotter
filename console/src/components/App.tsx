@@ -18,6 +18,7 @@ import {
   TRUCHET_MOTIF_NAMES,
   TRUCHET_DEFAULT_MASK,
   matrixToQuery,
+  boundsToQuery,
   IDENTITY_PARAMS,
 } from '../hooks/usePlotter';
 import { apiGet } from '../lib/api';
@@ -1915,26 +1916,41 @@ export default function App() {
   const [grid, setGridState] = useState<GridState>(() => loadGrid());
   useEffect(() => { saveGrid(grid); }, [grid]);
 
-  const applyGridCell = useCallback((col: number, row: number) => {
+  const applyGridCell = useCallback(async (col: number, row: number) => {
     const fb = grid.active ? grid.fullBounds! : bounds;   // full work area bounds
     const { cellW, cellH, cx, cy } = cellGeom(grid, fb, col, row);
     const cellBounds: PlotterBounds = { left: cellW / 2, right: cellW / 2, up: cellH / 2, down: cellH / 2, shape: 'rect' };
     const newGrid: GridState = { ...grid, selCol: col, selRow: row, active: true, fullBounds: grid.active ? grid.fullBounds : bounds };
     setGridState(newGrid);
     P.setBounds(cellBounds);
-    P.commitBounds(cellBounds);
-    if (P.ip) apiGet(P.ip, matrixToQuery({ a: 1, b: 0, c: 0, d: 1, tx: cx, ty: cy })).catch(() => {});
+    if (P.ip) {
+      // 1. Lift pen first (queued — ensures pen is up before cell transition).
+      // 2. Wait for bounds change (queued after pen-up) — this acts as a FIFO barrier:
+      //    all prior draws complete before done >= bounds_id, so the pen is guaranteed
+      //    to be up and idle when the matrix switches.
+      // 3. Apply matrix immediately (safe now — firmware queue is empty).
+      try {
+        await P.sendRaw('pen?pos=up');
+        await P.sendAndWait(boundsToQuery(cellBounds));
+        await apiGet(P.ip, matrixToQuery({ a: 1, b: 0, c: 0, d: 1, tx: cx, ty: cy }));
+      } catch {}
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grid, bounds, P.ip]);
+  }, [grid, bounds, P.ip, P.sendRaw, P.sendAndWait]);
 
-  const clearGridCell = useCallback(() => {
+  const clearGridCell = useCallback(async () => {
     const fb = grid.fullBounds ?? bounds;
     setGridState((g) => ({ ...g, active: false, fullBounds: null }));
     P.setBounds(fb);
-    P.commitBounds(fb);
-    if (P.ip) apiGet(P.ip, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+    if (P.ip) {
+      try {
+        await P.sendRaw('pen?pos=up');
+        await P.sendAndWait(boundsToQuery(fb));
+        await apiGet(P.ip, matrixToQuery(IDENTITY_PARAMS));
+      } catch {}
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grid.fullBounds, bounds, P.ip]);
+  }, [grid.fullBounds, bounds, P.ip, P.sendRaw, P.sendAndWait]);
 
   const fg = f(gotoF, setGoto);
   const fc = f(circle, setCircle);

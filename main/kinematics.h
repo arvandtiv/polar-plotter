@@ -109,16 +109,18 @@ static inline void plt_xy_to_steps(const plotter_geom_t *g, float x, float y,
  * chord spanning angle a on radius r is r*(1 - cos(a/2)); solving for a and
  * dividing 2*pi by it gives the count. Adaptive segmentation is the real
  * efficiency win: small circles get few segments, big ones get enough to look
- * round, neither over- nor under-shoots. Clamped to [8, 720]. */
+ * round, neither over- nor under-shoots. Clamped to [32, 720] — minimum 32
+ * prevents tiny circles from rendering as visible octagons (8-gon was the old
+ * min and produced 45-degree distortion on radii below ~3 mm). */
 static inline int plt_arc_segments(float radius_mm, float max_chord_err_mm)
 {
-    if (radius_mm <= 0.0f || max_chord_err_mm <= 0.0f) return 8;
+    if (radius_mm <= 0.0f || max_chord_err_mm <= 0.0f) return 32;
     float ratio = 1.0f - max_chord_err_mm / radius_mm;   /* cos(a/2) */
     if (ratio < -1.0f) ratio = -1.0f;
     if (ratio >  1.0f) ratio =  1.0f;
     float a = 2.0f * acosf(ratio);                        /* angle per chord */
     int n = (a > 1e-6f) ? (int)ceilf(PLT_TWO_PI / a) : 720;
-    if (n < 8)   n = 8;
+    if (n < 32)  n = 32;
     if (n > 720) n = 720;
     return n;
 }

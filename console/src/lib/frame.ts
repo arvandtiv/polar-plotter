@@ -17,7 +17,7 @@ export interface Frame {
   widthMm: number;
   heightMm: number;
   paths: Path[];
-  meta?: { title?: string; anchor?: Pt };
+  meta?: { title?: string; anchor?: Pt; noSimplify?: boolean };
 }
 
 /** Axis-aligned bounds of every point in the frame, or null if empty. */
