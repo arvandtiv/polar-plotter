@@ -516,6 +516,37 @@ origin. All drawing tools work in **cell-local coordinates** while a cell is act
 - `±cellH/2` reaches the cell edges vertically.
 - A circle with `r = cellW/4` fills half the cell width, symmetrically centred.
 
+### ⚠️ MANDATORY: verify shapes fit inside the cell BEFORE drawing
+
+**The firmware rejects any draw command whose extent exceeds the active cell bounds.
+Rejected jobs are silently counted as failed — nothing is drawn and no error is surfaced
+beyond the job-failure counter. A wrong radius in a 24×24 grid can produce 576 silent
+failures with a blank plot.**
+
+After `plot_grid_plan` returns `cellW` and `cellH`, compute the safe limits and check
+every shape you plan to send:
+
+```
+maxR    = min(cellW, cellH) / 2        ← maximum safe radius / half-size for centred shapes
+maxSide = min(cellW, cellH)            ← maximum safe full side length (squares/rects)
+```
+
+Per shape:
+| Shape | Constraint |
+|-------|-----------|
+| `circle r` | `r ≤ maxR` |
+| `square size` | `size/2 ≤ maxR` (i.e. `size ≤ min(cellW,cellH)`) |
+| `arc`, `line`, `goto` | all points must be within `±cellW/2` (X) and `±cellH/2` (Y) |
+| `plot_generate` | generator params (radius, maxRadius, etc.) must respect `maxR` |
+
+**Real example of what goes wrong:** a 24×24 grid over a 539×388 mm work area with
+`padding_mm=10` → `cellW≈12.9 mm`, `cellH≈6.6 mm`, `maxR≈3.3 mm`. Sending `circle r=12`
+produces 576 firmware rejections. The solution is either fewer cells (e.g. 6×4) or a
+smaller radius (`r ≤ 3`).
+
+**Workflow rule:** call `plot_grid_plan` first, read `cellW`/`cellH` from the response,
+compute `maxR`, and do not proceed until every planned draw command is confirmed to fit.
+
 ### Step 0: preview the layout with `plot_grid_plan`
 
 Call this first — no firmware state change, just returns the full cell table.
@@ -538,7 +569,8 @@ Returns:
 }
 ```
 
-Use this to choose which cells to draw in, pick appropriate radii, and build your plan.
+Use this to read `cellW` and `cellH`, compute `maxR = min(cellW,cellH)/2`, and verify
+every planned draw fits before sending a single command (see ⚠️ constraint above).
 
 ### Step 1: activate a cell with `plot_grid_select`
 
@@ -560,9 +592,11 @@ full bounds from your first `plot_status` call and pass the same `full_xn/xp/yn/
 
 ```
 1. plot_status                        → save full_xn, full_xp, full_yn, full_yp
-2. plot_grid_plan cols=3 rows=2 ...   → preview; pick radii, choose generators
+2. plot_grid_plan cols=3 rows=2 ...   → read cellW, cellH; compute maxR = min(cellW,cellH)/2
+                                        STOP HERE if any planned shape exceeds maxR — adjust
+                                        cols/rows or shape sizes before continuing
 3. plot_grid_select col=0 row=0 ...   → top-left cell active
-   plot_circle / plot_generate / ...  → draw in cell-local coords
+   plot_circle / plot_generate / ...  → draw in cell-local coords (shapes ≤ maxR!)
 4. plot_grid_select col=1 row=0 ...   → middle-top cell (SAME full bounds!)
    ...
 5. plot_grid_select col=2 row=0 ...
@@ -612,10 +646,12 @@ then `plot_generate` directly.
 ### Grid composition with different designs per cell
 ```
 1. plot_status                 → note full bounds (xn xp yn yp)
-2. plot_grid_plan cols=2 rows=2 padding_mm=5 full_xn=... → check cell sizes
+2. plot_grid_plan cols=2 rows=2 padding_mm=5 full_xn=...
+                               → read cellW/cellH; compute maxR = min(cellW,cellH)/2
+                                  VERIFY all params (R, orbitRadius, maxRadius…) ≤ maxR
 3. plot_set_speed 120000
 4. plot_grid_select col=0 row=0 (full bounds)
-   plot_generate generator="spirograph" params={R:40, r:15, d:30}
+   plot_generate generator="spirograph" params={R:40, r:15, d:30}   ← R ≤ maxR!
 5. plot_grid_select col=1 row=0 (same full bounds)
    plot_generate generator="orbitalWeave" params={orbitRadius:40, traceTurns:9}
 6. plot_grid_select col=0 row=1 (same full bounds)
