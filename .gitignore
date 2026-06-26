@@ -41,3 +41,6 @@ console-ui.png
 console-ui-clean.png
 layout-check.png
 log-layout.png
+
+# Editor
+.vscode/

@@ -2,7 +2,10 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   usePlotter,
   parseJsonScript,
+  streamQueries,
+  type SendResult,
   type ParsedLine,
+  type GeneratorSpec,
   type PlotterBounds,
   type MotionParams,
   type FillMode,
@@ -14,7 +17,24 @@ import {
   DEFAULTS,
   TRUCHET_MOTIF_NAMES,
   TRUCHET_DEFAULT_MASK,
+  matrixToQuery,
+  IDENTITY_PARAMS,
 } from '../hooks/usePlotter';
+import { apiGet } from '../lib/api';
+import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
+import { decodeBgcode } from '../lib/bgcode';
+import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
+import { compileFrame, expandGenerator } from '../lib/runPipeline';
+import { computeCell, gridClearQueries } from '../lib/gridScript';
+import type { Frame } from '../lib/frame';
+import { listModules, getModule, defaultsOf } from '../lib/registry';
+import { evaluate, type Layer, type LayerGroup } from '../lib/pipeline';
+import { loadImageToGray } from '../lib/image';
+import type { GrayImage } from '../lib/registry';
+import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc } from '../lib/studioDoc';
+import { exportGcode, DEFAULT_EXPORT } from '../lib/gcode-export';
+import '../lib/modules';   // side effect: registers all generators/modifiers
+import { ParamPanel } from './ParamPanel';
 
 // ================================================================
 //  Primitives
@@ -360,14 +380,13 @@ function PlotterCanvas({ bounds, pen, moving }: {
 }) {
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
-  const vbX = -left - pad, vbY = -down - pad;
+  const vbX = -left - pad, vbY = -up - pad;
   const vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
-  const py = (y: number) => y;  // +Y down in firmware and in display
 
   const gridStep = vbW > 800 ? 100 : 50;
   const gx: number[] = [], gy: number[] = [];
   for (let x = Math.ceil(-left / gridStep) * gridStep; x <= right; x += gridStep) gx.push(x);
-  for (let y = Math.ceil(-down / gridStep) * gridStep; y <= up; y += gridStep) gy.push(y);
+  for (let y = Math.ceil(-up / gridStep) * gridStep; y <= down; y += gridStep) gy.push(y);
 
   const sw = vbW / 400;
 
@@ -378,32 +397,32 @@ function PlotterCanvas({ bounds, pen, moving }: {
         {bounds.shape === 'ellipse' ? (
           <>
             {/* faint bounding box (what the inputs edit) + the actual drawable ellipse */}
-            <rect x={-left} y={-down} width={left + right} height={up + down}
+            <rect x={-left} y={-up} width={left + right} height={up + down}
               fill="none" stroke="#dce3ec" strokeWidth={sw} strokeDasharray={`${sw * 3} ${sw * 2}`} />
-            <ellipse cx={(right - left) / 2} cy={(up - down) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
+            <ellipse cx={(right - left) / 2} cy={(down - up) / 2} rx={(left + right) / 2} ry={(up + down) / 2}
               fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} />
           </>
         ) : (
-          <rect x={-left} y={-down} width={left + right} height={up + down}
+          <rect x={-left} y={-up} width={left + right} height={up + down}
             fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.5} rx={sw} />
         )}
-        {gx.map((x) => <line key={`gx${x}`} x1={x} y1={py(up)} x2={x} y2={py(-down)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
-        {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={py(y)} x2={right} y2={py(y)} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
+        {gx.map((x) => <line key={`gx${x}`} x1={x} y1={-up} x2={x} y2={down} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
+        {gy.map((y) => <line key={`gy${y}`} x1={-left} y1={y} x2={right} y2={y} stroke="#eef2f6" strokeWidth={sw * 0.6} />)}
         <line x1={-left} y1={0} x2={right} y2={0} stroke="#cbd5e1" strokeWidth={sw} />
-        <line x1={0} y1={py(up)} x2={0} y2={py(-down)} stroke="#cbd5e1" strokeWidth={sw} />
+        <line x1={0} y1={-up} x2={0} y2={down} stroke="#cbd5e1" strokeWidth={sw} />
         <circle cx={0} cy={0} r={sw * 3} fill="none" stroke="#94a3b8" strokeWidth={sw} />
         <g>
-          {moving && <circle cx={pen.x} cy={py(pen.y)} r={sw * 9} fill={pen.down ? '#059669' : '#0284c7'} opacity="0.18" />}
-          <circle cx={pen.x} cy={py(pen.y)} r={sw * 4.5} fill={pen.down ? '#059669' : 'none'}
+          {moving && <circle cx={pen.x} cy={pen.y} r={sw * 9} fill={pen.down ? '#059669' : '#0284c7'} opacity="0.18" />}
+          <circle cx={pen.x} cy={pen.y} r={sw * 4.5} fill={pen.down ? '#059669' : 'none'}
             stroke={pen.down ? '#059669' : '#0284c7'} strokeWidth={sw * 1.6} />
-          <circle cx={pen.x} cy={py(pen.y)} r={sw * 1.2} fill={pen.down ? '#ffffff' : '#0284c7'} />
+          <circle cx={pen.x} cy={pen.y} r={sw * 1.2} fill={pen.down ? '#ffffff' : '#0284c7'} />
         </g>
       </svg>
       <div className="pointer-events-none absolute inset-0 font-mono text-[10px] text-ink-600">
         <span className="absolute left-2 top-2">−Y {down}</span>
         <span className="absolute left-2 bottom-2">+Y {up}</span>
-        <span className="absolute right-2 top-1/2 -translate-y-1/2">+X {right}</span>
         <span className="absolute left-2 top-1/2 -translate-y-1/2">−X {left}</span>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2">+X {right}</span>
       </div>
     </div>
   );
@@ -417,36 +436,27 @@ function PlotterCanvas({ bounds, pen, moving }: {
 // an explicit "Apply bounds" button instead of updating on every keystroke.
 // The previous keystroke-driven approach caused the canvas to repaint and the
 // firmware to receive a new /api/bounds on every character typed ("too noisy").
-// Work-area presets, one per paper size — add more as new papers are introduced.
-const BOUNDS_PRESETS = [
-  { label: 'Water - paper', up: 274, down: 105, left: 260, right: 260 },
-] as const;
-
-// Quick paper-type picker shown above the Position window — applies a work-area
-// preset (sets + commits bounds) with one click; highlights the active one.
-function PaperPresets({ bounds, setBounds, commitBounds }: {
-  bounds: PlotterBounds;
-  setBounds: (b: PlotterBounds) => void;
-  commitBounds: (b: PlotterBounds) => void;
+// Small in-app modal that prompts for a single line of text (used to name a paper).
+function TextPromptModal({ title, label, initial, confirmText, onConfirm, onCancel }: {
+  title: string; label: string; initial: string; confirmText: string;
+  onConfirm: (value: string) => void; onCancel: () => void;
 }) {
-  const isActive = (p: typeof BOUNDS_PRESETS[number]) =>
-    bounds.left === p.left && bounds.right === p.right && bounds.up === p.up && bounds.down === p.down;
-  const pick = (p: typeof BOUNDS_PRESETS[number]) => {
-    const nb: PlotterBounds = { up: p.up, down: p.down, left: p.left, right: p.right, shape: bounds.shape };
-    setBounds(nb); commitBounds(nb);
-  };
+  const [val, setVal] = useState(initial);
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-ink-750 bg-ink-900 px-3 py-2 shadow-card">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">Paper type</span>
-      <div className="flex flex-wrap gap-1.5">
-        {BOUNDS_PRESETS.map((p) => (
-          <button key={p.label} onClick={() => pick(p)}
-            className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              isActive(p) ? 'border-cyanx/40 bg-cyanx/15 text-cyanx'
-                          : 'border-ink-700 bg-ink-850 text-ink-400 hover:border-cyanx/40 hover:text-cyanx'}`}>
-            {p.label}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
+      <div className="w-80 rounded-xl border border-ink-700 bg-ink-900 p-4 shadow-card" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-2 text-[13px] font-semibold text-ink-100">{title}</h3>
+        <label className="text-[11px] text-ink-500">{label}</label>
+        <input autoFocus value={val} onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) onConfirm(val.trim()); if (e.key === 'Escape') onCancel(); }}
+          className="mt-1 w-full rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50" />
+        <div className="mt-3 flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-md px-3 py-1.5 text-[12px] text-ink-400 hover:text-ink-200">Cancel</button>
+          <button onClick={() => val.trim() && onConfirm(val.trim())} disabled={!val.trim()}
+            className="rounded-md border border-cyanx/40 bg-cyanx/15 px-3 py-1.5 text-[12px] font-semibold text-cyanx hover:bg-cyanx/25 disabled:opacity-40">
+            {confirmText}
           </button>
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -491,16 +501,6 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
     commitBounds(nb);
   };
 
-  const applyPreset = (p: typeof BOUNDS_PRESETS[number]) => {
-    if (refs.up.current)    refs.up.current.value    = String(p.up);
-    if (refs.down.current)  refs.down.current.value  = String(p.down);
-    if (refs.left.current)  refs.left.current.value  = String(p.left);
-    if (refs.right.current) refs.right.current.value = String(p.right);
-    const nb: PlotterBounds = { up: p.up, down: p.down, left: p.left, right: p.right, shape };
-    setBounds(nb);
-    commitBounds(nb);
-  };
-
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') apply(); };
 
   // Switching shape applies immediately (and re-sends bounds) so the canvas + firmware
@@ -522,28 +522,6 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
 
   return (
     <div className="space-y-3">
-      {/* ---- Presets: Y grows, X stays ±240 ---- */}
-      <div>
-        <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-ink-500">
-          Presets — X ±240 mm, Y grows
-        </span>
-        <div className="flex gap-1">
-          {BOUNDS_PRESETS.map((p) => {
-            const active = bounds.up === p.up && bounds.down === p.down
-                        && bounds.left === p.left && bounds.right === p.right;
-            return (
-              <button key={p.label} onClick={() => applyPreset(p)}
-                className={`flex-1 rounded-md py-1.5 text-[11px] font-mono font-semibold transition-colors
-                  ${active
-                    ? 'bg-cyanx text-white'
-                    : 'bg-ink-850 border border-ink-700 text-ink-400 hover:border-cyanx/40 hover:text-cyanx'}`}>
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {row(refs.up,    'Down (+Y)',  bounds.up)}
       {row(refs.down,  'Up  (−Y)',   bounds.down)}
       {row(refs.left,  'Left  (−X)', bounds.left)}
@@ -709,14 +687,52 @@ function JobProgress({ status }: { status: PlotterStatus | null }) {
 
 function JobList({ jobs }: { jobs: JobEntry[] }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [jobs.length]);
+  const interacting = useRef(false);       // user is scrolling → don't auto-move
+  const idleTimer = useRef<number | null>(null);
+  const progUntil = useRef(0);             // ignore our own programmatic scroll events until this time
+
+  // Park the CURRENT (doing) job 150 px below the window's top — the first ~148 px
+  // is covered by the panel chrome above the list — unless the user is actively
+  // scrolling. Adding pending jobs no longer yanks the view to the bottom.
+  const TOP_OFFSET = 150;
+  const centerCurrent = useCallback(() => {
+    const c = ref.current;
+    if (!c || interacting.current) return;
+    const el = c.querySelector<HTMLElement>('[data-doing="1"]');
+    if (!el) return;
+    // el's offset within the scroll content (robust regardless of offsetParent)
+    const elTop = el.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop;
+    const target = elTop - TOP_OFFSET;
+    progUntil.current = Date.now() + 700;  // smooth scroll fires many events; ignore them all
+    c.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+  }, []);
+
+  // A real (user) scroll pauses auto-centering; it resumes ~4 s after they stop.
+  const markInteract = useCallback(() => {
+    interacting.current = true;
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => { interacting.current = false; centerCurrent(); }, 4000);
+  }, [centerCurrent]);
+
+  const onScroll = useCallback(() => {
+    if (Date.now() < progUntil.current) return;   // our own scrollTo — not the user
+    markInteract();
+  }, [markInteract]);
+
+  // Re-center when the current job advances or the list changes (idle only).
+  const doingId = jobs.find((j) => j.state === 'doing')?.id;
+  useEffect(() => { centerCurrent(); }, [doingId, jobs.length, centerCurrent]);
+  useEffect(() => () => { if (idleTimer.current) clearTimeout(idleTimer.current); }, []);
+
   if (!jobs.length) return <p className="text-[12px] text-ink-500">No jobs yet. Queue work from the MCP or the Draw tab.</p>;
   const dot = (s: JobEntry['state']) => (s === 'done' ? '✓' : s === 'doing' ? '▶' : '○');
   const cls = (s: JobEntry['state']) => (s === 'done' ? 'text-go' : s === 'doing' ? 'text-warn' : 'text-ink-600');
   return (
-    <div ref={ref} className="h-full space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
+    <div ref={ref} onScroll={onScroll} onWheel={markInteract} onTouchStart={markInteract} onPointerDown={markInteract}
+      className="h-full space-y-0.5 overflow-y-auto font-mono text-[12.5px]">
       {jobs.map((j) => (
-        <div key={j.id} className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
+        <div key={j.id} data-doing={j.state === 'doing' ? '1' : undefined}
+          className={`flex items-center gap-2 rounded-md px-2 py-1 ${j.state === 'doing' ? 'bg-warn/10' : ''}`}>
           <span className={`${cls(j.state)} ${j.state === 'doing' ? 'blink' : ''}`}>{dot(j.state)}</span>
           <span className="w-9 shrink-0 tabular-nums text-ink-700">#{j.id}</span>
           <span className={`flex-1 truncate ${j.state === 'pending' ? 'text-ink-500' : 'text-ink-200'}`}>
@@ -779,7 +795,7 @@ const TRUCHET_MOTIF_HELP = [
 //  Hardware / chip reference data
 // ================================================================
 
-const FW_VERSION = 'pico2 · v1.1 Stable';
+const FW_VERSION = 'pico2 · v1.2 dev';
 
 const TMC5072_SPECS = [
   { label: 'Driver IC',      value: 'TMC5072',                    note: 'Trinamic / Analog Devices' },
@@ -797,16 +813,16 @@ const TMC5072_SPECS = [
   { label: 'Home belt',      value: '715 mm each side',          note: 'Belt length motor→gondola at the midpoint origin' },
 ];
 
-function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
+function ChipInfoContent({ status }: { status: PlotterStatus | null }) {
   const m = status?.motion;
   const live = m ? [
-    { label: 'Run current',  value: `${m.run_ma} mA`,                    note: 'IRUN — active during motion' },
-    { label: 'Hold current', value: `${m.hold_ma} mA`,                   note: 'IHOLD — gondola must hold while idle' },
-    { label: 'VMAX',         value: m.vmax.toLocaleString(),              note: 'µsteps/s target velocity' },
-    { label: 'AMAX',         value: m.amax.toLocaleString(),             note: 'µsteps/s² peak acceleration' },
+    { label: 'Run current',  value: `${m.run_ma} mA`,       note: 'IRUN — active during motion' },
+    { label: 'Hold current', value: `${m.hold_ma} mA`,      note: 'IHOLD — gondola must hold while idle' },
+    { label: 'VMAX',         value: m.vmax.toLocaleString(), note: 'µsteps/s target velocity' },
+    { label: 'AMAX',         value: m.amax.toLocaleString(), note: 'µsteps/s² peak acceleration' },
   ] : null;
   return (
-    <Card title="Hardware · TMC5072" icon="⚙" accent="#7c3aed">
+    <>
       <div className="space-y-1">
         {TMC5072_SPECS.map(({ label, value, note }) => (
           <div key={label} className="grid grid-cols-[130px_1fr] gap-2 py-1 border-b border-ink-800/60 last:border-0">
@@ -832,7 +848,7 @@ function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
           </div>
         </>
       )}
-    </Card>
+    </>
   );
 }
 
@@ -842,6 +858,8 @@ function ChipInfoCard({ status }: { status: PlotterStatus | null }) {
 // ScriptTab — bulk CSV command entry
 // ================================================================
 
+// Bare-array format — paste directly into the textarea or load via "Load JSON" button.
+// Also accepted: { "metadata": {...}, "commands": [...] } wrapper (klee-style composition files).
 const SCRIPT_HINT = `[
   { "type": "pen", "position": "up" },
   { "type": "goto", "x": 0, "y": 0 },
@@ -850,72 +868,219 @@ const SCRIPT_HINT = `[
   { "type": "line", "x0": -80, "y0": 0, "x1": 80, "y1": 0, "cycles": 2 },
   { "type": "wobbly", "cx": 0, "cy": 50, "r": 60, "wobble": 0.4, "harmonics": 3 },
   { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42 },
+  { "type": "generate", "generator": "spirograph", "params": { "R": 80, "r": 30, "d": 50 } },
+  { "type": "generate", "generator": "noiseOrbit", "params": { "numCircles": 20, "maxRadius": 100 },
+    "warp": { "mode": "water", "params": { "amplitude": 10, "wavelength": 80 } } },
+  { "type": "set_speed", "vmax": 150000 },
+  { "type": "set_current", "run_ma": 400, "hold_ma": 200 },
+  { "type": "bounds", "xn": -260, "xp": 260, "yn": -115, "yp": 273 },
+  { "type": "matrix", "a": 1, "b": 0, "c": 0, "d": 1, "tx": 0, "ty": 0 },
   { "type": "speed", "vmax": 200000 },
   { "type": "home" }
-]`;
+]
 
-function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
-  sendRaw: (ep: string) => Promise<boolean>;
+// Grid-composition format (metadata provides work_area + grid for grid_select / grid_clear):
+// {
+//   "metadata": {
+//     "work_area": { "x_min": -260, "x_max": 260, "y_min": -115, "y_max": 273 },
+//     "grid": { "cols": 3, "rows": 2, "padding_mm": 5 }
+//   },
+//   "commands": [
+//     { "type": "set_speed", "vmax": 150000 },
+//     { "type": "grid_select", "col": 0, "row": 0 },
+//     { "type": "generate", "generator": "spirograph", "params": { "R": 50, "r": 10, "d": 40 } },
+//     { "type": "grid_select", "col": 1, "row": 0 },
+//     { "type": "generate", "generator": "noiseOrbit", "params": { "numCircles": 8 } },
+//     { "type": "grid_clear" },
+//     { "type": "home" }
+//   ]
+// }`;
+
+function plotterBounds(b: PlotterBounds) {
+  return { left: b.left, right: b.right, up: b.up, down: b.down };
+}
+
+function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
+  sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  sendAndWait: (ep: string, json?: string) => Promise<SendResult>;
+  sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
+  bounds: PlotterBounds;
 }) {
   const [text, setText] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef(false);
   const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; errors: number; total: number }>({
     status: 'idle', sent: 0, errors: 0, total: 0,
   });
 
-  const parsed = useMemo(() => parseJsonScript(text), [text]);
-  const good   = parsed.filter(l => l.query);
+  const loadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setText(ev.target?.result as string ?? '');
+      setRun({ status: 'idle', sent: 0, errors: 0, total: 0 });
+    };
+    reader.readAsText(file);
+    e.target.value = '';   // reset so the same file can be re-loaded
+  };
+
+  const parsed = useMemo(
+    () => parseJsonScript(text, { plotterBounds: bounds }),
+    [text, bounds.left, bounds.right, bounds.up, bounds.down],
+  );
+  const good   = parsed.filter(l => l.query || l.generator || l.gridSelect || l.gridClear);
   const bad    = parsed.filter(l => l.error);
 
   const start = useCallback(async () => {
     if (!good.length) return;
     abortRef.current = false;
-    runCancelRef.current = false;   // clear any prior STOP/CLEAR signal before a fresh run
-    setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
-    pushLog('cmd', `> script: queuing ${good.length} commands (flow-controlled)`);
-    let errors = 0;
-    // The board's draw queue holds 256 jobs and sendRaw returns on ENQUEUE (not on
-    // draw-completion). To never overflow — even when the machine is already busy
-    // with an EARLIER stack — gate every burst on the board's REAL pending count.
-    // Crucially: if the status read fails, or the queue is full, we WAIT rather
-    // than send (a rejection must never look like "room available").
-    const CAP = 256, HIGH = 220;
-    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-    const cancelled = () => abortRef.current || runCancelRef.current;  // STOP/CLEAR halt the feed
-    let i = 0;
-    let warned = false;
-    while (i < good.length && !cancelled()) {
-      const pend = await getPending();
-      if (pend === null || pend >= HIGH) {
-        if (pend !== null && !warned) {
-          pushLog('sys', `[script] board busy (${pend}/${CAP} queued) — waiting for room…`);
-          warned = true;
+    runCancelRef.current = false;
+    const cancelled = () => abortRef.current || runCancelRef.current;
+    // Grid scripts must run strictly in order: grid_select → draw → next cell.
+    // If we apply every grid_select first and queue all draws later, the matrix
+    // ends up on the last cell and every circle lands in the same place.
+    const gridMode = good.some(l => l.gridSelect);
+
+    const runGridSelect = async (line: typeof good[0]) => {
+      const { col, row, gc } = line.gridSelect!;
+      const cell = computeCell(gc, col, row);
+      pushLog('cmd', `> ${line.raw}`);
+      const bw = await sendAndWait(cell.boundsQuery, line.raw);
+      if (bw !== 'ok') { pushLog('err', `[script] grid_select bounds failed (${bw})`); return false; }
+      const mw = await sendRaw(cell.matrixQuery, line.raw);
+      if (mw !== 'ok') { pushLog('err', `[script] grid_select matrix failed (${mw})`); return false; }
+      pushLog('ok', `[script] cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm`);
+      return true;
+    };
+
+    const runGridClear = async (line: typeof good[0]) => {
+      const q = gridClearQueries(line.gridClear!.gc);
+      pushLog('cmd', `> ${line.raw}`);
+      const bw = await sendAndWait(q.boundsQuery, line.raw);
+      if (bw !== 'ok') { pushLog('err', `[script] grid_clear bounds failed (${bw})`); return false; }
+      const mw = await sendRaw(q.matrixQuery, line.raw);
+      if (mw !== 'ok') { pushLog('err', `[script] grid_clear matrix failed (${mw})`); return false; }
+      pushLog('ok', '[script] grid cleared');
+      return true;
+    };
+
+    if (gridMode) {
+      let sent = 0, errors = 0;
+      let gridTouched = false, gridCleared = false;
+      const gridGc =
+        good.find(l => l.gridSelect)?.gridSelect?.gc
+        ?? good.find(l => l.gridClear)?.gridClear?.gc;
+      setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
+      pushLog('cmd', `> script: grid mode — ${good.length} steps (flow-controlled draws)`);
+      pushLog('sys', `[script] work area from Work Area tab: yn=${-bounds.up} yp=${bounds.down} (metadata.work_area ignored)`);
+
+      // Draw commands are queued here and batch-streamed. sendAndWait(bounds) at each
+      // grid_select / grid_clear acts as a FIFO barrier: bounds is queued after all pending
+      // draws, so waiting for it implicitly means all previous draws have also completed.
+      const pendingDraws: { query: string; raw: string }[] = [];
+      const flushPendingDraws = async (): Promise<boolean> => {
+        if (!pendingDraws.length || cancelled()) return !cancelled();
+        const batch = pendingDraws.splice(0);
+        const { stopped, errors: errs } = await streamQueries(
+          batch,
+          { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
+            onProgress: () => setRun(r => ({ ...r, sent, errors })) },
+        );
+        errors += errs;
+        setRun(r => ({ ...r, sent, errors }));
+        return !stopped;
+      };
+
+      try {
+        for (const line of good) {
+          if (cancelled()) break;
+          if (line.gridSelect) {
+            if (!(await flushPendingDraws())) break;
+            gridTouched = true;
+            if (!(await runGridSelect(line))) break;
+            sent++; setRun(r => ({ ...r, sent }));
+            continue;
+          }
+          if (line.gridClear) {
+            if (!(await flushPendingDraws())) break;
+            gridCleared = true;
+            if (!(await runGridClear(line))) break;
+            sent++; setRun(r => ({ ...r, sent }));
+            continue;
+          }
+          if (line.generator) {
+            let queries: string[];
+            try {
+              queries = expandGenerator(line.generator, plotterBounds(bounds));
+            } catch (e) {
+              pushLog('err', `[script] generate "${line.generator.key}" failed: ${(e as Error).message}`);
+              errors++; setRun(r => ({ ...r, errors }));
+              continue;
+            }
+            pushLog('sys', `[script] generate "${line.generator.key}" → ${queries.length} commands`);
+            for (const q of queries) pendingDraws.push({ query: q, raw: line.raw });
+            sent++; setRun(r => ({ ...r, sent }));
+            continue;
+          }
+          if (line.query) {
+            pendingDraws.push({ query: line.query, raw: line.raw });
+            sent++; setRun(r => ({ ...r, sent }));
+          }
         }
-        await sleep(400);
-        continue;          // do NOT send while full / unknown
+        await flushPendingDraws();
+      } finally {
+        if (gridTouched && !gridCleared && gridGc) {
+          pushLog('sys', '[script] grid cleanup — restoring full bounds + matrix identity');
+          await flushPendingDraws();
+          await runGridClear({ idx: -1, raw: '{"type":"grid_clear"}', gridClear: { gc: gridGc } });
+        }
       }
-      warned = false;
-      // Room for (HIGH - pend) jobs. Assume the board doesn't drain during the
-      // burst (conservative → can't overflow), then re-read pending next loop.
-      let budget = HIGH - pend;
-      while (budget-- > 0 && i < good.length && !cancelled()) {
-        const ok = await sendRaw(good[i].query!);
-        if (!ok) errors++;   // real rejection (e.g. out of bounds) — skip, don't retry
-        i++;
-        setRun(r => ({ ...r, sent: i, errors }));
+      const stopped = cancelled();
+      pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
+              stopped
+                ? `[script] halted — ${sent - errors}/${good.length} completed`
+                : `[script] done — ${sent - errors} completed` +
+                  (errors ? `, ${errors} failed` : ', no failures'));
+      setRun(r => ({ ...r, status: 'done' }));
+      return;
+    }
+
+    // Non-grid scripts: expand generators, then flow-control the flat queue.
+    const items: { query: string; raw: string }[] = [];
+    for (const line of good) {
+      if (line.generator) {
+        let queries: string[];
+        try {
+          queries = expandGenerator(line.generator, plotterBounds(bounds));
+        } catch (e) {
+          pushLog('err', `[script] generate "${line.generator.key}" failed: ${(e as Error).message}`);
+          continue;
+        }
+        pushLog('sys', `[script] generate "${line.generator.key}" → ${queries.length} commands`);
+        for (const q of queries) items.push({ query: q, raw: line.raw });
+      } else if (line.query) {
+        items.push({ query: line.query, raw: line.raw });
       }
     }
-    const stopped = cancelled() && i < good.length;
+    if (!items.length) { setRun(r => ({ ...r, status: 'done' })); return; }
+    setRun({ status: 'running', sent: 0, errors: 0, total: items.length });
+    pushLog('cmd', `> script: queuing ${items.length} commands (flow-controlled)`);
+    const { sent, errors, stopped } = await streamQueries(
+      items,
+      { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
+        onProgress: (s, e) => setRun(r => ({ ...r, sent: s, errors: e })) },
+    );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
             stopped
-              ? `[script] halted by STOP/CLEAR — ${i}/${good.length} sent, ${good.length - i} not queued`
-              : `[script] done — ${i - errors} queued` +
+              ? `[script] halted by STOP/CLEAR — ${sent}/${items.length} sent, ${items.length - sent} not queued`
+              : `[script] done — ${sent - errors} queued` +
                 (errors ? `, ${errors} rejected (NOT queue-full — check bounds/syntax)` : ', no rejections'));
     setRun(r => ({ ...r, status: 'done' }));
-  }, [good, sendRaw, getPending, runCancelRef, pushLog]);
+  }, [good, bounds, sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
 
@@ -923,6 +1088,7 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
 
   return (
     <Card title="Script" icon="≡" accent="#0891b2" defaultCollapsed={false}>
+      <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={loadFile} />
       <textarea
         className="w-full h-56 resize-y rounded bg-ink-900 border border-ink-700 p-2 font-mono text-[12px] text-ink-300 placeholder-ink-600 focus:outline-none focus:border-cyan-600"
         placeholder={SCRIPT_HINT}
@@ -936,12 +1102,19 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
       <div className="mt-2 flex items-center gap-3 text-[12px]">
         <span className="text-ink-400">
           {parsed.length === 0
-            ? <span className="text-ink-600">paste commands above</span>
+            ? <span className="text-ink-600">paste JSON or load a .json file</span>
             : <><span className="text-ink-300 font-semibold">{good.length}</span> commands</>}
           {bad.length > 0 && <span className="ml-2 text-red-400 font-semibold">· {bad.length} error{bad.length > 1 ? 's' : ''}</span>}
         </span>
+        <button
+          className="ml-auto text-[11px] text-ink-500 hover:text-cyanx transition-colors"
+          onClick={() => fileRef.current?.click()}
+          title="Load a .json script file"
+        >
+          Load JSON
+        </button>
         {text && (
-          <button className="ml-auto text-[11px] text-ink-600 hover:text-ink-400" onClick={() => { setText(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
+          <button className="text-[11px] text-ink-600 hover:text-ink-400" onClick={() => { setText(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
             Clear
           </button>
         )}
@@ -995,23 +1168,748 @@ function ScriptTab({ sendRaw, getPending, runCancelRef, pushLog }: {
 }
 
 // ================================================================
+// GcodeTab — G-code digester: paste or upload .gcode / .bgcode, translate to
+// goto/line/pen ops, and stream them flow-controlled like the JSON script tab.
+// ================================================================
+
+const PEN_MODES: [PenMode, string][] = [
+  ['auto', 'Auto-detect'], ['z', 'Z height'], ['spindle', 'Spindle M3/M5'],
+  ['servo', 'Servo M280'], ['g01', 'G0 travel / G1 draw'],
+];
+const PLACE_MODES: [PlaceMode, string][] = [
+  ['fit', 'Auto-fit & center'], ['center', 'Center, no scale'],
+  ['rawflip', 'Raw + Y-flip'], ['raw', 'Raw (no transform)'],
+];
+
+function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled }: {
+  label: string; value: T; opts: [T, string][]; onChange: (v: T) => void; disabled?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
+      <select
+        className="rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyan-600 disabled:opacity-50"
+        value={value} disabled={disabled}
+        onChange={(e) => onChange(e.target.value as T)}>
+        {opts.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}
+      </select>
+    </label>
+  );
+}
+
+// v1.3 / S4 (Day 5): the Studio — pick a generator, tweak its schema-driven params,
+// and Run it through Frame → compile → streamQueries. Auto-lists every registered
+// "make" module, so new generators (S5+) appear here with zero UI wiring.
+// v1.3 / S17 (Day 23-24): live Frame preview with a drawing-order scrubber. Draws the
+// active (optimised, progress-sliced) frame in plotter coords. Self-contained SVG.
+function FramePreview({ bounds, frame, contain = false }: { bounds: PlotterBounds; frame: Frame; contain?: boolean }) {
+  const { left, right, up, down } = bounds;
+  const pad = Math.max(20, (left + right) * 0.06);
+  const vbX = -left - pad, vbY = -up - pad, vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
+  const sw = vbW / 400;
+  const CAP = 6000;   // guard against pathological path counts freezing the SVG
+  const shown = frame.paths.slice(0, CAP);
+  return (
+    <div className={contain ? 'h-full w-full overflow-hidden' : 'rounded-lg border border-ink-800 bg-ink-950 overflow-hidden'}>
+      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+        className={contain ? 'h-full w-full' : 'w-full'}
+        style={contain ? { display: 'block' } : { aspectRatio: `${vbW} / ${vbH}`, display: 'block' }}
+        preserveAspectRatio="xMidYMid meet">
+        <rect x={-left} y={-up} width={left + right} height={up + down} fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.2} rx={sw} />
+        {shown.map((p, i) => {
+          const pts = p.closed && p.points.length > 2 ? [...p.points, p.points[0]] : p.points;
+          return <polyline key={i} points={pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ')}
+            fill="none" stroke="#7c3aed" strokeWidth={sw * 1.2} strokeLinejoin="round" strokeLinecap="round" />;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ---- Studio layer-stack persistence (localStorage) ----
+const STUDIO_KEY = 'plotterStudioLayers';
+let _layerSeq = 0;
+const newLayerId  = () => `L${Date.now().toString(36)}${(_layerSeq++).toString(36)}`;
+const newGroupId  = () => `G${Date.now().toString(36)}${(_layerSeq++).toString(36)}`;
+
+interface StudioData { layers: Layer[]; groups: LayerGroup[]; }
+
+function loadStudioData(): StudioData {
+  try {
+    const raw = localStorage.getItem(STUDIO_KEY);
+    if (!raw) return { layers: [], groups: [] };
+    const parsed = JSON.parse(raw);
+    // Migration: old format was a bare Layer[] array
+    const rawLayers: unknown[] = Array.isArray(parsed) ? parsed : (parsed?.layers ?? []);
+    const rawGroups: unknown[] = Array.isArray(parsed) ? [] : (parsed?.groups ?? []);
+    const layers = rawLayers.flatMap((l): Layer[] => {
+      if (!l || typeof (l as Layer).moduleKey !== 'string') return [];
+      const x = l as Partial<Layer>;
+      // Keep layer even if module is not registered yet — don't silently drop and
+      // immediately overwrite localStorage with the shorter list.
+      if (!x.moduleKey) return [];
+      return [{ id: x.id || newLayerId(), moduleKey: x.moduleKey, params: x.params || {}, groupId: typeof x.groupId === 'string' ? x.groupId : undefined }];
+    });
+    const groups = rawGroups.flatMap((g): LayerGroup[] => {
+      if (!g || typeof (g as LayerGroup).id !== 'string') return [];
+      const x = g as Partial<LayerGroup>;
+      return [{ id: x.id!, name: x.name ?? 'Group', tx: x.tx ?? 0, ty: x.ty ?? 0, rotateDeg: x.rotateDeg ?? 0 }];
+    });
+    return { layers, groups };
+  } catch { /* ignore */ }
+  return { layers: [], groups: [] };
+}
+
+function saveStudioData(layers: Layer[], groups: LayerGroup[]): void {
+  // Guard: never save an empty stack over existing data (e.g. during SSR or a bad
+  // re-render before localStorage has been read). Only save if we have layers, or if
+  // the key is already empty/absent.
+  try {
+    if (layers.length === 0 && groups.length === 0) {
+      const existing = localStorage.getItem(STUDIO_KEY);
+      if (existing && existing !== '{"v":2,"layers":[],"groups":[]}') return;
+    }
+    localStorage.setItem(STUDIO_KEY, JSON.stringify({ v: 2, layers, groups }));
+  } catch { /* ignore */ }
+}
+
+// v1.3: the Studio is its own full-page product — a layer STACK (generators + modifiers,
+// evaluated bottom→top), a big live preview on the left, controls on the right. New
+// modules appear in the Add picker automatically.
+function StudioPage({ P, status, moving, bounds }: {
+  P: ReturnType<typeof usePlotter>;
+  status: PlotterStatus | null;
+  moving: boolean;
+  bounds: PlotterBounds;
+}) {
+  const { sendRaw, sendBatch, getPending, runCancelRef, pushLog } = P;
+  const allMods = useMemo(() => listModules(), []);
+  const makes = useMemo(() => listModules('make'), []);
+  const [studioData] = useState<StudioData>(() => loadStudioData());
+  const [layers, setLayers] = useState<Layer[]>(() => studioData.layers);
+  const [groups, setGroups] = useState<LayerGroup[]>(() => studioData.groups);
+  const [selId, setSelId] = useState<string>(() => studioData.layers[0]?.id ?? '');
+  const [addKey, setAddKey] = useState<string>(makes[0]?.key ?? '');
+  const [checkedLayerIds, setCheckedLayerIds] = useState<Set<string>>(new Set());
+  const abortRef = useRef(false);
+  const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; total: number; errors: number }>({
+    status: 'idle', sent: 0, total: 0, errors: 0,
+  });
+
+  useEffect(() => { saveStudioData(layers, groups); }, [layers, groups]);
+
+  // Source image for image modules (loaded in the UI, fed to evaluate via ctx.image).
+  const [image, setImage] = useState<GrayImage | undefined>(undefined);
+  const [imageName, setImageName] = useState('');
+  const imgRef = useRef<HTMLInputElement>(null);
+  const needsImage = layers.some((l) => getModule(l.moduleKey)?.group === 'Image');
+
+  const sel = layers.find((l) => l.id === selId);
+  const selGroup = groups.find((g) => g.id === selId);
+  const selMod = sel ? getModule(sel.moduleKey) : undefined;
+
+  const [orderPct, setOrderPct] = useState(100);   // drawing-order scrubber (% revealed)
+  const [useArcs, setUseArcs] = useState(false);   // collapse circular runs to arc jobs (needs firmware flash)
+  const frame = useMemo(
+    () => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, groups, image),
+    [layers, groups, bounds.left, bounds.right, bounds.up, bounds.down, image],
+  );
+  const optFrame = useMemo(() => optimizeOrder(simplifyFrame(frame)), [frame]);
+  const queries = useMemo(
+    () => compileFrame(frame, plotterBounds(bounds), { arcTol: useArcs ? 0.3 : undefined }),
+    [frame, useArcs, bounds.left, bounds.right, bounds.up, bounds.down],
+  );
+  const previewFrame = useMemo(() => buildProgressPaths(optFrame, orderPct / 100), [optFrame, orderPct]);
+  const draws = queries.filter((q) => q.startsWith('line?')).length;
+  const travels = queries.filter((q) => q.startsWith('goto?')).length;
+
+  const addLayer = () => {
+    const m = getModule(addKey); if (!m) return;
+    const layer: Layer = { id: newLayerId(), moduleKey: addKey, params: defaultsOf(m) };
+    setLayers((ls) => [...ls, layer]); setSelId(layer.id); setRun((r) => ({ ...r, status: 'idle' }));
+  };
+  const removeLayer = (id: string) => setLayers((ls) => {
+    const next = ls.filter((l) => l.id !== id);
+    if (selId === id) setSelId(next[next.length - 1]?.id ?? '');
+    return next;
+  });
+  const move = (id: string, dir: -1 | 1) => setLayers((ls) => {
+    const i = ls.findIndex((l) => l.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= ls.length) return ls;
+    const next = ls.slice(); [next[i], next[j]] = [next[j], next[i]]; return next;
+  });
+  const setParam = (key: string, val: number | string | boolean) =>
+    setLayers((ls) => ls.map((l) => (l.id === sel?.id ? { ...l, params: { ...l.params, [key]: val } } : l)));
+  const resetSel = () => { if (selMod && sel) setLayers((ls) => ls.map((l) => (l.id === sel.id ? { ...l, params: defaultsOf(selMod) } : l))); };
+
+  // ---- group operations ----
+  const createGroup = (layerIds: string[]) => {
+    const gid = newGroupId();
+    const g: LayerGroup = { id: gid, name: 'Group', tx: 0, ty: 0, rotateDeg: 0 };
+    setGroups((gs) => [...gs, g]);
+    setLayers((ls) => ls.map((l) => (layerIds.includes(l.id) ? { ...l, groupId: gid } : l)));
+    setCheckedLayerIds(new Set());
+    setSelId(gid);
+  };
+  const disbandGroup = (gid: string) => {
+    setGroups((gs) => gs.filter((g) => g.id !== gid));
+    setLayers((ls) => ls.map((l) => (l.groupId === gid ? { ...l, groupId: undefined } : l)));
+    if (selId === gid) setSelId('');
+  };
+  const removeFromGroup = (lid: string) =>
+    setLayers((ls) => ls.map((l) => (l.id === lid ? { ...l, groupId: undefined } : l)));
+  const updateGroup = (gid: string, key: keyof Omit<LayerGroup, 'id'>, val: string | number) =>
+    setGroups((gs) => gs.map((g) => (g.id === gid ? { ...g, [key]: val } : g)));
+  const toggleLayerCheck = (id: string) =>
+    setCheckedLayerIds((s) => { const ns = new Set(s); if (ns.has(id)) ns.delete(id); else ns.add(id); return ns; });
+
+  // ---- named documents (save/load/rename/delete + JSON export/import) ----
+  const [docs, setDocs] = useState<StudioDoc[]>(() => loadStudioDocs());
+  const [docName, setDocName] = useState('');
+  const [docModal, setDocModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { saveStudioDocs(docs); }, [docs]);
+
+  const loadLayersFresh = (src: Layer[], srcGroups: LayerGroup[] = []) => {
+    const fresh = src.map((l) => ({ id: newLayerId(), moduleKey: l.moduleKey, params: { ...l.params }, groupId: l.groupId }));
+    // Remap group IDs to match the new layer IDs
+    const idMap = new Map(src.map((l, i) => [l.id, fresh[i].id]));
+    const freshGroups = srcGroups.map((g) => ({ ...g, id: newGroupId() }));
+    const groupIdMap = new Map(srcGroups.map((g, i) => [g.id, freshGroups[i].id]));
+    fresh.forEach((l) => { if (l.groupId) l.groupId = groupIdMap.get(l.groupId) ?? l.groupId; void idMap; });
+    setLayers(fresh); setGroups(freshGroups); setSelId(fresh[0]?.id ?? ''); setRun((r) => ({ ...r, status: 'idle' }));
+  };
+  const saveDoc = (name: string) => {
+    const doc: StudioDoc = {
+      name,
+      layers: layers.map((l) => ({ id: l.id, moduleKey: l.moduleKey, params: { ...l.params }, groupId: l.groupId })),
+      groups: groups.map((g) => ({ ...g })),
+    };
+    setDocs((ds) => [...ds.filter((d) => d.name !== name), doc]); setDocName(name);
+    pushLog('ok', `[studio] saved "${name}"`);
+  };
+  const loadDoc = (name: string) => { const d = docs.find((x) => x.name === name); if (d) { loadLayersFresh(d.layers, d.groups); pushLog('ok', `[studio] loaded "${name}"`); } };
+  const renameDoc = (oldName: string, newName: string) => { if (newName.trim()) setDocs((ds) => ds.map((d) => (d.name === oldName ? { ...d, name: newName.trim() } : d))); setDocName(newName.trim()); };
+  const deleteDoc = (name: string) => setDocs((ds) => ds.filter((d) => d.name !== name));
+  const exportDoc = () => {
+    const blob = new Blob([serializeDoc(docName || 'design', layers, groups)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.json`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const exportGcodeFile = () => {
+    const text = exportGcode(optFrame);
+    const blob = new Blob([text], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.gcode`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const importDoc = async (file: File) => {
+    try { const d = parseDocFile(await file.text()); loadLayersFresh(d.layers, d.groups); setDocName(d.name); pushLog('ok', `[studio] imported "${d.name}" (${d.layers.length} layers, ${d.groups.length} groups)`); }
+    catch (e) { pushLog('err', `[studio] import: ${(e as Error).message}`); }
+  };
+
+  const start = useCallback(async () => {
+    abortRef.current = false; runCancelRef.current = false;
+    setRun({ status: 'running', sent: 0, total: queries.length, errors: 0 });
+    const layerNames = layers.map((l) => getModule(l.moduleKey)?.label ?? l.moduleKey).join(', ');
+    const arcCount = queries.filter((q) => q.startsWith('arc?')).length;
+    pushLog('cmd', `> studio: [${layerNames}] → ${queries.length} ops (${draws} lines, ${travels} travels${arcCount ? `, ${arcCount} arcs` : ''})`);
+    const { sent, errors, stopped } = await streamQueries(
+      queries.map((q) => ({ query: q })),
+      { sendRaw, sendBatch, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
+        onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
+    );
+    pushLog(stopped ? 'warn' : (errors ? 'warn' : 'ok'),
+      stopped ? `[studio] halted — ${sent}/${queries.length} sent`
+              : `[studio] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
+    setRun((r) => ({ ...r, status: 'done' }));
+  }, [queries, layers, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
+
+  const abort = useCallback(() => { abortRef.current = true; }, []);
+  const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
+  const busy = run.status === 'running';
+
+  return (
+    <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6 sm:py-6 lg:h-full">
+      <div className="grid grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1fr)_400px] lg:[grid-template-rows:minmax(0,1fr)]">
+
+        {/* ====== LEFT: live preview canvas + run/scrub/machine controls ====== */}
+        <div className="flex flex-col gap-4 lg:min-h-0">
+          <div className="flex flex-col rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 lg:flex-1 lg:min-h-0">
+            <div className="mb-3 flex items-center justify-between shrink-0">
+              <h2 className="text-[13px] font-bold tracking-tight text-ink-100">Preview</h2>
+              <span className="font-mono text-[11px] text-ink-500">{draws} draws · {travels} travels · {queries.length} ops</span>
+            </div>
+            <div className="aspect-[4/3] rounded-lg border border-ink-800 bg-ink-950 overflow-hidden lg:aspect-auto lg:flex-1 lg:min-h-0">
+              <FramePreview bounds={bounds} frame={previewFrame} contain />
+            </div>
+            <div className="mt-3 flex items-center gap-3 shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 shrink-0">Order</span>
+              <input type="range" min={0} max={100} step={1} value={orderPct} onChange={(e) => setOrderPct(Number(e.target.value))}
+                className="flex-1" title="Scrub the drawing order" />
+              <span className="w-10 text-right font-mono text-[11px] text-ink-500">{orderPct}%</span>
+            </div>
+          </div>
+
+          {/* run + machine controls */}
+          <div className="shrink-0 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {!busy
+                ? <Btn variant="go" onClick={start} disabled={draws === 0}>▶ Run</Btn>
+                : <Btn variant="danger" onClick={abort}>Abort feed</Btn>}
+              <Btn variant="default" onClick={resetSel} disabled={busy || !selMod}>⟲ Reset layer</Btn>
+              <button onClick={() => setUseArcs((v) => !v)} disabled={busy}
+                title="Collapse circular runs into single arc jobs (needs firmware with /api/arc — flash first)"
+                className={`rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 ${useArcs ? 'bg-cyanx/15 text-cyanx border border-cyanx/40' : 'text-ink-500 hover:text-ink-300 border border-ink-700'}`}>
+                ◜ Arcs {useArcs ? 'on' : 'off'}
+              </button>
+              <div className="ml-auto flex items-center gap-1">
+                <PauseButton paused={!!status?.paused} onPause={P.pause} onResume={P.resume} />
+                <StopButton onClick={P.stop} moving={moving} />
+                <ClearButton onClick={P.clearQueue} pending={status?.pending ?? 0} />
+              </div>
+            </div>
+            {run.status !== 'idle' && run.total > 0 && (
+              <div className="mt-3">
+                <div className="flex justify-between text-[11px] text-ink-500 mb-1">
+                  <span>{busy ? 'Streaming…' : 'Done'}</span>
+                  <span>{run.sent} / {run.total}</span>
+                </div>
+                <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
+                  <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ====== RIGHT: controls (scroll) ====== */}
+        <div className="flex flex-col lg:min-h-0">
+          <div className="rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 flex flex-col gap-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+
+            {/* Documents */}
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Design</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={docName} onChange={(e) => setDocName(e.target.value)} disabled={busy}
+                  className="flex-1 min-w-[120px] rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+                  <option value="">— saved designs —</option>
+                  {docs.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+                </select>
+                <Btn variant="default" onClick={() => docName && loadDoc(docName)} disabled={busy || !docName}>Load</Btn>
+                <Btn variant="default" onClick={() => docName && setDocModal({ mode: 'rename', initial: docName, target: docName })} disabled={busy || !docName}>✎</Btn>
+                <Btn variant="default" onClick={() => docName && deleteDoc(docName)} disabled={busy || !docName}>✕</Btn>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Btn variant="default" onClick={() => setDocModal({ mode: 'save', initial: docName })} disabled={busy || layers.length === 0}>💾 Save as…</Btn>
+                <Btn variant="default" onClick={exportDoc} disabled={layers.length === 0}>⤓ Export</Btn>
+                <input ref={importRef} type="file" accept=".json,application/json" className="hidden"
+                  onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) importDoc(fl); }} />
+                <Btn variant="default" onClick={() => importRef.current?.click()} disabled={busy}>⤒ Import</Btn>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Btn variant="go" onClick={start} disabled={draws === 0 || busy}>▶ Plot now</Btn>
+                <Btn variant="default" onClick={exportGcodeFile} disabled={draws === 0}>⤓ Export .gcode</Btn>
+              </div>
+            </div>
+
+            {/* Source image — only when an Image module is in the stack */}
+            {needsImage && (
+              <div className="flex items-center gap-2 border-t border-ink-800 pt-4">
+                <input ref={imgRef} type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const fl = e.target.files?.[0]; e.target.value = '';
+                    if (!fl) return;
+                    try { setImage(await loadImageToGray(fl)); setImageName(fl.name); pushLog('ok', `[studio] image ${fl.name}`); }
+                    catch (err) { pushLog('err', `[studio] image: ${(err as Error).message}`); }
+                  }} />
+                <Btn variant="primary" onClick={() => imgRef.current?.click()} disabled={busy}>🖼 Source image…</Btn>
+                {imageName ? <span className="font-mono text-[11px] text-ink-500 truncate max-w-[160px]">{imageName} {image && `(${image.width}×${image.height})`}</span>
+                           : <span className="text-[11px] text-amber-400">load an image</span>}
+              </div>
+            )}
+
+            {/* Sequence (layer stack) — evaluated bottom→top; a modifier sees the layers below it. */}
+            <div className="border-t border-ink-800 pt-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Sequence</p>
+              <div className="space-y-1">
+                {(() => {
+                  const seenGroups = new Set<string>();
+                  return layers.flatMap((l, i) => {
+                    const m = getModule(l.moduleKey);
+                    const active = l.id === selId;
+                    const grp = l.groupId ? groups.find((g) => g.id === l.groupId) : undefined;
+                    const rows: React.ReactNode[] = [];
+
+                    // Insert group header on first encounter
+                    if (grp && !seenGroups.has(grp.id)) {
+                      seenGroups.add(grp.id);
+                      const grpActive = selId === grp.id;
+                      rows.push(
+                        <div key={`grp-${grp.id}`} className={`rounded-t-md border-x border-t px-2 py-1 ${grpActive ? 'border-violet-500/40 bg-violet-500/10' : 'border-ink-700 bg-ink-800'}`}>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => setSelId(grp.id)} className="flex-1 flex items-center gap-1.5 text-left">
+                              <span className="text-[10px] text-ink-500">▼</span>
+                              <input
+                                type="text" value={grp.name}
+                                onClick={(e) => { e.stopPropagation(); setSelId(grp.id); }}
+                                onChange={(e) => updateGroup(grp.id, 'name', e.target.value)}
+                                className="flex-1 bg-transparent text-[12px] font-semibold text-violet-300 outline-none min-w-0 focus:text-violet-200" />
+                            </button>
+                            <button onClick={() => disbandGroup(grp.id)} disabled={busy}
+                              className="text-ink-500 hover:text-stop disabled:opacity-30 text-[11px]" title="Disband group">✕</button>
+                          </div>
+                          {/* Inline transform controls */}
+                          <div className="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap pb-1">
+                            {(['tx','ty','rotateDeg'] as const).map((k) => (
+                              <label key={k} className="flex items-center gap-1">
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-ink-500 w-6 text-right">
+                                  {k === 'tx' ? 'X' : k === 'ty' ? 'Y' : 'R°'}
+                                </span>
+                                <input type="number" step={k === 'rotateDeg' ? 1 : 0.5}
+                                  value={grp[k]}
+                                  onChange={(e) => updateGroup(grp.id, k, parseFloat(e.target.value) || 0)}
+                                  className="w-16 rounded bg-ink-950 border border-ink-700 px-1.5 py-0.5 text-[11px] text-ink-100 font-mono focus:outline-none focus:border-violet-500/50" />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Is this the last layer in its group?
+                    const nextInGroup = grp && layers[i + 1]?.groupId === grp.id;
+                    const rowBase = grp
+                      ? `flex items-center gap-1.5 border-x px-2 py-1 pl-5 bg-ink-850 ${nextInGroup ? 'border-ink-700' : 'rounded-b-md border-b border-ink-700'}`
+                      : `flex items-center gap-1.5 rounded-md border px-2 py-1 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`;
+
+                    rows.push(
+                      <div key={l.id} className={rowBase}>
+                        {!grp && (
+                          <input type="checkbox" checked={checkedLayerIds.has(l.id)}
+                            onChange={() => toggleLayerCheck(l.id)}
+                            className="accent-cyanx shrink-0" title="Select for grouping" />
+                        )}
+                        <button onClick={() => { setSelId(l.id); setCheckedLayerIds(new Set()); }}
+                          className={`flex-1 text-left text-[12px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                          {m?.label ?? l.moduleKey}
+                          {m?.kind === 'modify' && <span className="ml-1 text-[10px] text-ink-500">modify</span>}
+                        </button>
+                        <button onClick={() => move(l.id, -1)} disabled={i === 0 || busy}
+                          className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
+                        <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy}
+                          className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
+                        {grp ? (
+                          <button onClick={() => removeFromGroup(l.id)} disabled={busy}
+                            className="text-ink-500 hover:text-amber-400 disabled:opacity-30 text-[11px]" title="Remove from group">⊗</button>
+                        ) : (
+                          <button onClick={() => removeLayer(l.id)} disabled={busy}
+                            className="text-ink-500 hover:text-stop disabled:opacity-30 text-[12px]" title="Remove">✕</button>
+                        )}
+                      </div>
+                    );
+
+                    return rows;
+                  });
+                })()}
+                {layers.length === 0 && <p className="text-[11px] text-ink-600">No layers — add one below.</p>}
+              </div>
+
+              {/* Group-selected button + add picker */}
+              <div className="mt-2 flex flex-col gap-2">
+                {checkedLayerIds.size >= 2 && (
+                  <Btn variant="go" onClick={() => createGroup([...checkedLayerIds])}>
+                    Group {checkedLayerIds.size} selected
+                  </Btn>
+                )}
+                <div className="flex items-center gap-2">
+                  <select value={addKey} onChange={(e) => setAddKey(e.target.value)} disabled={busy}
+                    className="flex-1 rounded bg-ink-900 border border-ink-700 px-2 py-1.5 text-[12px] text-ink-200 focus:outline-none focus:border-cyanx/50 disabled:opacity-50">
+                    {allMods.map((m) => <option key={m.key} value={m.key}>{m.label}{m.kind === 'modify' ? ' · modify' : ''}</option>)}
+                  </select>
+                  <Btn variant="default" onClick={addLayer} disabled={busy}>+ Add</Btn>
+                </div>
+              </div>
+            </div>
+
+            {/* Selected layer's parameters — hidden when a group header is selected */}
+            {sel && selMod && !selGroup && (
+              <div className="border-t border-ink-800 pt-4">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">{selMod.label}</p>
+                {selMod.description && <p className="mb-3 text-[11px] leading-relaxed text-ink-500">{selMod.description}</p>}
+                <ParamPanel sections={selMod.sections} values={sel.params} onChange={setParam} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {docModal && (
+        <TextPromptModal
+          title={docModal.mode === 'save' ? 'Save current design as…' : 'Rename design'}
+          label="Design name" initial={docModal.initial}
+          confirmText={docModal.mode === 'save' ? 'Save' : 'Rename'}
+          onCancel={() => setDocModal(null)}
+          onConfirm={(name) => {
+            if (name.trim()) { if (docModal.mode === 'save') saveDoc(name.trim()); else if (docModal.target) renameDoc(docModal.target, name); }
+            setDocModal(null);
+          }} />
+      )}
+    </div>
+  );
+}
+
+function GcodeTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
+  sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
+  getPending: () => Promise<number | null>;
+  runCancelRef: React.MutableRefObject<boolean>;
+  pushLog: (kind: LogEntry['kind'], text: string) => void;
+  bounds: PlotterBounds;
+}) {
+  const [text, setText] = useState('');
+  const [penMode, setPenMode] = useState<PenMode>('auto');
+  const [placeMode, setPlaceMode] = useState<PlaceMode>('fit');
+  const [fileName, setFileName] = useState('');
+  const [decoding, setDecoding] = useState(false);
+  const [decodeErr, setDecodeErr] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef(false);
+  const [run, setRun] = useState<{ status: 'idle'|'running'|'done'; sent: number; errors: number; total: number }>({
+    status: 'idle', sent: 0, errors: 0, total: 0,
+  });
+
+  const result = useMemo<GcodeResult | null>(() => {
+    if (!text.trim()) return null;
+    try {
+      return digestGcode(text, {
+        penMode, placeMode,
+        bounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down },
+      });
+    } catch { return null; }
+  }, [text, penMode, placeMode, bounds.left, bounds.right, bounds.up, bounds.down]);
+
+  const loadFile = useCallback(async (file: File) => {
+    setDecodeErr(''); setFileName(file.name);
+    const lower = file.name.toLowerCase();
+    const isBinary = lower.endsWith('.bgcode') || lower.endsWith('.bgc');
+    try {
+      if (isBinary) {
+        setDecoding(true);
+        const txt = await decodeBgcode(await file.arrayBuffer());
+        setText(txt);
+        pushLog('ok', `[gcode] decoded ${file.name} → ${txt.length.toLocaleString()} chars`);
+      } else {
+        setText(await file.text());
+        pushLog('ok', `[gcode] loaded ${file.name}`);
+      }
+    } catch (e) {
+      setDecodeErr((e as Error).message);
+      pushLog('err', `[gcode] ${file.name}: ${(e as Error).message}`);
+    } finally {
+      setDecoding(false);
+      setRun((r) => ({ ...r, status: 'idle' }));
+    }
+  }, [pushLog]);
+
+  const start = useCallback(async () => {
+    if (!result || !result.queries.length) return;
+    abortRef.current = false;
+    runCancelRef.current = false;
+    setRun({ status: 'running', sent: 0, errors: 0, total: result.queries.length });
+    pushLog('cmd', `> gcode: queuing ${result.queries.length} ops (${result.draws} draws, ${result.travels} travels)`);
+    const cancelled = () => abortRef.current || runCancelRef.current;
+    const { sent, errors, stopped } = await streamQueries(
+      result.queries.map((q) => ({ query: q })),
+      { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'gcode',
+        onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
+    );
+    pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
+            stopped
+              ? `[gcode] halted by STOP/CLEAR — ${sent}/${result.queries.length} sent`
+              : `[gcode] done — ${sent - errors} queued` + (errors ? `, ${errors} rejected` : ''));
+    setRun((r) => ({ ...r, status: 'done' }));
+  }, [result, sendRaw, getPending, runCancelRef, pushLog]);
+
+  const abort = useCallback(() => { abortRef.current = true; }, []);
+  const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
+
+  return (
+    <Card title="G-code" icon="⌀" accent="#7c3aed" defaultCollapsed={false}>
+      {/* upload row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input ref={fileRef} type="file" accept=".gcode,.gco,.g,.nc,.bgcode,.bgc" className="hidden"
+          onChange={(e) => { const fl = e.target.files?.[0]; if (fl) loadFile(fl); e.target.value = ''; }} />
+        <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={run.status === 'running' || decoding}>
+          ⬆ Upload .gcode / .bgcode
+        </Btn>
+        {decoding && <span className="text-[12px] text-amber-400">decoding…</span>}
+        {fileName && !decoding && <span className="font-mono text-[11px] text-ink-500 truncate max-w-[200px]">{fileName}</span>}
+      </div>
+
+      {decodeErr && <div className="mt-2 font-mono text-[11px] text-red-400">{decodeErr}</div>}
+
+      <textarea
+        className="mt-3 w-full h-44 resize-y rounded bg-ink-900 border border-ink-700 p-2 font-mono text-[12px] text-ink-300 placeholder-ink-600 focus:outline-none focus:border-cyan-600"
+        placeholder={`; paste G-code here, or upload a file above\nG21\nG90\nG0 X10 Y10\nG1 Z0\nG1 X40 Y10\nG1 X40 Y40\nG0 Z2`}
+        value={text}
+        onChange={(e) => { setText(e.target.value); setRun((r) => ({ ...r, status: 'idle' })); }}
+        spellCheck={false}
+        disabled={run.status === 'running'}
+      />
+
+      {/* options */}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <GcodeSelect label="Pen control" value={penMode} opts={PEN_MODES} onChange={setPenMode} disabled={run.status === 'running'} />
+        <GcodeSelect label="Placement" value={placeMode} opts={PLACE_MODES} onChange={setPlaceMode} disabled={run.status === 'running'} />
+      </div>
+
+      {/* digest summary */}
+      {result && (
+        <div className="mt-3 rounded border border-ink-800 bg-ink-850 p-2.5 text-[12px] space-y-1">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-ink-300">
+            <span><span className="text-ink-500">draws</span> <span className="font-semibold">{result.draws}</span></span>
+            <span><span className="text-ink-500">travels</span> <span className="font-semibold">{result.travels}</span></span>
+            <span><span className="text-ink-500">pen</span> <span className="font-mono">{penMode === 'auto' ? `auto → ${result.resolvedPen}` : result.resolvedPen}</span></span>
+            {placeMode === 'fit' && <span><span className="text-ink-500">scale</span> <span className="font-mono">{(result.scale * 100).toFixed(0)}%</span></span>}
+          </div>
+          {result.bbox && (
+            <div className="font-mono text-[11px] text-ink-500">
+              source bbox: ({result.bbox.x0.toFixed(1)}, {result.bbox.y0.toFixed(1)}) → ({result.bbox.x1.toFixed(1)}, {result.bbox.y1.toFixed(1)}) mm
+            </div>
+          )}
+          {result.warnings.map((w, i) => (
+            <div key={i} className="text-[11px] text-amber-400">⚠ {w}</div>
+          ))}
+        </div>
+      )}
+
+      {/* action row */}
+      <div className="mt-3 flex items-center gap-3">
+        {run.status !== 'running' ? (
+          <Btn variant="go" onClick={start} disabled={!result || result.queries.length === 0}>
+            Run {result ? result.draws + result.travels : 0} move{result && (result.draws + result.travels) !== 1 ? 's' : ''} →
+          </Btn>
+        ) : (
+          <Btn variant="danger" onClick={abort}>Abort</Btn>
+        )}
+        {text && run.status !== 'running' && (
+          <button className="ml-auto text-[11px] text-ink-600 hover:text-ink-400"
+            onClick={() => { setText(''); setFileName(''); setDecodeErr(''); setRun({ status: 'idle', sent: 0, errors: 0, total: 0 }); }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* progress */}
+      {run.status !== 'idle' && run.total > 0 && (
+        <div className="mt-3">
+          <div className="flex justify-between text-[11px] text-ink-500 mb-1">
+            <span>{run.status === 'running' ? 'Streaming…' : 'Done'}</span>
+            <span>{run.sent} / {run.total}</span>
+          </div>
+          <div className="h-1.5 rounded bg-ink-800 overflow-hidden">
+            <div className={`h-full rounded transition-all ${run.errors > 0 ? 'bg-amber-500' : 'bg-cyan-500'}`}
+              style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] leading-relaxed text-ink-500">
+        Translates G-code to the plotter's goto/line/pen moves (Z/E/F are ignored — only X/Y + pen).
+        Binary <span className="font-mono">.bgcode</span> is decoded in the browser. Coordinates are
+        placed into the active work area; pen up/down is read per the selected convention.
+      </p>
+    </Card>
+  );
+}
+
+// ================================================================
 
 type Tab = 'area' | 'draw' | 'ai';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
+// ---- Grid tiling state -------------------------------------------------------
+
+interface GridState {
+  cols: number;
+  rows: number;
+  paddingMm: number;
+  selCol: number;
+  selRow: number;
+  active: boolean;
+  fullBounds: PlotterBounds | null;
+}
+
+const GRID_KEY = 'plotterGrid';
+const GRID_DEFAULTS: GridState = { cols: 2, rows: 2, paddingMm: 5, selCol: 0, selRow: 0, active: false, fullBounds: null };
+
+function loadGrid(): GridState {
+  try {
+    const raw = localStorage.getItem(GRID_KEY);
+    if (raw) { const g = JSON.parse(raw); return { ...GRID_DEFAULTS, ...g }; }
+  } catch { /* ignore */ }
+  return { ...GRID_DEFAULTS };
+}
+
+function saveGrid(g: GridState): void {
+  try { localStorage.setItem(GRID_KEY, JSON.stringify(g)); } catch { /* ignore */ }
+}
+
+/** Returns the cell centre (cx, cy in global coords) and cell dimensions for grid cell (col, row). */
+function cellGeom(g: GridState, fb: PlotterBounds, col: number, row: number) {
+  const tw = fb.left + fb.right;
+  const th = fb.up   + fb.down;
+  const cellW = (tw - (g.cols - 1) * g.paddingMm) / g.cols;
+  const cellH = (th - (g.rows - 1) * g.paddingMm) / g.rows;
+  const lx = -fb.left + col * (cellW + g.paddingMm);
+  const ty = -fb.up   + row * (cellH + g.paddingMm);
+  return { cellW, cellH, cx: lx + cellW / 2, cy: ty + cellH / 2 };
+}
+
+// ------------------------------------------------------------------------------
+
 export default function App() {
   const P = usePlotter();
-  const { pen, moving, connected, motion, bounds, log, status, jobs } = P;
+  const { pen, moving, connected, motion, bounds, log, status, jobs, papers, matrix, matrices } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
   const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [lineF, setLine]    = useState({ x0: 0, y0: 0, x1: 100, y1: 0, cycles: 1 });
-  const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1 });
+  const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
   const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
+  const [view, setView]     = useState<'console' | 'studio'>('console');
+  const [showHwInfo, setShowHwInfo] = useState(false);
+  const [paperModal, setPaperModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
+  const [matrixModal, setMatrixModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
+
+  // Grid tiling
+  const [grid, setGridState] = useState<GridState>(() => loadGrid());
+  useEffect(() => { saveGrid(grid); }, [grid]);
+
+  const applyGridCell = useCallback((col: number, row: number) => {
+    const fb = grid.active ? grid.fullBounds! : bounds;   // full work area bounds
+    const { cellW, cellH, cx, cy } = cellGeom(grid, fb, col, row);
+    const cellBounds: PlotterBounds = { left: cellW / 2, right: cellW / 2, up: cellH / 2, down: cellH / 2, shape: 'rect' };
+    const newGrid: GridState = { ...grid, selCol: col, selRow: row, active: true, fullBounds: grid.active ? grid.fullBounds : bounds };
+    setGridState(newGrid);
+    P.setBounds(cellBounds);
+    P.commitBounds(cellBounds);
+    if (P.ip) apiGet(P.ip, matrixToQuery({ a: 1, b: 0, c: 0, d: 1, tx: cx, ty: cy })).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grid, bounds, P.ip]);
+
+  const clearGridCell = useCallback(() => {
+    const fb = grid.fullBounds ?? bounds;
+    setGridState((g) => ({ ...g, active: false, fullBounds: null }));
+    P.setBounds(fb);
+    P.commitBounds(fb);
+    if (P.ip) apiGet(P.ip, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grid.fullBounds, bounds, P.ip]);
 
   const fg = f(gotoF, setGoto);
   const fc = f(circle, setCircle);
@@ -1022,7 +1920,7 @@ export default function App() {
   const fca = f(calib, setCalib);
 
   return (
-    <div className="h-screen flex flex-col bg-ink-950 text-ink-300 overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-ink-950 text-ink-300 lg:h-screen lg:overflow-hidden">
       {/* top bar */}
       <header className="sticky top-0 z-20 border-b border-ink-800 bg-ink-950/90 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3 sm:px-6 flex-wrap">
@@ -1044,8 +1942,18 @@ export default function App() {
                 <h1 className="text-[15px] font-bold tracking-tight text-ink-100">Polar Plotter</h1>
                 <span className="hidden sm:inline-flex items-center rounded-md border border-cyanx/30 bg-cyanx/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-cyanx tracking-wide">{FW_VERSION}</span>
               </div>
-              <p className="hidden font-mono text-[11px] text-ink-500 sm:block">V-plotter console · Pico 2 W · TMC5072</p>
+              <button onClick={() => setShowHwInfo(true)}
+                className="hidden font-mono text-[11px] text-ink-500 hover:text-cyanx transition-colors sm:block">
+                V-plotter console · Pico 2 W · TMC5072
+              </button>
             </div>
+          </div>
+          {/* product switcher: Console (v1.2 panels) vs Studio (full-page design app) */}
+          <div className="flex rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
+            {([['console', 'Console'], ['studio', 'Studio']] as ['console' | 'studio', string][]).map(([id, lbl]) => (
+              <button key={id} onClick={() => setView(id)}
+                className={`rounded-lg px-4 py-1.5 text-[12px] font-semibold transition-colors ${view === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
+            ))}
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {status?.estop && (
@@ -1061,18 +1969,17 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
-        <div className="h-full grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
+      <main className="flex-1 overflow-y-auto lg:min-h-0 lg:overflow-hidden">
+        {view === 'studio' ? (
+          <StudioPage P={P} status={status} moving={moving} bounds={bounds} />
+        ) : (
+        <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6 lg:h-full">
+        <div className="grid grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
 
           {/* ====== LEFT: machine state ====== */}
-          <div className="space-y-4 overflow-y-auto">
-            <PaperPresets bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
+          <div className="space-y-4 lg:overflow-y-auto">
             <Card title="Position" icon="◎" accent="#0284c7" defaultCollapsed={false} right={
-              <div className="flex items-center gap-3 font-mono text-[12px]">
-                <span className={moving ? 'text-warn' : 'text-ink-500'}>{moving ? '● MOVING' : '○ idle'}</span>
-                <span className={pen.down ? 'text-go' : 'text-ink-500'}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
-              </div>
+              <span className={`font-mono text-[12px] ${pen.down ? 'text-go' : 'text-ink-500'}`}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
             }>
               <PlotterCanvas bounds={bounds} pen={pen} moving={moving} />
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1081,23 +1988,62 @@ export default function App() {
                 <Readout label="Pending" value={status?.pending ?? 0} unit="job" />
                 <Readout label="Done" value={status?.done ?? 0} unit="" />
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
+              {(Math.abs(matrix.tx) > 0.5 || Math.abs(matrix.ty) > 0.5) && (
+                <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/40 px-2.5 py-1.5 text-[11px] text-amber-200">
+                  Affine offset active (tx={matrix.tx.toFixed(1)}, ty={matrix.ty.toFixed(1)}) — position is cell-local.
+                  Click <button type="button" className="underline hover:text-amber-100" onClick={() => P.resetMatrix()}>↺ Identity</button> or Home to reset.
+                </div>
+              )}
+              {/* Current job — its exact JSON while running (console + Script tab), else idle. */}
+              <div className="mt-3">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Current job</div>
+                <div className={`rounded-md border border-ink-800 bg-ink-950 px-2.5 py-1.5 font-mono text-[11px] break-all ${P.currentJob ? 'text-cyanx' : 'text-ink-600'}`}>
+                  {P.currentJob || '— idle —'}
+                </div>
+              </div>
+
+              {/* Driver health — inline, no extra card wrapper */}
+              <div className="mt-3">
+                <DriverBanner status={status} onClearFault={P.clearFault} />
+              </div>
+
+              {/* Move to point */}
+              <div className="mt-3">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Move to point</div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
+                  <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
+                  <Btn variant="primary" className="col-span-2 sm:col-span-1"
+                    onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
+                </div>
+                <div className="mt-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
+                  <JogPad onJog={(dx, dy) => {
+                    const nx = pen.x + dx, ny = pen.y + dy;
+                    setGoto({ x: nx, y: ny });
+                    P.enqueue({ type: 'goto', x: nx, y: ny });
+                  }} />
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
                 <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
                 <Btn variant={pen.down ? 'default' : 'go'} onClick={() => P.enqueue({ type: 'pen', pos: 'up' })}>Pen Up</Btn>
                 <Btn variant={pen.down ? 'go' : 'default'} onClick={() => P.enqueue({ type: 'pen', pos: 'down' })}>Pen Down</Btn>
+                {/* Paper type selector — right-aligned; manage papers in the Calibration tab. */}
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper</span>
+                  <select
+                    value={papers.find((p) => p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down)?.name ?? ''}
+                    onChange={(e) => { const p = papers.find((x) => x.name === e.target.value); if (p) P.applyPaper(p); }}
+                    className="rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50">
+                    <option value="" disabled hidden>Custom…</option>
+                    {papers.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
               </div>
             </Card>
-
-            <Card title="Driver health" icon="❤" accent="#059669">
-              <DriverBanner status={status} onClearFault={P.clearFault} />
-              <p className="mt-3 text-[12px] leading-relaxed text-ink-500">
-                The MCP halts the running job and pauses the script on a real TMC5072 fault
-                (over-temp, coil short). Fix the cause, then <span className="text-ink-300">Clear</span> to resume.
-              </p>
-            </Card>
-
-            <ChipInfoCard status={status} />
 
           </div>
 
@@ -1108,7 +2054,7 @@ export default function App() {
                so the Log can flex-1 to absorb any leftover height when the method
                cards are short, while keeping a usable min height and scrolling
                the whole region when content overflows. */}
-          <div className="flex flex-col gap-4 h-full min-h-0">
+          <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
             {/* Tab bar */}
             <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
               {([['area','Calibration'],['draw','Draw'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
@@ -1118,7 +2064,7 @@ export default function App() {
             </div>
 
             {/* Methods + Log scroll region (flows top→bottom) */}
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+            <div className="flex flex-col gap-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
             {/* Tab panels */}
             <div className="space-y-4">
             {/* ---- Draw tab ---- */}
@@ -1182,16 +2128,17 @@ export default function App() {
                     <FieldInline label="Harmonics" value={wobbly.harmonics} min={1} max={8} step={1}
                       onChange={fw('harmonics') as (v: number) => void} />
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <FieldInline label="Seed" value={wobbly.seed} min={0} max={99999} step={1}
                       onChange={fw('seed') as (v: number) => void} />
                     <FieldInline label="Cycles" value={wobbly.cycles} min={1}
                       onChange={fw('cycles') as (v: number) => void} />
-                    <div className="flex items-end">
-                      <p className="text-[11px] leading-relaxed text-ink-500">
-                        0 = circle · 1 = max wobble<br/>harmonics = shape complexity
-                      </p>
-                    </div>
+                    <FieldInline label="Angle" unit="°" value={wobbly.angle} onChange={fw('angle') as (v: number) => void} />
+                    <FieldInline label="Spacing" unit="mm" value={wobbly.spacing} min={0.5} step={0.5} onChange={fw('spacing') as (v: number) => void} />
+                  </div>
+                  <div className="mt-3 flex gap-3">
+                    <div className="flex-1"><FillPicker value={wobbly.fillMode} onChange={(v) => setWobbly({ ...wobbly, fillMode: v })} /></div>
+                    <div className="w-28"><OutlineToggle value={wobbly.outline} onChange={(v) => setWobbly({ ...wobbly, outline: v })} /></div>
                   </div>
                 </Card>
 
@@ -1243,26 +2190,9 @@ export default function App() {
               </>
             )}
 
-            {/* ---- Work area tab (work area + move + calibration) ---- */}
+            {/* ---- Work area tab (work area + calibration) ---- */}
             {tab === 'area' && (
               <>
-                <Card title="Move to point" icon="↗" accent="#0284c7" defaultCollapsed={false}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                    <FieldInline label="X" unit="mm" value={gotoF.x} onChange={fg('x') as (v: number) => void} />
-                    <FieldInline label="Y" unit="mm" value={gotoF.y} onChange={fg('y') as (v: number) => void} />
-                    <Btn variant="primary" className="col-span-2 sm:col-span-1"
-                      onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
-                  </div>
-                  <div className="mt-4">
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
-                    <JogPad onJog={(dx, dy) => {
-                      const nx = pen.x + dx, ny = pen.y + dy;
-                      setGoto({ x: nx, y: ny });
-                      P.enqueue({ type: 'goto', x: nx, y: ny });
-                    }} />
-                  </div>
-                </Card>
-
                 <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
                   <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
                     Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
@@ -1270,8 +2200,97 @@ export default function App() {
                   </p>
                   <BoundsControl bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
                   <div className="mt-4 flex gap-2">
-                    <Btn variant="ghost" onClick={() => { P.setBounds(DEFAULTS.bounds); P.commitBounds(DEFAULTS.bounds); }}>Reset to default</Btn>
+                    <Btn variant="go" onClick={() => setPaperModal({ mode: 'save', initial: '' })}>💾 Save as paper…</Btn>
                   </div>
+
+                  {/* Saved papers — apply / rename / delete. New ones come from "Save as paper". */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper types</p>
+                  <div className="space-y-1.5">
+                    {papers.map((p) => {
+                      const active = p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down;
+                      return (
+                        <div key={p.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                          <button onClick={() => P.applyPaper(p)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                            {p.name} <span className="font-mono text-[11px] text-ink-500">{p.left + p.right}×{p.up + p.down} mm</span>
+                          </button>
+                          <button onClick={() => setPaperModal({ mode: 'rename', initial: p.name, target: p.name })}
+                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
+                          <button onClick={() => P.deletePaper(p.name)}
+                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
+                        </div>
+                      );
+                    })}
+                    {papers.length === 0 && <p className="text-[11px] text-ink-600">No papers saved yet.</p>}
+                  </div>
+
+                  {/* ---- Grid tiling ---- */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Grid tiling</p>
+                  <p className="mb-3 text-[11px] leading-relaxed text-ink-500">
+                    Subdivide the work area into cells. Selecting a cell remaps <span className="font-mono text-ink-300">(0,0)</span> to its
+                    centre and clips all jobs to its bounds.
+                  </p>
+
+                  {/* Active cell banner */}
+                  {grid.active && (
+                    <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                      <span className="flex-1 text-[11px] font-semibold text-amber-300">
+                        Cell col {grid.selCol + 1} · row {grid.selRow + 1} active
+                        {grid.fullBounds && <span className="ml-2 font-normal text-amber-500/70">
+                          ({Math.round(grid.fullBounds.left + grid.fullBounds.right)}×{Math.round(grid.fullBounds.up + grid.fullBounds.down)} mm full area)
+                        </span>}
+                      </span>
+                      <Btn onClick={clearGridCell}>↩ Full area</Btn>
+                    </div>
+                  )}
+
+                  {/* Cols / Rows / Padding */}
+                  <div className="mb-3 grid grid-cols-3 gap-3">
+                    <FieldInline label="Cols" value={grid.cols} min={1} max={12} step={1}
+                      onChange={(v) => setGridState((g) => ({ ...g, cols: Math.max(1, Math.round(v as number)) }))} />
+                    <FieldInline label="Rows" value={grid.rows} min={1} max={12} step={1}
+                      onChange={(v) => setGridState((g) => ({ ...g, rows: Math.max(1, Math.round(v as number)) }))} />
+                    <FieldInline label="Gap" unit="mm" value={grid.paddingMm} min={0} max={50} step={0.5}
+                      onChange={(v) => setGridState((g) => ({ ...g, paddingMm: Math.max(0, v as number) }))} />
+                  </div>
+
+                  {/* Visual cell picker */}
+                  {(() => {
+                    const fb = grid.active ? grid.fullBounds! : bounds;
+                    const tw = fb.left + fb.right;
+                    const th = fb.up + fb.down;
+                    // Show cell dimensions in the picker tooltip
+                    const cellW = Math.round((tw - (grid.cols - 1) * grid.paddingMm) / grid.cols);
+                    const cellH = Math.round((th - (grid.rows - 1) * grid.paddingMm) / grid.rows);
+                    return (
+                      <div>
+                        <div className="inline-grid gap-1 w-full"
+                          style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}>
+                          {Array.from({ length: grid.rows * grid.cols }).map((_, i) => {
+                            const col = i % grid.cols;
+                            const row = Math.floor(i / grid.cols);
+                            const isActive = grid.active && grid.selCol === col && grid.selRow === row;
+                            return (
+                              <button key={`${col}-${row}`}
+                                onClick={() => applyGridCell(col, row)}
+                                title={`Col ${col + 1}, Row ${row + 1} · ${cellW}×${cellH} mm`}
+                                className={`h-9 rounded border text-[10px] font-mono transition-colors ${
+                                  isActive
+                                    ? 'border-cyanx bg-cyanx/20 text-cyanx font-bold'
+                                    : 'border-ink-700 bg-ink-900 text-ink-500 hover:border-cyanx/50 hover:bg-ink-850 hover:text-ink-200'
+                                }`}>
+                                {col + 1},{row + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-[10px] text-ink-600">
+                          Each cell ≈ {cellW} × {cellH} mm · click a cell to activate
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </Card>
 
                 <Card title="Helper" icon="✛" accent="#db2777" collapsible>
@@ -1316,7 +2335,54 @@ export default function App() {
                   </div>
                 </Card>
 
-                <LogCard title="Log" icon="❯" accent="#059669" defaultSize="collapsed"
+                <Card title="Affine matrix" icon="⧉" accent="#7c3aed" collapsible>
+                  <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
+                    Warps the logical drawing space before the belt math:
+                    <span className="font-mono text-ink-300"> x′ = a·x + b·y + tx</span>,
+                    <span className="font-mono text-ink-300"> y′ = c·x + d·y + ty</span>.
+                    Session-only (never saved to the board); resets to identity on power-up.
+                    For exploring rotation/shear/scale/offset — it can't fix the line bow.
+                  </p>
+                  {/* 2×3 grid: [a b tx] / [c d ty]. Keyed by value so applying a preset
+                      remounts the uncontrolled inputs with the new numbers. */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <FieldInline key={`a-${matrix.a}`}  label="a"  value={matrix.a}  step={0.01} onChange={(v) => P.setMatrixVal('a', v)} />
+                    <FieldInline key={`b-${matrix.b}`}  label="b"  value={matrix.b}  step={0.01} onChange={(v) => P.setMatrixVal('b', v)} />
+                    <FieldInline key={`tx-${matrix.tx}`} label="tx" unit="mm" value={matrix.tx} step={1} onChange={(v) => P.setMatrixVal('tx', v)} />
+                    <FieldInline key={`c-${matrix.c}`}  label="c"  value={matrix.c}  step={0.01} onChange={(v) => P.setMatrixVal('c', v)} />
+                    <FieldInline key={`d-${matrix.d}`}  label="d"  value={matrix.d}  step={0.01} onChange={(v) => P.setMatrixVal('d', v)} />
+                    <FieldInline key={`ty-${matrix.ty}`} label="ty" unit="mm" value={matrix.ty} step={1} onChange={(v) => P.setMatrixVal('ty', v)} />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Btn variant="go" onClick={() => P.applyMatrixVals()}>✓ Apply</Btn>
+                    <Btn variant="default" onClick={() => P.resetMatrix()}>↺ Identity</Btn>
+                    <Btn variant="default" onClick={() => setMatrixModal({ mode: 'save', initial: '' })}>💾 Save as preset…</Btn>
+                  </div>
+
+                  {/* Saved matrix presets — apply / rename / delete. */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Presets</p>
+                  <div className="space-y-1.5">
+                    {matrices.map((m) => {
+                      const active = m.a === matrix.a && m.b === matrix.b && m.c === matrix.c
+                        && m.d === matrix.d && m.tx === matrix.tx && m.ty === matrix.ty;
+                      return (
+                        <div key={m.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                          <button onClick={() => P.applyMatrix(m)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                            {m.name} <span className="font-mono text-[11px] text-ink-500">[{m.a} {m.b} {m.tx} / {m.c} {m.d} {m.ty}]</span>
+                          </button>
+                          <button onClick={() => setMatrixModal({ mode: 'rename', initial: m.name, target: m.name })}
+                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
+                          <button onClick={() => P.deleteMatrix(m.name)}
+                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
+                        </div>
+                      );
+                    })}
+                    {matrices.length === 0 && <p className="text-[11px] text-ink-600">No presets saved yet.</p>}
+                  </div>
+                </Card>
+
+                <LogCard title="Log" icon="❯" accent="#059669" defaultSize="minimized"
                   right={
                     <button onClick={() => P.pushLog('sys', '— cleared —')}
                       className="text-[11px] text-ink-500 hover:text-ink-300">clear</button>
@@ -1348,7 +2414,9 @@ export default function App() {
                   </div>
                 </LogCard>
 
-                <ScriptTab sendRaw={P.sendRaw} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} />
+                <ScriptTab sendRaw={P.sendRaw} sendAndWait={P.sendAndWait} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+
+                <GcodeTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />
@@ -1361,7 +2429,59 @@ export default function App() {
           </div>
         </div>
         </div>
+        )}
       </main>
+
+      {paperModal && (
+        <TextPromptModal
+          title={paperModal.mode === 'save' ? 'Save current work area as paper' : 'Rename paper'}
+          label="Paper name"
+          initial={paperModal.initial}
+          confirmText={paperModal.mode === 'save' ? 'Save' : 'Rename'}
+          onCancel={() => setPaperModal(null)}
+          onConfirm={(name) => {
+            if (paperModal.mode === 'save') P.savePaper(name);
+            else if (paperModal.target) P.renamePaper(paperModal.target, name);
+            setPaperModal(null);
+          }}
+        />
+      )}
+
+      {matrixModal && (
+        <TextPromptModal
+          title={matrixModal.mode === 'save' ? 'Save current matrix as preset' : 'Rename matrix preset'}
+          label="Preset name"
+          initial={matrixModal.initial}
+          confirmText={matrixModal.mode === 'save' ? 'Save' : 'Rename'}
+          onCancel={() => setMatrixModal(null)}
+          onConfirm={(name) => {
+            if (matrixModal.mode === 'save') P.saveMatrix(name);
+            else if (matrixModal.target) P.renameMatrix(matrixModal.target, name);
+            setMatrixModal(null);
+          }}
+        />
+      )}
+
+      {/* Hardware info popup — triggered by clicking the header subtitle */}
+      {showHwInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowHwInfo(false)}>
+          <div className="w-full max-w-lg rounded-2xl border border-ink-750 bg-ink-900 shadow-2xl overflow-y-auto max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-ink-800">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px]" style={{ color: '#7c3aed' }}>⚙</span>
+                <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-400">Hardware · TMC5072</h2>
+              </div>
+              <button onClick={() => setShowHwInfo(false)}
+                className="text-ink-500 hover:text-ink-200 text-[18px] leading-none px-1">×</button>
+            </div>
+            <div className="p-5">
+              <ChipInfoContent status={status} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

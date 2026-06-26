@@ -27,6 +27,16 @@ export async function apiGet(ip: string, endpoint: string): Promise<ApiResult> {
   return r.json() as Promise<ApiResult>;
 }
 
+// POST /api/batch — many draw ops in one request (newline-separated query strings).
+// Plain-text body keeps it a CORS "simple request" (no preflight). Returns enqueue counts.
+export interface BatchResult { status: string; accepted: number; rejected: number; id?: number; }
+export async function apiBatch(ip: string, body: string): Promise<BatchResult> {
+  const base = ip ? `http://${ip}` : '';
+  const r = await fetch(`${base}/api/batch`, { method: 'POST', body });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json() as Promise<BatchResult>;
+}
+
 // Raw shape of GET /api/status from the firmware (see web_server.c handle_status).
 // drv_ok / drv_flags are the TMC5072 driver-health fields the firmware exposes so
 // the console (and the MCP) can see when a real driver fault has latched.
@@ -34,11 +44,12 @@ export interface RawStatus {
   status: string;
   enqueued: number; current: number; done: number; pending: number;
   qcap?: number; rejected?: number; peak?: number;
-  idle: boolean; aborting: boolean; paused: boolean; estop?: boolean; job: string;
+  idle: boolean; aborting: boolean; paused: boolean; estop?: boolean; pen_down?: boolean; job: string;
   drv_ok: boolean; drv_flags: string;
   x: number; y: number;
   bounds: { xn: number; xp: number; yn: number; yp: number; ellipse: boolean };
   motion: { vmax: number; amax: number; run_ma: number; hold_ma: number };
+  matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number };
 }
 
 export async function getStatus(ip: string): Promise<RawStatus> {

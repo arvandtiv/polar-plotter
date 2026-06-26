@@ -17,6 +17,18 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import {
+  compilePaths,
+  compilePathsWithWarp,
+  expandGenerator,
+  boundsFromFirmware,
+  listGenerators,
+  gridCtxFromMetadata,
+  gridCtxFromPlotterBounds,
+  computeCell,
+  gridClearQueries,
+  hydrateGridCommands,
+} from './core.js';
 
 const PLOTTER_IP   = process.env.PLOTTER_IP   ?? '192.168.1.71';
 const PLOTTER_PORT = process.env.PLOTTER_PORT ?? '80';
@@ -33,7 +45,11 @@ async function api(endpoint) {
     throw new Error(`Network error reaching plotter at ${BASE}: ${err.message}`);
   }
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
-  return res.json();
+  const json = await res.json();
+  if ((json?.status ?? 'ok') !== 'ok') {
+    throw new Error(json?.msg ?? `firmware error from ${endpoint}`);
+  }
+  return json;
 }
 
 function ok(json) {
@@ -60,7 +76,7 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
   if ((r?.status ?? 'ok') !== 'ok') return r;   // rejected (e.g. outside work area)
   const id = r.id;
   if (id == null) return r;                      // endpoint isn't a tracked job
-  const deadline = Date.now() + timeoutMs;
+  let deadline = Date.now() + timeoutMs;
   for (;;) {
     let s = null;
     try { s = await api('status'); } catch { /* transient — retry until deadline */ }
@@ -87,11 +103,101 @@ async function drawAndWait(endpoint, { timeoutMs = 180_000, pollMs = 150 } = {})
   }
 }
 
+/**
+ * Flow-controlled batch dispatch using the firmware's /api/batch endpoint.
+ *
+ * /api/batch accepts a POST with newline-separated draw ops and enqueues them
+ * all in ONE TCP connection — ~80x fewer round-trips than calling api() per op.
+ * Supported ops: pen, goto, line, arc. Others fall back to individual api() calls.
+ *
+ * The firmware batch body is capped at 8192 bytes; we chunk at BATCH_BODY_MAX
+ * and wait for queue headroom before each chunk.
+ */
+const QUEUE_HEADROOM = 24;
+const BATCH_BODY_MAX = 7200;   // conservative under firmware's 8192
+const BATCH_LINE_MAX = 200;    // hard cap: keeps chunk.length < 256-QUEUE_HEADROOM, preventing headroom deadlock
+const BATCH_OPS = new Set(['pen', 'goto', 'line', 'arc']);
+
+async function postBatch(lines) {
+  const body = lines.join('\n');
+  const url = `${BASE}/api/batch`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', 'Content-Length': String(Buffer.byteLength(body)) },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (err) { throw new Error(`Batch network error: ${err.message}`); }
+  if (!res.ok) throw new Error(`HTTP ${res.status} from /api/batch`);
+  const r = await res.json();
+  // Firmware returns status:"error" with HTTP 200 for body-truncated / oversized bodies.
+  if (r?.status === 'error') throw new Error(`Firmware batch error: ${r.msg ?? 'unknown'}`);
+  // Rejected ops = queue was full despite headroom check (race or oversized chunk).
+  if ((r?.rejected ?? 0) > 0) throw new Error(`Batch partial rejection: ${r.rejected} ops dropped (accepted ${r.accepted})`);
+  return r;
+}
+
+async function batchSend(queries, { timeoutMs = 600_000 } = {}) {
+  let lastId = null;
+  let deadline = Date.now() + timeoutMs;
+  let chunk = [], chunkBytes = 0;
+
+  const flushChunk = async () => {
+    if (chunk.length === 0) return;
+    // Wait for queue headroom before submitting the chunk.
+    for (;;) {
+      if (Date.now() > deadline) throw new Error('timeout waiting for queue headroom');
+      const s = await api('status');
+      if (s.drv_ok === false) throw new Error(`DRIVER FAULT: ${s.drv_flags}`);
+      if (s.estop) throw new Error('E-STOP triggered');
+      if (s.aborting) throw new Error('abort triggered');
+      const free = (s.qcap ?? 256) - (s.pending ?? 0);
+      if (free >= chunk.length + QUEUE_HEADROOM) break;
+      await sleep(100);
+    }
+    const r = await postBatch(chunk);
+    if (r?.id != null) lastId = r.id;
+    chunk = []; chunkBytes = 0;
+  };
+
+  for (const q of queries) {
+    const op = q.split('?')[0];
+    if (!BATCH_OPS.has(op)) {
+      // Non-batchable op (speed, accel, home, sethome, etc.) — flush first, then individual call.
+      await flushChunk();
+      const r = await api(q);
+      if (r?.id != null) lastId = r.id;
+      continue;
+    }
+    const lineBytes = Buffer.byteLength(q) + 1;
+    if (chunkBytes + lineBytes > BATCH_BODY_MAX || chunk.length >= BATCH_LINE_MAX) await flushChunk();
+    chunk.push(q);
+    chunkBytes += lineBytes;
+  }
+  await flushChunk();
+
+  if (lastId == null) return { status: 'ok', msg: 'no queued jobs (all commands were non-draw)' };
+
+  // Wait for the last job to physically complete.
+  for (;;) {
+    if (Date.now() > deadline) return { status: 'timeout', msg: `timed out waiting for job ${lastId}` };
+    await sleep(200);
+    let s;
+    try { s = await api('status'); } catch { continue; }
+    if (s.drv_ok === false) return { status: 'driver_fault', msg: `DRIVER FAULT: ${s.drv_flags}` };
+    if (s.aborting) return { status: 'aborted', msg: 'batch aborted (escape)' };
+    if (s.paused) { deadline = Date.now() + timeoutMs; continue; } // operator paused — extend
+    if ((s.done ?? 0) >= lastId) return { status: 'ok', msg: `${queries.length} commands dispatched; job ${lastId} done` };
+  }
+}
+
 // ── Server setup ─────────────────────────────────────────────────────────────
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.1.0',
+  version: '1.4.1',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
@@ -310,6 +416,28 @@ server.tool(
   }),
 );
 
+// plot_set_matrix ────────────────────────────────────────────────────────────
+server.tool(
+  'plot_set_matrix',
+  `Apply a 2D affine warp to the logical drawing space (session-only, NOT saved to flash).
+Every commanded (x,y) is transformed before the belt math:
+  x' = a*x + b*y + tx ;  y' = c*x + d*y + ty
+Identity (a=1, b=0, c=0, d=1, tx=0, ty=0) = no warp (the startup default).
+This is an EXPLORATION tool for rotation/shear/scale/offset of the whole drawing —
+an affine is linear and cannot correct the polargraph line-bow. Pass identity to reset.`,
+  {
+    a:  z.number().describe('x scale / cos term (identity 1)'),
+    b:  z.number().describe('x shear from y (identity 0)'),
+    c:  z.number().describe('y shear from x (identity 0)'),
+    d:  z.number().describe('y scale / cos term (identity 1)'),
+    tx: z.number().describe('x translation in mm (identity 0)'),
+    ty: z.number().describe('y translation in mm (identity 0)'),
+  },
+  async ({ a, b, c, d, tx, ty }) => ({
+    content: [{ type: 'text', text: ok(await api(`matrix?a=${a}&b=${b}&c=${c}&d=${d}&tx=${tx}&ty=${ty}`)) }],
+  }),
+);
+
 // plot_wobbly ────────────────────────────────────────────────────────────────
 server.tool(
   'plot_wobbly',
@@ -336,12 +464,17 @@ Examples:
     wobble:    z.number().min(0).max(1).default(0.4).describe('Distortion amount 0.0–1.0 (default 0.4)'),
     harmonics: z.number().int().min(1).max(8).default(3).describe('Shape complexity 1–8 (default 3)'),
     seed:      z.number().int().min(0).default(42).describe('Random seed — same seed = same shape (default 42)'),
-    cycles:    z.number().int().min(1).default(1).describe('Number of passes (default 1)'),
+    cycles:    z.number().int().min(1).default(1).describe('Outline passes (default 1)'),
+    fill_mode:   z.number().int().min(0).max(2).default(0).describe('0=none 1=hatch 2=concentric (nested wavy rings)'),
+    hatch_angle: z.number().default(0).describe('Hatch angle in degrees (default 0 = horizontal)'),
+    spacing:     z.number().positive().default(3).describe('Hatch / ring spacing in mm (default 3)'),
+    outline:     z.boolean().default(true).describe('Draw the wavy perimeter (default true)'),
   },
-  async ({ cx, cy, r, bound_r, wobble, harmonics, seed, cycles }) => ({
+  async ({ cx, cy, r, bound_r, wobble, harmonics, seed, cycles, fill_mode, hatch_angle, spacing, outline }) => ({
     content: [{ type: 'text', text: ok(await drawAndWait(
       `wobbly?cx=${cx}&cy=${cy}&r=${r}&bound_r=${bound_r}` +
-      `&wobble=${wobble}&harmonics=${harmonics}&seed=${seed}&cycles=${cycles}`,
+      `&wobble=${wobble}&harmonics=${harmonics}&seed=${seed}&cycles=${cycles}` +
+      `&fill=${fill_mode}&angle=${hatch_angle}&spacing=${spacing}&outline=${outline ? 1 : 0}`,
     )) }],
   }),
 );
@@ -406,6 +539,31 @@ server.tool(
   },
   async ({ cx, cy }) => ({
     content: [{ type: 'text', text: ok(await drawAndWait(`bullseye?cx=${cx}&cy=${cy}`)) }],
+  }),
+);
+
+// plot_arc ───────────────────────────────────────────────────────────────────
+server.tool(
+  'plot_arc',
+  'Draw a single arc: part of a circle centred at (cx, cy) with the given radius, ' +
+  'sweeping from angle a0 to a1 (radians, 0 = right, increases clockwise since Y+ is down). ' +
+  'lift=true (default) lets the firmware manage pen position; lift=false continues from the ' +
+  'current pen position without raising it (for chaining arcs into composite curves). ' +
+  'Full-circle example: a0=0, a1=6.2832. Quarter-circle (top-right): a0=−1.5708, a1=0.',
+  {
+    cx:     z.number().default(0).describe('Centre X in mm'),
+    cy:     z.number().default(0).describe('Centre Y in mm'),
+    r:      z.number().positive().default(50).describe('Radius in mm'),
+    a0:     z.number().default(0).describe('Start angle in radians (0 = right/east)'),
+    a1:     z.number().default(6.2832).describe('End angle in radians (default = full circle)'),
+    cw:     z.boolean().default(false).describe('Clockwise sweep (default false = CCW)'),
+    cycles: z.number().int().min(1).max(20).default(1).describe('Times to retrace (darken)'),
+    lift:   z.boolean().default(true).describe('Manage pen automatically (false = chain with prior arc)'),
+  },
+  async ({ cx, cy, r, a0, a1, cw, cycles, lift }) => ({
+    content: [{ type: 'text', text: ok(await drawAndWait(
+      `arc?cx=${cx}&cy=${cy}&r=${r}&a0=${a0}&a1=${a1}&cw=${cw ? 1 : 0}&cycles=${cycles}&lift=${lift ? 1 : 0}`
+    )) }],
   }),
 );
 
@@ -534,45 +692,76 @@ Each command object must have a "type" field plus the parameters for that type:
   { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }
   { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42, "motifs": 1955 }
   { "type": "bullseye","cx": 0, "cy": 0 }
-  { "type": "grid",    "cx": 0, "cy": 0 }`,
+  { "type": "grid",    "cx": 0, "cy": 0 }
+
+Configuration commands (take effect instantly, do not queue a draw job):
+  { "type": "bounds",       "xn": -200, "xp": 200, "yn": -150, "yp": 150, "ellipse": false }
+  { "type": "matrix",       "a": 1, "b": 0, "c": 0, "d": 1, "tx": 50, "ty": 30 }
+  { "type": "grid_select",  "cols": 2, "rows": 2, "padding_mm": 5, "col": 0, "row": 0,
+                             "full_xn": -200, "full_xp": 200, "full_yn": -150, "full_yp": 150 }
+  { "type": "grid_clear",   "full_xn": -200, "full_xp": 200, "full_yn": -150, "full_yp": 150 }
+
+Studio generators (same unified pipeline as the console Script tab):
+  { "type": "generate", "generator": "randomWalker", "params": { "count": 5, "seed": 42 } }
+
+Wrapped document (grid tests — metadata supplies work_area + grid for grid_select):
+  { "metadata": { "work_area": { "x_min": -276, "x_max": 263, "y_min": -115, "y_max": 273 },
+                  "grid": { "cols": 10, "rows": 10, "padding_mm": 10 } },
+    "commands": [ … ] }`,
   {
-    commands: z.array(z.object({
-      type: z.enum([
-        'goto', 'line', 'circle', 'square', 'wobbly', 'truchet',
-        'bullseye', 'grid', 'border',
-        'pen', 'home', 'sethome', 'stop',
-        'speed', 'accel', 'current',
-      ]).describe('Command type'),
-    }).passthrough()).min(1).describe('Ordered list of commands to execute'),
+    commands: z.union([
+      z.array(z.object({ type: z.string().optional() }).passthrough()).min(1),
+      z.object({
+        metadata: z.record(z.string(), z.unknown()).optional(),
+        commands: z.array(z.object({ type: z.string().optional() }).passthrough()).min(1),
+      }),
+    ]).describe('Command array, or { metadata, commands } document (console Script tab format)'),
 
     stop_on_error: z.boolean().default(true).describe(
       'Abort the script if any command returns an error (default true)',
     ),
   },
-  async ({ commands, stop_on_error }) => {
+  async ({ commands: raw, stop_on_error }) => {
+    let { commands: all, gridCtx } = unwrapScriptCommands(raw);
+    if (gridCtx) {
+      const s = await api('status');
+      const fb = boundsFromFirmware(s.bounds ?? {});
+      gridCtx = gridCtxFromPlotterBounds(fb, gridCtx);
+      all = hydrateGridCommands(all, gridCtx);
+    }
+    const commands = all.filter((c) => c?.type && c.type !== 'status');
     const results = [];
 
     for (let i = 0; i < commands.length; i++) {
       const cmd = commands[i];
-      let endpoint;
-
-      try {
-        endpoint = buildEndpoint(cmd);
-      } catch (err) {
-        const msg = `[${i + 1}/${commands.length}] build error: ${err.message}`;
-        results.push(msg);
-        if (stop_on_error) {
-          results.push('Script aborted.');
-          break;
-        }
-        continue;
-      }
+      const isDirect = DIRECT_CMD_TYPES.has(cmd.type);
 
       let json;
       try {
-        json = await drawAndWait(endpoint);   // wait until this step physically finishes
+        if (cmd.type === 'generate') {
+          const s = await api('status');
+          const bounds = boundsFromFirmware(s.bounds ?? {});
+          const spec = {
+            key: cmd.generator ?? cmd.key,
+            params: cmd.params ?? {},
+            warp: cmd.warp
+              ? { mode: cmd.warp.mode ?? 'water', params: cmd.warp.params ?? {} }
+              : undefined,
+          };
+          const queries = expandGenerator(spec, bounds);
+          json = await batchSend(queries);
+        } else if (isDirect) {
+          // Configuration commands bypass the draw queue and execute immediately.
+          json = await executeDirectCmd(cmd, gridCtx);
+        } else {
+          if (cmd.type === 'home' || cmd.type === 'sethome') {
+            await api('matrix?a=1&b=0&c=0&d=1&tx=0&ty=0');
+          }
+          const endpoint = buildEndpoint(cmd);
+          json = await drawAndWait(endpoint);   // wait until this step physically finishes
+        }
       } catch (err) {
-        const msg = `[${i + 1}/${commands.length}] ${cmd.type} → network error: ${err.message}`;
+        const msg = `[${i + 1}/${commands.length}] ${cmd.type}: ${err.message}`;
         results.push(msg);
         if (stop_on_error) {
           results.push('Script aborted.');
@@ -608,7 +797,447 @@ Each command object must have a "type" field plus the parameters for that type:
   },
 );
 
+// ── Raw-path & generative tools ──────────────────────────────────────────────
+
+server.tool(
+  'plot_list_generators',
+  'List all built-in generative algorithms available to plot_generate. ' +
+  'Returns each generator key, label, and description so you can choose what to use. ' +
+  'Call this first to browse options before calling plot_generate.',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: JSON.stringify(listGenerators(), null, 2) }],
+  }),
+);
+
+server.tool(
+  'plot_polylines',
+  `Draw one or more arbitrary polyline paths directly on the plotter.
+This is the lowest-level drawing tool — pass arrays of (x,y) points and the MCP
+compiles them to goto/pen/line firmware sequences and sends them with flow control.
+
+Use this when the firmware's fixed primitives (circle, square, wobbly, truchet)
+can't express the shape you want. You compute the points; this tool sends them.
+
+The tool handles pen management for each path:
+  goto start (pen up) → pen down → line segments → pen up
+
+If clip_to_bounds is true (default), paths that stray outside the current work
+area are trimmed at the boundary — the surviving inside segments are drawn, the
+out-of-bounds parts are silently dropped.
+
+SAMPLING DENSITY — rule of thumb:
+  For smooth curves: sample every ≤ 2 mm along the curve.
+  Full circle radius R → at least ceil(2·π·R / 2) points.
+  Example: R=60 mm → ceil(188/2) = 94 points minimum (200 is safer).
+
+COMMON PATTERNS Claude can compute:
+
+  Archimedean spiral (R grows linearly with angle):
+    for i in 0..N: θ = i*(2π*turns/N), r = rMin + (rMax-rMin)*(i/N)
+    x = r*cos(θ), y = r*sin(θ)
+
+  Lissajous figure (two sine waves):
+    x = A*sin(a*t + δ), y = B*sin(b*t)   for t in [0, 2π]
+    a/b ratio determines knot complexity; δ is the phase offset.
+
+  Rose curve (polar):
+    r = cos(k*θ), x = r*cos(θ), y = r*sin(θ)   for θ in [0, 2π] (k even)
+    or [0, π] (k odd). k=2 → 4 petals, k=3 → 3 petals.
+
+  Sine wave band:
+    x = xStart + t*(xEnd-xStart), y = cy + A*sin(ω*t + φ)
+
+  Concentric rings (separate paths per ring):
+    for each R: points = [ (R*cos(θ), R*sin(θ)) for θ in 0..2π+ε ]
+
+All coordinates in mm, Y+ = DOWN. Check plot_status for current bounds.`,
+  {
+    paths: z.array(z.object({
+      points: z.array(z.object({
+        x: z.number(),
+        y: z.number(),
+      })).min(2).describe('Ordered list of (x,y) waypoints in mm'),
+      closed:  z.boolean().default(false).describe('Connect last point back to first'),
+      cycles:  z.number().int().min(1).max(10).default(1).describe('Retrace count (darken)'),
+    })).min(1),
+    clip_to_bounds: z.boolean().default(true).describe(
+      'Trim paths at the work-area boundary so out-of-range segments are clipped (default true)',
+    ),
+    warp_mode: z.enum(['none', 'water', 'droplet']).default('none').describe(
+      'Apply a warp displacement to the paths before sending. ' +
+      '"water" = sinusoidal X/Y ripple; "droplet" = radial rings from a centre.',
+    ),
+    warp_params: z.object({
+      amplitude:  z.number().default(8).describe('Warp displacement magnitude (mm)'),
+      wavelength: z.number().default(60).describe('Warp spatial period (mm)'),
+      falloff:    z.number().default(0.01).describe('Droplet radial decay (0 = uniform)'),
+      cx:         z.number().default(0).describe('Warp centre X (mm)'),
+      cy:         z.number().default(0).describe('Warp centre Y (mm)'),
+    }).default({}).describe('Warp parameters — only used when warp_mode != "none"'),
+  },
+  async ({ paths, clip_to_bounds, warp_mode, warp_params }) => {
+    // Read current bounds for clipping.
+    let clipBounds = null;
+    let fwBounds = null;
+    if (clip_to_bounds) {
+      try {
+        const s = await api('status');
+        fwBounds = boundsFromFirmware(s.bounds ?? {});
+        if (![fwBounds.left, fwBounds.right, fwBounds.up, fwBounds.down].every(v => isFinite(v) && v > 0)) {
+          fwBounds = null;
+        }
+      } catch { /* skip clipping if status fails */ }
+    }
+
+    if (!fwBounds) fwBounds = { left: 300, right: 300, up: 300, down: 300 };
+    const queries = compilePathsWithWarp(
+      paths,
+      fwBounds,
+      warp_mode !== 'none' ? { mode: warp_mode, params: warp_params ?? {} } : null,
+    );
+    const result = await batchSend(queries);
+
+    return {
+      content: [{ type: 'text', text: [
+        `Sent ${paths.length} path(s) — ${queries.length} firmware commands.`,
+        warp_mode !== 'none' ? `Warp: ${warp_mode} (amplitude ${(warp_params ?? {}).amplitude ?? 8} mm)` : null,
+        clip_to_bounds && fwBounds
+          ? `Clipped to x:${-fwBounds.left}..${fwBounds.right}, y:${-fwBounds.up}..${fwBounds.down}`
+          : 'No bounds clipping (status unavailable or skipped).',
+        `Result: ${result.status}${result.msg ? ` — ${result.msg}` : ''}`,
+      ].filter(Boolean).join('\n') }],
+    };
+  },
+);
+
+server.tool(
+  'plot_generate',
+  `Run a named generative algorithm, compile its output to firmware commands, and
+send everything to the plotter — in one call. This gives you access to all the
+studio generators from the MCP, without needing the browser console.
+
+Use plot_list_generators first to browse what is available and read each one's
+parameter description. Then call plot_generate with the generator key and your
+chosen params.
+
+All generators respect the current work area bounds (read via plot_status before
+calling). Out-of-bounds paths are clipped automatically.
+
+After generation, you can also apply a warp displacement to the paths by setting
+warp_mode to "water" (sinusoidal) or "droplet" (radial ripples) with warp_params.
+
+Available generators (call plot_list_generators for descriptions):
+  spirograph   — hypotrochoid / epitrochoid roulette curves (gear toy)
+  orbitalWeave — continuous orbiting trace that folds into woven knots
+  noiseOrbit   — concentric rings distorted by 3D noise + Chaikin smoothing
+  randomWalker — agents drifting with accumulating velocity
+  noisedHatches — grid of hatch cells shaped by a noise blob
+  sheets       — randomly displaced column grid, interpolated into curtain lines
+  moireCurtain — two line gratings at slightly different angles (moiré interference)
+  patternMaker — base shape tiled across a grid with per-cell rotation`,
+  {
+    generator: z.string().describe(
+      'Generator module key — use plot_list_generators to see all options with descriptions',
+    ),
+
+    params: z.record(z.union([z.number(), z.string(), z.boolean()])).default({}).describe(
+      'Generator-specific parameters. Omit any to use the generator\'s defaults. ' +
+      'Use plot_list_generators to see what each generator accepts.',
+    ),
+
+    warp_mode: z.enum(['none', 'water', 'droplet']).default('none').describe(
+      'Apply a warp displacement after generation. "water" = sinusoidal X/Y ripple; ' +
+      '"droplet" = radial rings from a centre (like a stone in water). "none" = no warp.',
+    ),
+
+    warp_params: z.object({
+      amplitude:  z.number().default(8).describe('Warp displacement magnitude (mm)'),
+      wavelength: z.number().default(60).describe('Warp spatial period (mm)'),
+      falloff:    z.number().default(0.01).describe('Droplet mode: radial decay rate. 0 = no decay.'),
+      cx:         z.number().default(0).describe('Warp centre X (mm, droplet mode)'),
+      cy:         z.number().default(0).describe('Warp centre Y (mm, droplet mode)'),
+    }).default({}).describe('Parameters for the warp modifier (only used when warp_mode != "none")'),
+  },
+  async ({ generator, params, warp_mode, warp_params }) => {
+    const s = await api('status');
+    const bounds = boundsFromFirmware(s.bounds ?? {});
+    if (![bounds.left, bounds.right, bounds.up, bounds.down].every(v => isFinite(v) && v > 0)) {
+      const b = s.bounds ?? {};
+      throw new Error(`Could not read valid work area bounds from firmware (got: xn=${b.xn}, xp=${b.xp}, yn=${b.yn}, yp=${b.yp}). Is the plotter connected?`);
+    }
+
+    const spec = {
+      key: generator,
+      params: params ?? {},
+      warp: warp_mode !== 'none'
+        ? { mode: warp_mode, params: warp_params ?? {} }
+        : undefined,
+    };
+    const queries = expandGenerator(spec, bounds);
+    const result = await batchSend(queries);
+
+    const gens = listGenerators();
+    const label = gens.find((g) => g.key === generator)?.label ?? generator;
+
+    return {
+      content: [{ type: 'text', text: [
+        `Generator: ${label}`,
+        `Firmware commands: ${queries.length}`,
+        warp_mode !== 'none' ? `Warp applied: ${warp_mode} (amplitude ${warp_params?.amplitude ?? 8} mm)` : null,
+        `Result: ${result.status}${result.msg ? ` — ${result.msg}` : ''}`,
+      ].filter(Boolean).join('\n') }],
+    };
+  },
+);
+
+// ── Bounds & grid tools ──────────────────────────────────────────────────────
+
+server.tool(
+  'plot_set_bounds',
+  'Set the firmware work area bounds. All drawing commands are clipped to this ' +
+  'rectangle (or the inscribed ellipse when ellipse=true). Coordinates in mm; ' +
+  'Y+ is DOWN. xn/yn are usually negative (left/top), xp/yp positive (right/bottom). ' +
+  'Use plot_status to read current bounds. Use plot_grid_clear (not this tool) to ' +
+  'restore bounds after grid cell work.',
+  {
+    xn:      z.number().describe('Left boundary (X−, usually negative)'),
+    xp:      z.number().describe('Right boundary (X+, usually positive)'),
+    yn:      z.number().describe('Top boundary (Y−, usually negative since Y+ is down)'),
+    yp:      z.number().describe('Bottom boundary (Y+, usually positive since Y+ is down)'),
+    ellipse: z.boolean().default(false).describe(
+      'Clip to the ellipse inscribed in the box instead of the rectangle (default false)',
+    ),
+  },
+  async ({ xn, xp, yn, yp, ellipse }) => ({
+    content: [{ type: 'text', text: ok(await api(
+      `bounds?xn=${xn}&xp=${xp}&yn=${yn}&yp=${yp}&shape=${ellipse ? 1 : 0}`,
+    )) }],
+  }),
+);
+
+// plot_grid_plan ──────────────────────────────────────────────────────────────
+server.tool(
+  'plot_grid_plan',
+  `Compute and return the full grid layout for a given work area and grid params —
+no firmware call, no state change. Use this BEFORE starting cell iteration to:
+  • Confirm cell sizes and padding look right
+  • Get every cell's global centre coordinates
+  • Build a loop plan (col 0..cols-1, row 0..rows-1)
+
+Returns a JSON object:
+  { cols, rows, padding_mm, cellW, cellH,
+    cells: [ { col, row, cx, cy, xn, xp, yn, yp }, ... ] }
+where cx/cy are the cell centre in global (full-area) coordinates, and
+xn/xp/yn/yp are the cell edges in global coordinates.`,
+  {
+    cols:       z.number().int().min(1).max(12).describe('Number of columns'),
+    rows:       z.number().int().min(1).max(12).describe('Number of rows'),
+    padding_mm: z.number().min(0).default(5).describe('Gap between adjacent cells in mm (default 5)'),
+    full_xn:    z.number().describe('Full work area left bound (xn from plot_status)'),
+    full_xp:    z.number().describe('Full work area right bound (xp from plot_status)'),
+    full_yn:    z.number().describe('Full work area top bound (yn from plot_status)'),
+    full_yp:    z.number().describe('Full work area bottom bound (yp from plot_status)'),
+  },
+  ({ cols, rows, padding_mm, full_xn, full_xp, full_yn, full_yp }) => {
+    const cellW = ((full_xp - full_xn) - (cols - 1) * padding_mm) / cols;
+    const cellH = ((full_yp - full_yn) - (rows - 1) * padding_mm) / rows;
+    if (cellW <= 0 || cellH <= 0) {
+      return { content: [{ type: 'text', text: JSON.stringify({
+        error: `padding_mm=${padding_mm} too large — cells have zero or negative size`,
+        cellW, cellH,
+      }) }] };
+    }
+    const rnd = (n) => Math.round(n * 10) / 10;
+    const cells = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const lx = full_xn + c * (cellW + padding_mm);
+        const ty = full_yn + r * (cellH + padding_mm);
+        const cx = lx + cellW / 2;
+        const cy = ty + cellH / 2;
+        cells.push({
+          col: c, row: r,
+          cx: rnd(cx), cy: rnd(cy),
+          xn: rnd(lx), xp: rnd(lx + cellW),
+          yn: rnd(ty), yp: rnd(ty + cellH),
+        });
+      }
+    }
+    return {
+      content: [{ type: 'text', text: JSON.stringify({
+        cols, rows, padding_mm,
+        cellW: rnd(cellW), cellH: rnd(cellH),
+        total: cols * rows,
+        cells,
+      }, null, 2) }],
+    };
+  },
+);
+
+server.tool(
+  'plot_grid_select',
+  `Activate a grid cell: divide the full work area into cols×rows equal cells
+(with padding_mm gap between adjacent cells), then configure the firmware so
+that (0,0) maps to the selected cell's centre and all drawing is clipped to that
+cell's bounds.
+
+IMPORTANT — pass the FULL work area bounds every call (not the cell bounds the
+firmware reports once a cell is active). Call plot_status ONCE at session start,
+save xn/xp/yn/yp, and reuse those same values for every plot_grid_select and
+plot_grid_clear call.
+
+The tool pushes two things to firmware:
+  1. bounds = ±cellW/2, ±cellH/2   → clips drawing to this cell
+  2. matrix tx=cellCentreX, ty=Y   → (0,0) draws at the cell's global centre
+
+After activation, all draw tools (plot_line, plot_circle, plot_generate, etc.)
+work in cell-local coordinates — (0,0) is the cell centre, (±cellW/2, ±cellH/2)
+are the edges. plot_generate reads the cell bounds automatically.
+
+Typical single-session workflow:
+  1. plot_status                         → save full xn, xp, yn, yp
+  2. plot_grid_plan cols rows padding ... → (optional) preview layout
+  3. plot_grid_select col=0 row=0 ...    → top-left cell
+  4. plot_circle / plot_generate / ...   → draw (cell-local coords)
+  5. plot_grid_select col=1 row=0 ...    → next cell (same full bounds!)
+  6. ...repeat for all cells...
+  7. plot_grid_clear                     → restore full work area`,
+  {
+    cols:       z.number().int().min(1).max(12).describe('Number of columns'),
+    rows:       z.number().int().min(1).max(12).describe('Number of rows'),
+    padding_mm: z.number().min(0).default(5).describe('Gap between adjacent cells in mm (default 5)'),
+    col:        z.number().int().min(0).describe('Column to activate (0 = leftmost)'),
+    row:        z.number().int().min(0).describe('Row to activate (0 = topmost)'),
+    full_xn:    z.number().describe('Full work area left bound (xn from plot_status)'),
+    full_xp:    z.number().describe('Full work area right bound (xp from plot_status)'),
+    full_yn:    z.number().describe('Full work area top bound (yn from plot_status)'),
+    full_yp:    z.number().describe('Full work area bottom bound (yp from plot_status)'),
+  },
+  async ({ cols, rows, padding_mm, col, row, full_xn, full_xp, full_yn, full_yp }) => {
+    if (col >= cols) throw new Error(`col ${col} out of range (0..${cols - 1})`);
+    if (row >= rows) throw new Error(`row ${row} out of range (0..${rows - 1})`);
+    const cellW = ((full_xp - full_xn) - (cols - 1) * padding_mm) / cols;
+    const cellH = ((full_yp - full_yn) - (rows - 1) * padding_mm) / rows;
+    if (cellW <= 0 || cellH <= 0) throw new Error('padding_mm too large — cells have zero or negative size');
+    const lx = full_xn + col * (cellW + padding_mm);
+    const ty = full_yn + row * (cellH + padding_mm);
+    const cx = lx + cellW / 2;
+    const cy = ty + cellH / 2;
+    const cell = computeCell(
+      { cols, rows, padding_mm, full_xn, full_xp, full_yn, full_yp },
+      col, row,
+    );
+    await drawAndWait(cell.boundsQuery);
+    await api(cell.matrixQuery);
+    const rnd = (n) => Math.round(n * 10) / 10;
+    return {
+      content: [{ type: 'text', text: [
+        `Grid cell (col ${col}, row ${row}) activated.`,
+        `Cell size: ${rnd(cell.cellW)} × ${rnd(cell.cellH)} mm`,
+        `Cell centre in global coords: (${rnd(cell.cx)}, ${rnd(cell.cy)})`,
+        `Work area now clipped to x: ${rnd(-cell.cellW/2)}..${rnd(cell.cellW/2)}, y: ${rnd(-cell.cellH/2)}..${rnd(cell.cellH/2)}`,
+        `(0,0) = cell centre. All draw commands use cell-local coordinates.`,
+      ].join('\n') }],
+    };
+  },
+);
+
+server.tool(
+  'plot_grid_clear',
+  'Deactivate grid cell mode: restore the full work area bounds and reset the ' +
+  'coordinate matrix to identity (goto 0 0 returns to the original origin). ' +
+  'Pass the same full_xn/xp/yn/yp values you used for plot_grid_select.',
+  {
+    full_xn: z.number().describe('Full work area left bound (same as plot_grid_select)'),
+    full_xp: z.number().describe('Full work area right bound'),
+    full_yn: z.number().describe('Full work area top bound'),
+    full_yp: z.number().describe('Full work area bottom bound'),
+    ellipse: z.boolean().default(false).describe('Restore as ellipse clip (default false = rectangle)'),
+  },
+  async ({ full_xn, full_xp, full_yn, full_yp, ellipse }) => {
+    const boundsEp = `bounds?xn=${full_xn}&xp=${full_xp}&yn=${full_yn}&yp=${full_yp}&shape=${ellipse ? 1 : 0}`;
+    await drawAndWait(boundsEp);
+    await api(`matrix?a=1&b=0&c=0&d=1&tx=0&ty=0`);
+    return {
+      content: [{ type: 'text', text: [
+        'Grid cell cleared. Full work area restored.',
+        `Bounds: x: ${full_xn}..${full_xp}, y: ${full_yn}..${full_yp}`,
+        '(0,0) is the original plotter origin again.',
+      ].join('\n') }],
+    };
+  },
+);
+
+// ── Script document helpers (console Script tab parity) ─────────────────────
+
+/** Accept a bare command array or { metadata, commands } — same as the console Script tab. */
+function unwrapScriptCommands(raw) {
+  if (Array.isArray(raw)) return { commands: raw, gridCtx: null };
+  if (raw && typeof raw === 'object' && Array.isArray(raw.commands)) {
+    const gridCtx = gridCtxFromMetadata(raw);
+    return { commands: hydrateGridCommands(raw.commands, gridCtx), gridCtx };
+  }
+  throw new Error('Expected a JSON command array or { metadata, commands } document');
+}
+
 // ── Endpoint builder (shared by plot_script) ─────────────────────────────────
+
+/** Handle configuration commands that need direct api() calls (no draw queue). */
+async function executeDirectCmd(cmd, gridCtx = null) {
+  const p = cmd;
+  switch (p.type) {
+    case 'bounds':
+      return api(`bounds?xn=${p.xn}&xp=${p.xp}&yn=${p.yn}&yp=${p.yp}&shape=${p.ellipse ? 1 : 0}`);
+
+    case 'matrix':
+      return api(`matrix?a=${p.a ?? 1}&b=${p.b ?? 0}&c=${p.c ?? 0}&d=${p.d ?? 1}&tx=${p.tx ?? 0}&ty=${p.ty ?? 0}`);
+
+    case 'grid_select': {
+      let gc = gridCtx;
+      if (isFinite(Number(p.cols)) && isFinite(Number(p.full_xn))) {
+        gc = {
+          cols: Number(p.cols), rows: Number(p.rows),
+          padding_mm: Number(p.padding_mm ?? 5),
+          full_xn: Number(p.full_xn), full_xp: Number(p.full_xp),
+          full_yn: Number(p.full_yn), full_yp: Number(p.full_yp),
+        };
+      }
+      if (!gc) throw new Error('grid_select: need metadata.work_area+grid on the document, or cols/rows/full_xn…yp on the command');
+      const col = Number(p.col ?? 0);
+      const row = Number(p.row ?? 0);
+      const cell = computeCell(gc, col, row);
+      // Bounds is a queued job — wait until it lands before matrix (immediate).
+      await drawAndWait(cell.boundsQuery);
+      await api(cell.matrixQuery);
+      return { status: 'ok', msg: `cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm` };
+    }
+
+    case 'grid_clear': {
+      const ellipse = p.ellipse ?? false;
+      let gc = gridCtx;
+      if (isFinite(Number(p.full_xn))) {
+        gc = {
+          cols: 1, rows: 1, padding_mm: 5,
+          full_xn: Number(p.full_xn), full_xp: Number(p.full_xp),
+          full_yn: Number(p.full_yn), full_yp: Number(p.full_yp),
+        };
+      }
+      if (!gc) throw new Error('grid_clear: need metadata.work_area on the document, or full_xn…yp on the command');
+      const q = gridClearQueries(gc);
+      const shape = ellipse ? 1 : 0;
+      const boundsEp = q.boundsQuery.replace('shape=0', `shape=${shape}`);
+      await drawAndWait(boundsEp);
+      await api(q.matrixQuery);
+      return { status: 'ok', msg: 'grid cleared, full area restored' };
+    }
+
+    default:
+      throw new Error(`Not a direct command: ${p.type}`);
+  }
+}
+
+const DIRECT_CMD_TYPES = new Set(['bounds', 'matrix', 'grid_select', 'grid_clear']);
 
 function buildEndpoint(cmd) {
   const p = cmd;
@@ -618,6 +1247,13 @@ function buildEndpoint(cmd) {
 
     case 'line':
       return `line?x0=${p.x0 ?? 0}&y0=${p.y0 ?? 0}&x1=${p.x1 ?? 0}&y1=${p.y1 ?? 0}&cycles=${p.cycles ?? 1}`;
+
+    case 'arc':
+      return (
+        `arc?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}&r=${p.r ?? 50}` +
+        `&a0=${p.a0 ?? 0}&a1=${p.a1 ?? 6.2832}` +
+        `&cw=${(p.cw ?? false) ? 1 : 0}&cycles=${p.cycles ?? 1}&lift=${(p.lift ?? true) ? 1 : 0}`
+      );
 
     case 'circle':
       return (
@@ -677,7 +1313,8 @@ function buildEndpoint(cmd) {
       return `accel?amax=${p.amax ?? 500}`;
 
     case 'current':
-      return `cur?run=${p.run_ma ?? 300}&hold=${p.hold_ma ?? 100}`;
+      // Accept run_ma/hold_ma (MCP style) and run/hold (console script style).
+      return `cur?run=${p.run_ma ?? p.run ?? 300}&hold=${p.hold_ma ?? p.hold ?? 100}`;
 
     default:
       throw new Error(`Unknown command type: ${p.type}`);

@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "title": "Grid random-walker smoke test (2×2)",
+    "work_area": {
+      "x_min": -276,
+      "x_max": 263,
+      "y_min": -115,
+      "y_max": 273
+    },
+    "grid": {
+      "cols": 2,
+      "rows": 2,
+      "padding_mm": 10
+    }
+  },
+  "commands": [
+    { "type": "grid_select", "col": 0, "row": 0 },
+    {
+      "type": "generate",
+      "generator": "randomWalker",
+      "params": {
+        "count": 3,
+        "steps": 40,
+        "flowAngle": 90,
+        "velStep": 0.4,
+        "maxVel": 2,
+        "x1": -15,
+        "y1": -15,
+        "x2": 15,
+        "y2": 15,
+        "seed": 42,
+        "cycles": 1
+      }
+    },
+    { "type": "grid_select", "col": 1, "row": 0 },
+    {
+      "type": "generate",
+      "generator": "randomWalker",
+      "params": { "count": 3, "steps": 40, "seed": 43, "flowAngle": 0 }
+    },
+    { "type": "grid_select", "col": 0, "row": 1 },
+    {
+      "type": "generate",
+      "generator": "randomWalker",
+      "params": { "count": 3, "steps": 40, "seed": 44, "flowAngle": 180 }
+    },
+    { "type": "grid_select", "col": 1, "row": 1 },
+    {
+      "type": "generate",
+      "generator": "randomWalker",
+      "params": { "count": 3, "steps": 40, "seed": 45, "flowAngle": 270 }
+    },
+    { "type": "grid_clear" },
+    { "type": "home" }
+  ]
+}

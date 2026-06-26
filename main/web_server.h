@@ -26,12 +26,13 @@ typedef enum {
     WCMD_CURRENT,
     WCMD_WOBBLY,
     WCMD_TRUCHET,
+    WCMD_ARC,
 } wcmd_type_t;
 
 typedef struct {
     wcmd_type_t type;
     uint32_t    id;
-    float p[8];
+    float p[12];
 } wcmd_t;
 
 extern QueueHandle_t g_draw_queue;
@@ -53,6 +54,9 @@ void plotter_get_bounds(float *xn, float *xp, float *yn, float *yp);
 bool plotter_bounds_ellipse(void);
 void plotter_get_xy(float *x, float *y);
 void plotter_get_motion(uint32_t *vmax, uint32_t *amax, float *run_ma, float *hold_ma);
+void plotter_set_matrix(float a, float b, float c, float d, float tx, float ty);
+void plotter_get_matrix(float *a, float *b, float *c, float *d, float *tx, float *ty);
+bool plotter_pen_is_down(void);   /* live pen state for /api/status */
 void plotter_abort_now(void);
 void plotter_stop_hold(void);
 void plotter_clear_fault(void);

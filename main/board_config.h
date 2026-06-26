@@ -34,9 +34,9 @@
 #define TMC_SPI_INST  spi0
 #define TMC_SPI_HZ    2000000   /* 2 MHz — fast enough for streaming segments, well within TMC5072 spec */
 
-/* Pen lift servo */
-#define PEN_UP_DEG    180
-#define PEN_DOWN_DEG  120
+/* Pen lift servo (re-mounted flipped — angles measured on hardware) */
+#define PEN_UP_DEG    50
+#define PEN_DOWN_DEG  70
 #define PEN_DWELL_MS  200
 
 /* TMC5072 dual driver: 0 = driver 1 (left belt), 1 = driver 2 (right belt) */

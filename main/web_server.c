@@ -236,7 +236,7 @@ static uint32_t enqueue(wcmd_t *cmd)
     if (!g_draw_queue) return 0;
     uint32_t id = ++g_job_enqueued;
     cmd->id = id;
-    if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(200)) != pdTRUE) {
+    if (xQueueSend(g_draw_queue, cmd, pdMS_TO_TICKS(50)) != pdTRUE) {
         --g_job_enqueued;
         ++g_job_rejected;   /* queue full — the exact firmware-side rejection */
         return 0;
@@ -313,6 +313,7 @@ static void handle_line(int sock, const char *qs)
     c.p[2] = qf(qs, "x1",  100.0f);
     c.p[3] = qf(qs, "y1",    0.0f);
     c.p[4] = qf(qs, "cycles", 1.0f);
+    c.p[5] = qf(qs, "lift",   1.0f);   /* 1 = standalone (pen up/travel/down/draw/up); 0 = continuous (no bob) */
     if (!pt_ok(sock, c.p[0], c.p[1]) || !pt_ok(sock, c.p[2], c.p[3])) return;
     resp_enqueue(sock, "line queued", &c);
 }
@@ -380,6 +381,10 @@ static void handle_wobbly(int sock, const char *qs)
     c.p[5] = qf(qs, "harmonics", 3.0f);
     c.p[6] = qf(qs, "seed",     42.0f);
     c.p[7] = qf(qs, "cycles",    1.0f);
+    c.p[8]  = qf(qs, "fill",     0.0f);   /* 0 none/outline, 1 hatch, 2 concentric */
+    c.p[9]  = qf(qs, "angle",    0.0f);   /* hatch angle (deg) */
+    c.p[10] = qf(qs, "spacing",  3.0f);   /* hatch / ring spacing (mm) */
+    c.p[11] = qf(qs, "outline",  1.0f);   /* 1 = draw the outline too */
     if (c.p[2] <= 0) { resp_json(sock, "error", "r must be > 0"); return; }
     if (c.p[3] <= 0.0f) c.p[3] = c.p[2] * 1.5f;
     if (!box_ok(sock, c.p[0], c.p[1], c.p[3], c.p[3])) return;
@@ -427,6 +432,29 @@ static void handle_bounds(int sock, const char *qs)
     resp_enqueue(sock, "bounds queued", &c);
 }
 
+/* Affine warp of the logical (x,y) command space (session-only, identity default).
+ * Applied immediately — exploratory, not a queued drawing op. */
+static void handle_matrix(int sock, const char *qs)
+{
+    plotter_set_matrix(qf(qs, "a", 1.0f), qf(qs, "b", 0.0f), qf(qs, "c", 0.0f),
+                       qf(qs, "d", 1.0f), qf(qs, "tx", 0.0f), qf(qs, "ty", 0.0f));
+    resp_json(sock, "ok", "matrix applied");
+}
+
+static void handle_arc(int sock, const char *qs)
+{
+    wcmd_t c = { .type = WCMD_ARC };
+    c.p[0] = qf(qs, "cx", 0.0f);
+    c.p[1] = qf(qs, "cy", 0.0f);
+    c.p[2] = qf(qs, "r",  10.0f);
+    c.p[3] = qf(qs, "a0", 0.0f);     /* start angle (rad) */
+    c.p[4] = qf(qs, "a1", 0.0f);     /* end angle (rad) */
+    c.p[5] = qf(qs, "cw", 0.0f);     /* 1 = clockwise */
+    c.p[6] = qf(qs, "cycles", 1.0f);
+    c.p[7] = qf(qs, "lift", 1.0f);   /* 0 = continuous (no pen bob) */
+    resp_enqueue(sock, "arc queued", &c);
+}
+
 static void handle_speed(int sock, const char *qs)
 {
     wcmd_t c = { .type = WCMD_SPEED };
@@ -459,26 +487,31 @@ static void handle_status(int sock, const char *qs)
     bool idle = (pending == 0);
     uint32_t mv = 0, ma = 0; float run_ma = 0.0f, hold_ma = 0.0f;
     plotter_get_motion(&mv, &ma, &run_ma, &hold_ma);
+    float ma_a, ma_b, ma_c, ma_d, ma_tx, ma_ty;
+    plotter_get_matrix(&ma_a, &ma_b, &ma_c, &ma_d, &ma_tx, &ma_ty);
 
-    char buf[800];
+    char buf[960];
     snprintf(buf, sizeof(buf),
         "{\"status\":\"ok\",\"enqueued\":%lu,\"current\":%lu,\"done\":%lu,"
         "\"pending\":%d,\"qcap\":%d,\"rejected\":%lu,\"peak\":%lu,"
-        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"estop\":%s,\"estop_pin\":%d,\"job\":\"%s\","
+        "\"idle\":%s,\"aborting\":%s,\"paused\":%s,\"estop\":%s,\"estop_pin\":%d,\"pen_down\":%s,\"job\":\"%s\","
         "\"drv_ok\":%s,\"drv_flags\":\"%s\","
         "\"x\":%.2f,\"y\":%.2f,"
         "\"bounds\":{\"xn\":%.1f,\"xp\":%.1f,\"yn\":%.1f,\"yp\":%.1f,\"ellipse\":%s},"
-        "\"motion\":{\"vmax\":%lu,\"amax\":%lu,\"run_ma\":%.1f,\"hold_ma\":%.1f}}\n",
+        "\"motion\":{\"vmax\":%lu,\"amax\":%lu,\"run_ma\":%.1f,\"hold_ma\":%.1f},"
+        "\"matrix\":{\"a\":%.5f,\"b\":%.5f,\"c\":%.5f,\"d\":%.5f,\"tx\":%.3f,\"ty\":%.3f}}\n",
         (unsigned long)g_job_enqueued, (unsigned long)g_job_current,
         (unsigned long)g_job_done, pending, DRAW_QUEUE_DEPTH,
         (unsigned long)g_job_rejected, (unsigned long)g_pending_peak,
         idle ? "true" : "false",
         g_job_abort ? "true" : "false", g_paused ? "true" : "false",
-        g_estop ? "true" : "false", plotter_estop_level(), g_job_desc,
+        g_estop ? "true" : "false", plotter_estop_level(),
+        plotter_pen_is_down() ? "true" : "false", g_job_desc,
         g_drv_fault ? "false" : "true", g_drv_flags,
         (double)x, (double)y, (double)xn, (double)xp, (double)yn, (double)yp,
         plotter_bounds_ellipse() ? "true" : "false",
-        (unsigned long)mv, (unsigned long)ma, (double)run_ma, (double)hold_ma);
+        (unsigned long)mv, (unsigned long)ma, (double)run_ma, (double)hold_ma,
+        (double)ma_a, (double)ma_b, (double)ma_c, (double)ma_d, (double)ma_tx, (double)ma_ty);
     send_response(sock, 200, "application/json", buf);
 }
 
@@ -647,6 +680,97 @@ static const char s_html[] =
     "};"
     "</script></body></html>";
 
+/* ---- Batch endpoint (POST /api/batch) ----
+ * Body = newline-separated draw ops ("line?x0=..", "goto?x=..", "pen?pos=up", "arc?..").
+ * Enqueues them all in ONE request → ~80x fewer TCP connections than one request per op,
+ * which is what makes large streamed designs (tens of thousands of segments) practical. */
+#define BATCH_BODY_MAX 8192
+static char s_batch_body[BATCH_BODY_MAX + 1];
+
+static int hdr_content_length(const char *req)
+{
+    const char *p = strstr(req, "Content-Length:");
+    if (!p) p = strstr(req, "content-length:");
+    if (!p) return -1;
+    p += 15;
+    while (*p == ' ') p++;
+    return atoi(p);
+}
+
+static bool batch_build_cmd(const char *path, const char *qs, wcmd_t *c)
+{
+    memset(c, 0, sizeof(*c));
+    if (strcmp(path, "line") == 0) {
+        c->type = WCMD_LINE;
+        c->p[0] = qf(qs, "x0", 0); c->p[1] = qf(qs, "y0", 0);
+        c->p[2] = qf(qs, "x1", 0); c->p[3] = qf(qs, "y1", 0);
+        c->p[4] = qf(qs, "cycles", 1); c->p[5] = qf(qs, "lift", 1);
+        return true;
+    }
+    if (strcmp(path, "goto") == 0) {
+        c->type = WCMD_GOTO; c->p[0] = qf(qs, "x", 0); c->p[1] = qf(qs, "y", 0); return true;
+    }
+    if (strcmp(path, "arc") == 0) {
+        c->type = WCMD_ARC;
+        c->p[0] = qf(qs, "cx", 0); c->p[1] = qf(qs, "cy", 0); c->p[2] = qf(qs, "r", 10);
+        c->p[3] = qf(qs, "a0", 0); c->p[4] = qf(qs, "a1", 0); c->p[5] = qf(qs, "cw", 0);
+        c->p[6] = qf(qs, "cycles", 1); c->p[7] = qf(qs, "lift", 1);
+        return true;
+    }
+    if (strcmp(path, "pen") == 0) {
+        char pos[16] = ""; qs_str(qs, "pos", pos, sizeof(pos));
+        if (strcmp(pos, "down") == 0)      c->type = WCMD_PEN_DOWN;
+        else if (strcmp(pos, "up") == 0)   c->type = WCMD_PEN_UP;
+        else { c->type = WCMD_PEN_DEG; c->p[0] = qf(qs, "deg", 90.0f); }
+        return true;
+    }
+    return false;
+}
+
+static void handle_batch(int sock, const char *req, int total)
+{
+    int clen = hdr_content_length(req);
+    const char *bstart = strstr(req, "\r\n\r\n");
+    int have = 0;
+    if (bstart) { bstart += 4; have = total - (int)(bstart - req); }
+    if (clen < 0) clen = have;
+    if (clen > BATCH_BODY_MAX) { resp_json(sock, "error", "batch too large"); return; }
+    int n = have > clen ? clen : have;
+    if (n > 0) memcpy(s_batch_body, bstart, (size_t)n);
+    while (n < clen) {
+        int r = recv(sock, s_batch_body + n, clen - n, 0);
+        if (r <= 0) break;
+        n += r;
+    }
+    s_batch_body[n] = '\0';
+    if (n < clen) {
+        /* recv timed out or connection dropped before the full body arrived.
+         * Return an error so the client retries rather than silently losing ops. */
+        printf("[web] batch body truncated: got %d of %d bytes — returning error\n", n, clen);
+        resp_json(sock, "error", "body truncated");
+        return;
+    }
+
+    uint32_t accepted = 0, rejected = 0, lastId = 0;
+    char *save = NULL;
+    for (char *line = strtok_r(s_batch_body, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
+        size_t L = strlen(line);
+        if (L && line[L - 1] == '\r') line[--L] = '\0';
+        if (L == 0) continue;
+        char *q = strchr(line, '?');
+        const char *qs = "";
+        if (q) { *q = '\0'; qs = q + 1; }
+        wcmd_t c;
+        if (!batch_build_cmd(line, qs, &c)) { rejected++; continue; }
+        uint32_t id = enqueue(&c);
+        if (id == 0) rejected++; else { accepted++; lastId = id; }
+    }
+    char out[112];
+    snprintf(out, sizeof(out), "{\"status\":\"ok\",\"accepted\":%lu,\"rejected\":%lu,\"id\":%lu}\n",
+             (unsigned long)accepted, (unsigned long)rejected, (unsigned long)lastId);
+    send_response(sock, 200, "application/json", out);
+}
+
 /* ---- Route table ---- */
 
 typedef void (*handler_fn_t)(int sock, const char *qs);
@@ -656,6 +780,7 @@ static const route_t s_routes[] = {
     { "/api/circle",     handle_circle     },
     { "/api/square",     handle_square     },
     { "/api/line",       handle_line       },
+    { "/api/arc",        handle_arc        },
     { "/api/goto",       handle_goto       },
     { "/api/home",       handle_home       },
     { "/api/stop",       handle_stop       },
@@ -667,6 +792,7 @@ static const route_t s_routes[] = {
     { "/api/truchet",    handle_truchet    },
     { "/api/sethome",    handle_sethome    },
     { "/api/bounds",     handle_bounds     },
+    { "/api/matrix",     handle_matrix     },
     { "/api/speed",      handle_speed      },
     { "/api/accel",      handle_accel      },
     { "/api/cur",        handle_cur        },
@@ -698,7 +824,7 @@ static void http_server_task(void *arg)
     if (bind(srv_sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         printf("[web] bind() failed\n"); close(srv_sock); vTaskDelete(NULL);
     }
-    listen(srv_sock, 5);
+    listen(srv_sock, 10);
     printf("[web] HTTP server on port %d\n", HTTP_PORT);
 
     char req_buf[1024];
@@ -749,6 +875,17 @@ static void http_server_task(void *arg)
         /* SSE: transfer socket to sse_task — do NOT close it here. */
         if (strcmp(url, "/events") == 0) {
             handle_events(client_sock);
+            continue;
+        }
+
+        /* Batch enqueue: needs the headers + body, not just the query string.
+         * The request line has been null-terminated at *eol, so we pass eol+1
+         * (the '\n' that follows) as the start of the headers — strstr("\r\n\r\n")
+         * and strstr("Content-Length:") both work fine on the unmodified headers. */
+        if (strcmp(url, "/api/batch") == 0) {
+            int hdr_off = (int)(eol + 1 - req_buf);
+            handle_batch(client_sock, eol + 1, total - hdr_off);
+            close(client_sock);
             continue;
         }
 

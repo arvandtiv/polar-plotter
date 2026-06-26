@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { apiGet, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
+import { apiGet, apiBatch, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
+import { loadPapers, savePapers, type Paper } from '../lib/papers';
+export type { Paper } from '../lib/papers';
+import { loadMatrices, saveMatrices, type Matrix } from '../lib/matrices';
+export type { Matrix } from '../lib/matrices';
 
 // ---- types -------------------------------------------------------
 
@@ -8,6 +12,8 @@ export type FillMode = 0 | 1 | 2;   // 0=none  1=hatch  2=concentric
 export type BoundsShape = 'rect' | 'ellipse';
 export interface PlotterBounds { left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface MotionParams  { vmax: number; amax: number; run: number; hold: number; }
+export interface MatrixParams  { a: number; b: number; c: number; d: number; tx: number; ty: number; }
+export const IDENTITY_PARAMS: MatrixParams = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 
 export interface CircleCmd   { type: 'circle';   cx: number; cy: number; r: number;    cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
 export interface SquareCmd   { type: 'square';   cx: number; cy: number; size: number; cycles: number; fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
@@ -22,7 +28,8 @@ export interface GridCmd     { type: 'grid';     cx: number; cy: number; }
 // canvas can preview the exact perimeter (the firmware uses its own stored bounds).
 export interface BorderCmd   { type: 'border';   left: number; right: number; up: number; down: number; shape: BoundsShape; }
 export interface WobblyCmd   { type: 'wobbly';   cx: number; cy: number; r: number; boundR: number;
-                               wobble: number; harmonics: number; seed: number; cycles: number; }
+                               wobble: number; harmonics: number; seed: number; cycles: number;
+                               fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
 // Truchet (Carlson 2018 winged motifs, single scale): white ribbons + hatched ground.
 // Carries the current bounds (like BorderCmd) so the preview can mirror the firmware's
 // work-area grid + clipping; the firmware itself uses its own stored bounds.
@@ -40,6 +47,7 @@ export interface PlotterStatus {
   idle: boolean; aborting: boolean; paused: boolean; estop: boolean; job: string;
   drvOk: boolean; drvFlags: string;
   motion?: { vmax: number; amax: number; run_ma: number; hold_ma: number };
+  matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number };
 }
 // One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
 // MCP's full plan), so labels are captured as `current` advances; not-yet-run jobs
@@ -52,8 +60,30 @@ export const DEFAULTS = {
   // run de-rated 600→400 mA to match the firmware default (board_config.h) — a pen
   // gondola needs little torque and run current is the multi-hour-plot heat source.
   motion: { vmax: 350000, amax: 1690, run: 940, hold: 440 },
-  bounds: { left: 260, right: 260, up: 274, down: 105, shape: 'rect' as BoundsShape },
+  bounds: { left: 276, right: 263, up: 115, down: 273, shape: 'rect' as BoundsShape },
 };
+
+// ---- bounds localStorage persistence --------------------------------
+// The UI is the source of truth for bounds — firmware resets on every reboot.
+// On connect the UI pushes its stored bounds to the firmware (see boundsSeeded logic).
+const BOUNDS_KEY = 'plotterBounds';
+function loadBounds(): PlotterBounds {
+  try {
+    const raw = localStorage.getItem(BOUNDS_KEY);
+    if (raw) {
+      const b = JSON.parse(raw);
+      if (typeof b.left === 'number' && typeof b.right === 'number' &&
+          typeof b.up   === 'number' && typeof b.down  === 'number') {
+        return { left: b.left, right: b.right, up: b.up, down: b.down,
+                 shape: b.shape === 'ellipse' ? 'ellipse' : 'rect' };
+      }
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULTS.bounds };
+}
+function saveBounds(b: PlotterBounds): void {
+  try { localStorage.setItem(BOUNDS_KEY, JSON.stringify(b)); } catch { /* ignore */ }
+}
 
 // Light-theme stroke palette (deepened for contrast on white) — Claude Design tokens.
 const PALETTE = ['#0284c7', '#059669', '#d97706', '#db2777', '#7c3aed', '#ea580c'];
@@ -75,7 +105,8 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'grid':     return `grid?cx=${cmd.cx}&cy=${cmd.cy}`;
     case 'border':   return 'border';   // firmware traces its own stored bounds
     case 'wobbly':   return `wobbly?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&bound_r=${cmd.boundR}` +
-                            `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}`;
+                            `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}` +
+                            `&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
     case 'truchet':  return `truchet?n=${cmd.n}&spacing=${cmd.spacing}&angle=${cmd.angle}&seed=${cmd.seed}&motifs=${cmd.motifs}`;
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
@@ -93,7 +124,7 @@ export function cmdToJson(cmd: PlotCmd): string {
     case 'line':     return JSON.stringify({ type: 'line', x0: cmd.x0, y0: cmd.y0, x1: cmd.x1, y1: cmd.y1, cycles: cmd.cycles });
     case 'circle':   return JSON.stringify({ type: 'circle', cx: cmd.cx, cy: cmd.cy, r: cmd.r, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
     case 'square':   return JSON.stringify({ type: 'square', cx: cmd.cx, cy: cmd.cy, size: cmd.size, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
-    case 'wobbly':   return JSON.stringify({ type: 'wobbly', cx: cmd.cx, cy: cmd.cy, r: cmd.r, bound_r: cmd.boundR, wobble: cmd.wobble, harmonics: cmd.harmonics, seed: cmd.seed, cycles: cmd.cycles });
+    case 'wobbly':   return JSON.stringify({ type: 'wobbly', cx: cmd.cx, cy: cmd.cy, r: cmd.r, bound_r: cmd.boundR, wobble: cmd.wobble, harmonics: cmd.harmonics, seed: cmd.seed, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
     case 'truchet':  return JSON.stringify({ type: 'truchet', n: cmd.n, spacing: cmd.spacing, angle: cmd.angle, seed: cmd.seed, motifs: cmd.motifs });
     case 'bullseye': return JSON.stringify({ type: 'bullseye', cx: cmd.cx, cy: cmd.cy });
     case 'grid':     return JSON.stringify({ type: 'grid', cx: cmd.cx, cy: cmd.cy });
@@ -132,31 +163,56 @@ export function cmdLabel(cmd: PlotCmd): string {
 // them under a "commands" (or "script") key — e.g. { "commands": [ … ] } — and
 // converts each to an API query string. Same object shape as plot_script in the
 // MCP, so scripts are copy-pasteable between Claude Desktop and this console.
+import type { GeneratorSpec } from '../lib/runPipeline';
+import {
+  gridCtxFromMetadata,
+  gridCtxFromPlotterBounds,
+  computeCell,
+  gridClearQueries,
+  hydrateGridCommands,
+  type GridCtx,
+} from '../lib/gridScript';
+export type { GeneratorSpec };
+
 export interface ParsedLine {
   idx: number;      // 0-based index in the JSON array (-1 = top-level error)
   raw: string;      // compact JSON of the item (for display)
-  query?: string;   // present when ok
+  query?: string;   // present for regular firmware commands
+  generator?: GeneratorSpec;  // present for "generate" items — expanded at run time
+  gridSelect?: { col: number; row: number; gc: GridCtx };
+  gridClear?: { gc: GridCtx };
   error?: string;   // present when validation failed
 }
 
-export function parseJsonScript(text: string): ParsedLine[] {
+export function parseJsonScript(
+  text: string,
+  opts?: { plotterBounds?: PlotterBounds },
+): ParsedLine[] {
   const t = text.trim();
   if (!t) return [];
 
   let arr: unknown[];
+  let gridCtx: GridCtx | null = null;
+  const rn = (n: number) => Math.round(n * 100) / 100;
+
   try {
     const parsed = JSON.parse(t);
     if (Array.isArray(parsed)) {
       arr = parsed;
     } else if (parsed && typeof parsed === 'object') {
       // Unwrap { commands: [ … ] } or { script: [ … ] }.
+      // Also extract grid context from outer metadata (klee-style composition files).
       const wrap = parsed as Record<string, unknown>;
+      gridCtx = gridCtxFromMetadata(wrap as { metadata?: { work_area?: Record<string, number>; grid?: Record<string, number> } });
+      if (gridCtx && opts?.plotterBounds) {
+        gridCtx = gridCtxFromPlotterBounds(opts.plotterBounds, gridCtx);
+      }
       const inner = Array.isArray(wrap.commands) ? wrap.commands
                   : Array.isArray(wrap.script)   ? wrap.script
                   : null;
       if (!inner)
         return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ] or an object with a "commands" array' }];
-      arr = inner as unknown[];
+      arr = hydrateGridCommands(inner as { type?: string }[], gridCtx) as unknown[];
     } else {
       return [{ idx: -1, raw: '', error: 'Expected a JSON array [ … ] or an object with a "commands" array' }];
     }
@@ -164,10 +220,14 @@ export function parseJsonScript(text: string): ParsedLine[] {
     return [{ idx: -1, raw: '', error: `JSON syntax: ${(e as Error).message}` }];
   }
 
-  return arr.map((item, idx) => {
+  const results: ParsedLine[] = [];
+
+  arr.forEach((item, idx) => {
     const raw = JSON.stringify(item);
-    if (!item || typeof item !== 'object' || Array.isArray(item))
-      return { idx, raw, error: 'each item must be an object' };
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      results.push({ idx, raw, error: 'each item must be an object' });
+      return;
+    }
 
     const o = item as Record<string, unknown>;
     const type = String(o.type ?? '').toLowerCase();
@@ -180,71 +240,273 @@ export function parseJsonScript(text: string): ParsedLine[] {
       return null;
     };
 
+    // Silently skip comment-only objects (no type), preflight status checks, and
+    // planning-only commands — they carry no executable firmware action.
+    if (!type || type === 'status' || type === 'grid_plan') return;
+
     switch (type) {
       case 'goto': {
-        const e = req('x', 'y'); if (e) return { idx, raw, error: `goto: ${e}` };
-        return { idx, raw, query: `goto?x=${num('x',0)}&y=${num('y',0)}` };
+        const e = req('x', 'y'); if (e) { results.push({ idx, raw, error: `goto: ${e}` }); return; }
+        results.push({ idx, raw, query: `goto?x=${num('x',0)}&y=${num('y',0)}` });
+        return;
       }
       case 'pen': {
         const pos = String(o.position ?? o.pos ?? '').toLowerCase();
-        if (pos !== 'up' && pos !== 'down')
-          return { idx, raw, error: 'pen: "position" must be "up" or "down"' };
-        return { idx, raw, query: `pen?pos=${pos}` };
+        if (pos !== 'up' && pos !== 'down') { results.push({ idx, raw, error: 'pen: "position" must be "up" or "down"' }); return; }
+        results.push({ idx, raw, query: `pen?pos=${pos}` });
+        return;
       }
-      case 'home':    return { idx, raw, query: 'home' };
-      case 'sethome': return { idx, raw, query: 'sethome' };
-      case 'stop':    return { idx, raw, query: 'stop' };
-      case 'border':  return { idx, raw, query: 'border' };
+      case 'home':    results.push({ idx, raw, query: 'home' });    return;
+      case 'sethome': results.push({ idx, raw, query: 'sethome' }); return;
+      case 'stop':    results.push({ idx, raw, query: 'stop' });    return;
+      case 'border':  results.push({ idx, raw, query: 'border' });  return;
       case 'line': {
-        const e = req('x0','y0','x1','y1'); if (e) return { idx, raw, error: `line: ${e}` };
-        return { idx, raw, query:
-          `line?x0=${num('x0',0)}&y0=${num('y0',0)}&x1=${num('x1',0)}&y1=${num('y1',0)}&cycles=${num('cycles',1)}` };
+        const e = req('x0','y0','x1','y1'); if (e) { results.push({ idx, raw, error: `line: ${e}` }); return; }
+        results.push({ idx, raw, query:
+          `line?x0=${num('x0',0)}&y0=${num('y0',0)}&x1=${num('x1',0)}&y1=${num('y1',0)}&cycles=${num('cycles',1)}` });
+        return;
       }
       case 'circle': {
-        const e = req('cx','cy','r'); if (e) return { idx, raw, error: `circle: ${e}` };
+        const e = req('cx','cy','r'); if (e) { results.push({ idx, raw, error: `circle: ${e}` }); return; }
         const ol = o.outline === false || o.outline === 0 ? 0 : 1;
-        return { idx, raw, query:
-          `circle?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+        results.push({ idx, raw, query:
+          `circle?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
+        return;
       }
       case 'square': {
-        const e = req('cx','cy','size'); if (e) return { idx, raw, error: `square: ${e}` };
+        const e = req('cx','cy','size'); if (e) { results.push({ idx, raw, error: `square: ${e}` }); return; }
         const ol = o.outline === false || o.outline === 0 ? 0 : 1;
-        return { idx, raw, query:
-          `square?cx=${num('cx',0)}&cy=${num('cy',0)}&size=${num('size',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` };
+        results.push({ idx, raw, query:
+          `square?cx=${num('cx',0)}&cy=${num('cy',0)}&size=${num('size',0)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
+        return;
       }
       case 'wobbly': {
-        const e = req('cx','cy','r'); if (e) return { idx, raw, error: `wobbly: ${e}` };
-        return { idx, raw, query:
-          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}` };
+        const e = req('cx','cy','r'); if (e) { results.push({ idx, raw, error: `wobbly: ${e}` }); return; }
+        const ol = o.outline === false || o.outline === 0 ? 0 : 1;
+        results.push({ idx, raw, query:
+          `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
+        return;
       }
       case 'truchet': {
-        return { idx, raw, query:
-          `truchet?n=${num('n',4)}&spacing=${num('spacing',3)}&angle=${num('angle',45)}&seed=${num('seed',42)}&motifs=${num('motifs',0)}` };
+        results.push({ idx, raw, query:
+          `truchet?n=${num('n',4)}&spacing=${num('spacing',3)}&angle=${num('angle',45)}&seed=${num('seed',42)}&motifs=${num('motifs',0)}` });
+        return;
       }
       case 'bullseye':
-        return { idx, raw, query: `bullseye?cx=${num('cx',0)}&cy=${num('cy',0)}` };
-      case 'speed': {
-        const e = req('vmax'); if (e) return { idx, raw, error: `speed: ${e}` };
-        return { idx, raw, query: `speed?vmax=${num('vmax',0)}` };
+        results.push({ idx, raw, query: `bullseye?cx=${num('cx',0)}&cy=${num('cy',0)}` }); return;
+      case 'grid':
+        results.push({ idx, raw, query: `grid?cx=${num('cx',0)}&cy=${num('cy',0)}` }); return;
+      case 'arc': {
+        const e = req('cx','cy','r','a0','a1'); if (e) { results.push({ idx, raw, error: `arc: ${e}` }); return; }
+        results.push({ idx, raw, query:
+          `arc?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',10)}&a0=${num('a0',0)}&a1=${num('a1',0)}&cw=${num('cw',0)}&cycles=${num('cycles',1)}&lift=${num('lift',1)}` });
+        return;
+      }
+      case 'bounds': {
+        const e = req('xn','xp','yn','yp'); if (e) { results.push({ idx, raw, error: `bounds: ${e}` }); return; }
+        results.push({ idx, raw, query:
+          `bounds?xn=${num('xn',0)}&xp=${num('xp',0)}&yn=${num('yn',0)}&yp=${num('yp',0)}&shape=${num('shape',0)}` });
+        return;
+      }
+      case 'matrix': {
+        results.push({ idx, raw, query:
+          `matrix?a=${num('a',1)}&b=${num('b',0)}&c=${num('c',0)}&d=${num('d',1)}&tx=${num('tx',0)}&ty=${num('ty',0)}` });
+        return;
+      }
+      case 'speed':
+      case 'set_speed': {
+        const e = req('vmax'); if (e) { results.push({ idx, raw, error: `${type}: ${e}` }); return; }
+        results.push({ idx, raw, query: `speed?vmax=${num('vmax',0)}` });
+        return;
       }
       case 'accel': {
-        const e = req('amax'); if (e) return { idx, raw, error: `accel: ${e}` };
-        return { idx, raw, query: `accel?amax=${num('amax',0)}` };
+        const e = req('amax'); if (e) { results.push({ idx, raw, error: `accel: ${e}` }); return; }
+        results.push({ idx, raw, query: `accel?amax=${num('amax',0)}` });
+        return;
       }
       case 'cur':
-      case 'current': {
-        const e = req('run'); if (e) return { idx, raw, error: `cur: ${e}` };
-        return { idx, raw, query: `cur?run=${num('run',0)}&hold=${num('hold',200)}` };
+      case 'current':
+      case 'set_current': {
+        // Accept both 'run'/'hold' (console style) and 'run_ma'/'hold_ma' (MCP/klee style).
+        const runVal = isFinite(Number(o.run_ma)) ? Number(o.run_ma) : num('run', 0);
+        const holdVal = isFinite(Number(o.hold_ma)) ? Number(o.hold_ma) : num('hold', 200);
+        if (!isFinite(runVal) || runVal === 0) { results.push({ idx, raw, error: `${type}: missing "run" or "run_ma"` }); return; }
+        results.push({ idx, raw, query: `cur?run=${runVal}&hold=${holdVal}` });
+        return;
       }
+      case 'grid_select': {
+        let gc: GridCtx | null = gridCtx;
+        if (isFinite(Number(o.cols)) && isFinite(Number(o.full_xn))) {
+          gc = {
+            cols: num('cols', 1), rows: num('rows', 1), padding_mm: num('padding_mm', 5),
+            full_xn: num('full_xn', 0), full_xp: num('full_xp', 0),
+            full_yn: num('full_yn', 0), full_yp: num('full_yp', 0),
+          };
+        }
+        if (!gc) { results.push({ idx, raw, error: 'grid_select: need cols/rows/full_xn/xp/yn/yp or outer metadata.grid + metadata.work_area' }); return; }
+        const col = num('col', 0), row = num('row', 0);
+        try {
+          computeCell(gc, col, row);
+          results.push({ idx, raw, gridSelect: { col, row, gc } });
+        } catch (e) {
+          results.push({ idx, raw, error: (e as Error).message });
+        }
+        return;
+      }
+      case 'grid_clear': {
+        let gc: GridCtx | null = gridCtx;
+        if (isFinite(Number(o.full_xn))) {
+          gc = { cols: 1, rows: 1, padding_mm: 5, full_xn: num('full_xn', 0), full_xp: num('full_xp', 0), full_yn: num('full_yn', 0), full_yp: num('full_yp', 0) };
+        }
+        if (!gc) { results.push({ idx, raw, error: 'grid_clear: need full_xn/xp/yn/yp or outer metadata.work_area' }); return; }
+        results.push({ idx, raw, gridClear: { gc } });
+        return;
+      }
+      case 'generate': {
+        const key = String(o.generator ?? o.key ?? '');
+        if (!key) { results.push({ idx, raw, error: 'generate: missing "generator" key' }); return; }
+        const params: Record<string, number | string | boolean> = {};
+        const rawParams = o.params && typeof o.params === 'object' && !Array.isArray(o.params)
+          ? o.params as Record<string, unknown> : {};
+        for (const [k, v] of Object.entries(rawParams)) {
+          if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') params[k] = v;
+        }
+        let warp: GeneratorSpec['warp'] | undefined;
+        if (o.warp && typeof o.warp === 'object' && !Array.isArray(o.warp)) {
+          const w = o.warp as Record<string, unknown>;
+          const mode = String(w.mode ?? 'water');
+          const wp: Record<string, number> = {};
+          if (w.params && typeof w.params === 'object') {
+            for (const [k, v] of Object.entries(w.params as Record<string, unknown>)) {
+              if (typeof v === 'number') wp[k] = v;
+            }
+          }
+          warp = { mode, params: wp };
+        }
+        results.push({ idx, raw, generator: { key, params, warp } });
+        return;
+      }
+
       default:
-        return { idx, raw, error: `unknown type "${type}"` };
+        results.push({ idx, raw, error: `unknown type "${type}"` });
     }
   });
+
+  return results;
 }
 
 export function boundsToQuery(b: PlotterBounds): string {
   // Firmware params: xn = X−, xp = X+, yn = Y−, yp = Y+, shape 0=rect 1=ellipse
-  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.down}&yp=${b.up}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
+  // up = distance above origin (|yn|), down = distance below origin (yp)
+  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.up}&yp=${b.down}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
+}
+
+// ---- shared flow-controlled query streamer -----------------------
+// The board's draw queue holds 256 jobs and sendRaw returns on ENQUEUE (not on
+// draw-completion). To never overflow — even when the machine is already busy
+// with an EARLIER stack — gate every burst on the board's REAL pending count.
+// Crucially: if the status read fails OR the queue is full, WAIT rather than send
+// (a rejection must never look like "room available"). Used by both the JSON
+// Script tab and the G-code digester so they share identical back-pressure.
+export type SendResult = 'ok' | 'rejected' | 'error';
+export interface StreamItem { query: string; raw?: string; }
+/** Firmware /api/batch only accepts these ops — everything else must use sendRaw. */
+export const BATCH_OPS = new Set(['pen', 'goto', 'line', 'arc']);
+export function isBatchableQuery(query: string): boolean {
+  return BATCH_OPS.has(query.split('?')[0]);
+}
+export interface StreamHandlers {
+  sendRaw: (ep: string, json?: string) => Promise<SendResult>;
+  /** Optional: enqueue many ops in one request. When present, streamQueries uses it
+   *  (≈80× fewer connections); otherwise it falls back to one request per op. */
+  sendBatch?: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
+  getPending: () => Promise<number | null>;
+  isCancelled: () => boolean;
+  onProgress?: (sent: number, errors: number) => void;
+  pushLog: (kind: LogEntry['kind'], text: string) => void;
+  label?: string;
+}
+export async function streamQueries(items: StreamItem[], h: StreamHandlers): Promise<{ sent: number; errors: number; stopped: boolean }> {
+  const CAP = 256, HIGH = 220, BATCH = 64;
+  const MAX_NET_FAILS = 60;          // consecutive transient failures before we give up
+  const label = h.label ?? 'stream';
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  let errors = 0, i = 0, warned = false, netFails = 0;
+
+  const onTransient = async (): Promise<boolean> => {
+    // returns true if we should give up
+    if (++netFails >= MAX_NET_FAILS) {
+      h.pushLog('err', `[${label}] aborting — ${netFails} straight network failures (connection lost?). ${i}/${items.length} sent.`);
+      return true;
+    }
+    if (netFails === 1) h.pushLog('sys', `[${label}] network busy — backing off & retrying (not dropping jobs)…`);
+    await sleep(Math.min(2000, 150 * netFails));
+    return false;
+  };
+
+  while (i < items.length && !h.isCancelled()) {
+    const pend = await h.getPending();
+    if (pend === null || pend >= HIGH) {
+      if (pend !== null && !warned) {
+        h.pushLog('sys', `[${label}] board busy (${pend}/${CAP} queued) — waiting for room…`);
+        warned = true;
+      }
+      await sleep(400);
+      continue;                       // do NOT send while full / unknown
+    }
+    warned = false;
+    const room = HIGH - pend;         // room reserved → a batch sized ≤ room can't overflow
+
+    if (h.sendBatch && isBatchableQuery(items[i].query)) {
+      // Batch only consecutive pen/goto/line/arc ops — circle/home/etc. use sendRaw below.
+      const maxN = Math.min(room, BATCH, items.length - i);
+      let n = 0;
+      while (n < maxN && isBatchableQuery(items[i + n].query)) n++;
+      const res = await h.sendBatch(items.slice(i, i + n).map((it) => it.query));
+      if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; continue; }
+      netFails = 0;
+      errors += res.rejected;         // sized to fit → rejections are genuine (skip them)
+      const actual = res.accepted + res.rejected;
+      if (actual < n) {
+        // Firmware processed fewer ops than sent (body may have been truncated by a recv
+        // timeout). Advance only past the confirmed ops; the rest retry next iteration.
+        i += actual;
+        h.pushLog('warn', `[${label}] partial batch: sent ${n}, fw confirmed ${actual} — ${n - actual} retrying`);
+      } else {
+        i += n;                       // all n were processed (accepted or rejected)
+      }
+      h.onProgress?.(i, errors);
+      continue;
+    }
+
+    if (h.sendBatch) {
+      // Non-batchable op (circle, square, home, …) — individual GET, same as MCP batchSend.
+      const res = await h.sendRaw(items[i].query, items[i].raw);
+      if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; continue; }
+      netFails = 0;
+      if (res === 'rejected') errors++;
+      i++;
+      h.onProgress?.(i, errors);
+      continue;
+    }
+
+    // Per-op fallback (no batch support).
+    let budget = room;
+    while (budget > 0 && i < items.length && !h.isCancelled()) {
+      const res = await h.sendRaw(items[i].query, items[i].raw);
+      if (res === 'error') { if (await onTransient()) return { sent: i, errors, stopped: true }; break; }
+      netFails = 0;
+      if (res === 'rejected') errors++;
+      i++;
+      budget--;
+      h.onProgress?.(i, errors);
+    }
+  }
+  return { sent: i, errors, stopped: h.isCancelled() && i < items.length };
+}
+
+export function matrixToQuery(m: MatrixParams): string {
+  return `matrix?a=${m.a}&b=${m.b}&c=${m.c}&d=${m.d}&tx=${m.tx}&ty=${m.ty}`;
 }
 
 export function motionToQuery(key: keyof MotionParams, val: number, m: MotionParams): string {
@@ -663,20 +925,30 @@ export function usePlotter() {
   const [moving, setMoving]        = useState(false);
   const [connected, setConnected]  = useState(false);
   const [motion, setMotionState]   = useState<MotionParams>({ ...DEFAULTS.motion });
-  const [bounds, setBoundsState]   = useState<PlotterBounds>({ ...DEFAULTS.bounds });
+  const [bounds, setBoundsState]   = useState<PlotterBounds>(() => loadBounds());
   const [queue, setQueue]          = useState<string[]>([]);
   const [log, setLog]              = useState<LogEntry[]>([mkLog('sys', 'console ready')]);
   const [status, setStatus]        = useState<PlotterStatus | null>(null);
   const [jobs, setJobs]            = useState<JobEntry[]>([]);
+  const [papers, setPapers]        = useState<Paper[]>(() => loadPapers());
+  // Affine matrix: `matrix` = the live 6 values being edited; `matrices` = saved
+  // presets (localStorage). Firmware default is identity and is NEVER auto-applied
+  // on connect — the user explicitly applies a warp.
+  const [matrix, setMatrixState]   = useState<MatrixParams>({ ...IDENTITY_PARAMS });
+  const [matrices, setMatrices]    = useState<Matrix[]>(() => loadMatrices());
 
   // Labels captured per job id as `current` advances (firmware only reports the
   // CURRENT job's label, so we remember each one to render the done-job history).
   const jobLabels = useRef<Map<number, string>>(new Map());
+  // JSON of each job we submitted (console enqueue + Script-tab items), keyed by
+  // job id, so the Position panel can show the running job's exact JSON value.
+  const jobJson = useRef<Map<number, string>>(new Map());
 
   // Tracks whether we've already seeded bounds/motion from the firmware on this IP.
   // Reset when IP changes so a new plotter gets a fresh read.
   const boundsSeeded  = useRef(false);
   const motionSeeded  = useRef(false);
+  const matrixSeeded  = useRef(false);
   // Connectivity debounce: SSE uses sseWasOpen to log the drop only once (not on
   // every retry burst). Status poll uses pollFails to require 3 consecutive misses
   // before declaring the link down, so a single slow response doesn't flash the UI.
@@ -687,9 +959,17 @@ export function usePlotter() {
   // value and would otherwise see stale data (EventSource handlers, setInterval).
   // The ref is updated every render so the callback always reads the current value.
   const motionRef = useRef(motion);    motionRef.current = motion;
+  const boundsRef = useRef(bounds);    boundsRef.current = bounds;
+  const papersRef = useRef(papers);    papersRef.current = papers;
+  const matrixRef = useRef(matrix);    matrixRef.current = matrix;
+  const matricesRef = useRef(matrices); matricesRef.current = matrices;
   const ipRef     = useRef(ip);        ipRef.current     = ip;
   const cancelRef = useRef(false);     // set true by stop()/clearQueue() to cancel client-side work
   const runCancelRef = useRef(false);  // set true by stop()/clearQueue() to halt a running script batch
+
+  // Persist bounds whenever they change — gives a better offline default than the
+  // hardcoded fallback. Firmware bounds always win on connect (line ~938).
+  useEffect(() => { saveBounds(bounds); }, [bounds]);
 
   const pushLog = useCallback((kind: LogEntry['kind'], text: string) => {
     setLog((l) => [...l.slice(-199), mkLog(kind, text)]);
@@ -723,6 +1003,10 @@ export function usePlotter() {
     es.onmessage = (e) => {
       // Unnamed events = log messages from web_log()
       const text = e.data as string;
+      // Suppress per-sub-segment line/goto chatter — one per segment floods the log
+      // and pushes out the higher-level cmd/sys entries. Arc, circle, square, pen,
+      // errors etc. are kept because they're coarse-grained and meaningful.
+      if (/^(line|goto) (done|\()/.test(text)) return;
       const kind: LogEntry['kind'] = text.startsWith('!! ') ? 'warn' : 'fw';
       pushLog(kind, text);
     };
@@ -760,6 +1044,7 @@ export function usePlotter() {
     if (!ip) { setStatus(null); setJobs([]); return; }
     boundsSeeded.current = false;   // new IP → re-read bounds + motion from that plotter
     motionSeeded.current = false;
+    matrixSeeded.current = false;
     pollFails.current = 0;
     let alive = true;
 
@@ -784,15 +1069,19 @@ export function usePlotter() {
       // Pen position + MOVING come straight from the board — no client animation.
       // The dot tracks the real XACTUAL→mm position, and MOVING reflects true
       // execution: on while a job runs, off the instant the board is idle (or paused).
-      setPen((p) => ({ ...p, x: s.x, y: s.y }));
+      // Pen down/up mirrors the REAL firmware state (it toggles during scripts /
+      // G-code / MCP draws, not just on UI button clicks).
+      setPen((p) => ({ ...p, x: s.x, y: s.y, down: s.pen_down ?? p.down }));
       setMoving(!s.idle && !s.paused);
 
-      // On first connect, SELECT the default paper (Water - paper): set it in the
-      // console and push it to the firmware so the board matches the chosen preset.
-      if (!boundsSeeded.current) {
+      // On first idle connect, PUSH our stored bounds to the firmware — never adopt the
+      // firmware's values. The firmware resets bounds on every reboot; the UI's
+      // localStorage value is the durable source of truth. We use apiGet directly (not
+      // the job queue) so this is a config write, never a draw job. We gate on s.idle
+      // to avoid landing a bounds config mid-plot on a reconnect.
+      if (!boundsSeeded.current && s.bounds && s.idle) {
         boundsSeeded.current = true;
-        setBoundsState({ ...DEFAULTS.bounds });
-        apiGet(ip, boundsToQuery(DEFAULTS.bounds)).catch(() => {});
+        if (ipRef.current) apiGet(ipRef.current, boundsToQuery(boundsRef.current)).catch(() => {});
       }
       if (!motionSeeded.current && s.motion) {
         motionSeeded.current = true;
@@ -803,13 +1092,19 @@ export function usePlotter() {
           hold: s.motion.hold_ma,
         });
       }
+      // Reflect the firmware's ACTIVE matrix into the editor (identity at startup) —
+      // read-only seeding, never an apply.
+      if (!matrixSeeded.current && s.matrix) {
+        matrixSeeded.current = true;
+        setMatrixState({ ...s.matrix });
+      }
 
       if (s.job && s.current > 0) jobLabels.current.set(s.current, s.job);
 
       setStatus({
         enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
         idle: s.idle, aborting: s.aborting, paused: s.paused, estop: !!s.estop, job: s.job,
-        drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion,
+        drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion, matrix: s.matrix,
       });
 
       // Build the job rows. Cap to a trailing window so a long session doesn't
@@ -855,23 +1150,68 @@ export function usePlotter() {
     // Pen up/down is the one bit of state the firmware doesn't report back, so
     // reflect it locally for the indicator.
     if (cmd.type === 'pen') setPen((p) => ({ ...p, down: cmd.pos === 'down' }));
+    // Grid scripts leave aff_tx/aff_ty at a cell centre — home/sethome must reset
+    // the matrix or position reads ~cell offset at step 0 (firmware also resets).
+    if (cmd.type === 'home' || cmd.type === 'sethome') {
+      setMatrixState({ ...IDENTITY_PARAMS });
+      if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+      setPen((p) => ({ ...p, x: 0, y: 0 }));
+    }
     setQueue((q) => [...q, cmd.type]);
     const d = await send(ep);
-    /* Register the job label at submit time so pending entries in the job list
-     * show their type (e.g. "line — pending") instead of a blank "pending…". */
-    if (d?.id) jobLabels.current.set(d.id, cmdLabel(cmd));
+    /* Register the job label + JSON at submit time so the job list shows the type
+     * and the Position panel can show the running job's exact JSON. */
+    if (d?.id) { jobLabels.current.set(d.id, cmdLabel(cmd)); jobJson.current.set(d.id, cmdToJson(cmd)); }
     setQueue((q) => q.slice(1));
   }, [send, pushLog]);
 
-  // Quiet raw send for bulk script execution — no individual log lines,
-  // returns true on ok, false on error/network failure.
-  const sendRaw = useCallback(async (endpoint: string): Promise<boolean> => {
-    if (!ipRef.current) return false;
+  // Quiet raw send for bulk script execution — no individual log lines, returns
+  // true on ok. Pass the item's JSON so the Position panel can show it while it runs.
+  // 'ok' = queued; 'rejected' = the firmware refused it (bounds/syntax/queue-full) → skip;
+  // 'error' = the request didn't complete (network/connection) → caller should retry, not drop.
+  const sendRaw = useCallback(async (endpoint: string, json?: string): Promise<SendResult> => {
+    if (!ipRef.current) return 'error';
     try {
       const d = await apiGet(ipRef.current, endpoint);
-      return d.status === 'ok';
+      if (d.status === 'ok' && d.id != null && json) jobJson.current.set(d.id, json);
+      return d.status === 'ok' ? 'ok' : 'rejected';
     } catch {
-      return false;
+      return 'error';
+    }
+  }, []);
+
+  /** Enqueue a job and block until the firmware reports it done (for bounds etc.). */
+  const sendAndWait = useCallback(async (endpoint: string, json?: string): Promise<SendResult> => {
+    if (!ipRef.current) return 'error';
+    try {
+      const d = await apiGet(ipRef.current, endpoint);
+      if (d.status !== 'ok') return 'rejected';
+      if (d.id != null && json) jobJson.current.set(d.id, json);
+      if (d.id == null) return 'ok';
+      const deadline = Date.now() + 180_000;
+      for (;;) {
+        const s = await getStatus(ipRef.current);
+        if ((s.done ?? 0) >= d.id) return 'ok';
+        if (Date.now() > deadline) return 'error';
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    } catch {
+      return 'error';
+    }
+  }, []);
+
+  // Batch many draw ops into one HTTP request (≈80× fewer connections → big streams
+  // become practical). Returns enqueue counts, or 'error' on a transient network fail.
+  const sendBatch = useCallback(async (queries: string[]): Promise<{ accepted: number; rejected: number } | 'error'> => {
+    if (!ipRef.current) return 'error';
+    try {
+      const d = await apiBatch(ipRef.current, queries.join('\n'));
+      // Firmware-side errors (e.g. body too large) must trigger a retry, not a silent
+      // {accepted:0,rejected:0} which would advance i past all n ops without queuing them.
+      if (d.status !== 'ok') return 'error';
+      return { accepted: Number(d.accepted) || 0, rejected: Number(d.rejected) || 0 };
+    } catch {
+      return 'error';
     }
   }, []);
 
@@ -938,15 +1278,98 @@ export function usePlotter() {
     if (ipRef.current) send('clearfault');
   }, [send, pushLog]);
 
+  // ---- paper presets (persisted, user-managed) -----------------
+  const applyPaper = useCallback((p: Paper) => {
+    const b: PlotterBounds = { left: p.left, right: p.right, up: p.up, down: p.down, shape: 'rect' };
+    setBoundsState(b);
+    if (ipRef.current) apiGet(ipRef.current, boundsToQuery(b)).catch(() => {});
+    pushLog('ok', `[paper] ${p.name}`);
+  }, [pushLog]);
+
+  const savePaper = useCallback((name: string) => {
+    const b = boundsRef.current;
+    const p: Paper = { name, up: b.up, down: b.down, left: b.left, right: b.right };
+    const next = [...papersRef.current.filter((x) => x.name !== name), p];
+    setPapers(next); savePapers(next);
+    pushLog('ok', `[paper] saved "${name}" (${b.left + b.right}×${b.up + b.down} mm)`);
+  }, [pushLog]);
+
+  const renamePaper = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    const next = papersRef.current.map((x) => (x.name === oldName ? { ...x, name: newName.trim() } : x));
+    setPapers(next); savePapers(next);
+  }, []);
+
+  const deletePaper = useCallback((name: string) => {
+    const next = papersRef.current.filter((x) => x.name !== name);
+    setPapers(next); savePapers(next);
+  }, []);
+
+  // ---- affine matrix (live editor + presets) -------------------
+  // Edit one of the 6 live values (does NOT push to firmware until applyMatrixVals).
+  const setMatrixVal = useCallback((key: keyof MatrixParams, val: number) => {
+    setMatrixState((m) => ({ ...m, [key]: val }));
+  }, []);
+
+  // Push the current live values to the firmware session.
+  const applyMatrixVals = useCallback(() => {
+    const ep = matrixToQuery(matrixRef.current);
+    pushLog('cmd', `> ${ep}`);
+    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
+  }, [pushLog]);
+
+  // Reset to identity (passthrough) in both the editor and the firmware.
+  const resetMatrix = useCallback(() => {
+    setMatrixState({ ...IDENTITY_PARAMS });
+    pushLog('cmd', '> matrix identity');
+    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+  }, [pushLog]);
+
+  // Apply a saved preset: load into the editor AND push to the firmware.
+  const applyMatrix = useCallback((m: Matrix) => {
+    const vals: MatrixParams = { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty };
+    setMatrixState(vals);
+    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(vals)).catch(() => {});
+    pushLog('ok', `[matrix] ${m.name}`);
+  }, [pushLog]);
+
+  const saveMatrix = useCallback((name: string) => {
+    const v = matrixRef.current;
+    const m: Matrix = { name, a: v.a, b: v.b, c: v.c, d: v.d, tx: v.tx, ty: v.ty };
+    const next = [...matricesRef.current.filter((x) => x.name !== name), m];
+    setMatrices(next); saveMatrices(next);
+    pushLog('ok', `[matrix] saved "${name}"`);
+  }, [pushLog]);
+
+  const renameMatrix = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    const next = matricesRef.current.map((x) => (x.name === oldName ? { ...x, name: newName.trim() } : x));
+    setMatrices(next); saveMatrices(next);
+  }, []);
+
+  const deleteMatrix = useCallback((name: string) => {
+    const next = matricesRef.current.filter((x) => x.name !== name);
+    setMatrices(next); saveMatrices(next);
+  }, []);
+
+  // Running job for the Position panel: its JSON if we submitted it (console or
+  // Script tab), else the firmware's text description; '' when nothing is running.
+  const currentJob = (status && !status.idle && status.current > 0)
+    ? (jobJson.current.get(status.current) ?? status.job ?? '')
+    : '';
+
   return {
     ip, setIp,
     pen, moving, connected,
     motion, bounds,
     queue, log,
-    status, jobs,
+    status, jobs, currentJob,
+    papers, applyPaper, savePaper, renamePaper, deletePaper,
+    matrix, matrices, setMatrixVal, applyMatrixVals, resetMatrix,
+    applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
+    enqueue, sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
     DEFAULTS,
   };
 }

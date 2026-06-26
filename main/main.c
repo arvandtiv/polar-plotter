@@ -68,6 +68,8 @@ static plotter_geom_t g_geom = {
     .steps_per_mm = STEPS_PER_MM,
     .left_sign    = LEFT_DIR_SIGN,
     .right_sign   = RIGHT_DIR_SIGN,
+    .aff_a = 1.0f, .aff_b = 0.0f, .aff_tx = 0.0f,   /* affine warp = identity at boot */
+    .aff_c = 0.0f, .aff_d = 1.0f, .aff_ty = 0.0f,
 };
 
 /* ---- Onboard LED (CYW43439 GPIO, Pico 2W) ----
@@ -120,12 +122,14 @@ static void led_task(void *arg)
 
 /* Forward declarations */
 static void do_draw_goto(float x, float y);
-static void do_draw_line(float x0, float y0, float x1, float y1, int cycles);
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift);
+static void do_draw_arc(float cx, float cy, float r, float a0, float a1, bool cw, int cycles, bool lift);
 static void do_draw_square(float cx, float cy, float size, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_bullseye(float cx, float cy);
 static void do_draw_grid(float cx, float cy);
-static void do_draw_wobbly(float cx, float cy, float r, float bound_r, float wobble, int harmonics, int seed, int cycles);
+static void do_draw_wobbly(float cx, float cy, float r, float bound_r, float wobble, int harmonics, int seed, int cycles,
+                           int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_truchet(float cx, float cy, int n, float spacing, float angle_deg, int seed, uint32_t mask);
 
 static void init_geometry(void)
@@ -220,19 +224,15 @@ void plotter_clear_fault(void)
     web_log("fault / E-STOP cleared — drivers reconfigured & re-enabled");
 }
 
-/* Hardware E-STOP ISR (GPIO falling edge, button → GND, internal pull-up). Cuts the
- * TMC output stage in hardware right here — no SPI, no motion task, ~µs — then
- * latches it off (so the next move can't silently re-enable) and flags the motion
- * loop to bail at its next poll. Kept tiny: only register writes + volatile flags. */
+/* Hardware E-STOP ISR (GPIO falling edge, button → GND, internal pull-up). Kept
+ * tiny: sets the latch + abort flags (which gate the streaming and bail the motion
+ * loop) and wakes the high-priority responder that does the actual hard stop over
+ * SPI. We do NOT cut ENN here — a freewheel coasts at speed; the responder brakes. */
 static void estop_isr(uint gpio, uint32_t events)
 {
     (void)gpio; (void)events;
-    gpio_put(PIN_ENN, !ENN_ON_LEVEL);   /* drivers OFF immediately (hardware) */
-    tmc.hard_off = true;                 /* block any re-enable from the motion task */
-    g_estop      = true;                 /* motion_should_abort() bails the in-flight move */
-    g_job_abort  = true;                 /* trip the generic abort too (checked first in the loop) */
-    /* Wake the high-priority e-stop task to actively halt the chip's ramp generator
-     * over SPI — ENN-cut alone leaves the ramp commanding motion toward XTARGET. */
+    g_estop      = true;   /* gates path_emit + bails the motion loop (no new moves issued) */
+    g_job_abort  = true;
     if (s_estop_task) {
         BaseType_t hpw = pdFALSE;
         vTaskNotifyGiveFromISR(s_estop_task, &hpw);
@@ -240,26 +240,30 @@ static void estop_isr(uint gpio, uint32_t events)
     }
 }
 
-/* High-priority (> motion task) E-STOP responder: woken by the ISR, it preempts the
- * motion task and STOPS THE RAMP GENERATOR over SPI (VMAX=0 + XTARGET=XACTUAL) so the
- * chip immediately stops driving the motors, on top of the hardware ENN cut. */
+/* High-priority (> motion task) E-STOP responder. The chip's ramp generator is
+ * commanded toward a far XTARGET (look-ahead), so a freewheel would COAST at speed.
+ * Instead we ACTIVELY BRAKE: max deceleration + VMAX=0 + target pinned to the current
+ * position, re-applied for ~60 ms so it overrides any in-flight streamed move and the
+ * motor decelerates HARD to a standstill — no coast. Once stopped we cut power. */
 static void estop_task(void *arg)
 {
     (void)arg;
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        gpio_put(PIN_ENN, !ENN_ON_LEVEL);                 /* ENN off (if the pin is effective) */
-        /* De-energize the coils over SPI regardless of the ENN pin: CHOPCONF TOFF=0
-         * switches the output stage off immediately — instant freewheel. This is the
-         * real "stop now"; ENN is a backup. */
+        for (int i = 0; i < 30; i++) {
+            for (int m = 0; m < 2; m++) {
+                tmc5072_write(&tmc, TMC5072_DMAX(m), 0xFFFF);   /* max decel */
+                tmc5072_write(&tmc, TMC5072_VMAX(m), 0);        /* no velocity allowed */
+                tmc5072_write(&tmc, TMC5072_XTARGET(m), (uint32_t)tmc5072_position(&tmc, m));
+            }
+            vTaskDelay(pdMS_TO_TICKS(2));
+        }
+        /* Stopped — now de-energize and latch off until an explicit clear. */
+        gpio_put(PIN_ENN, !ENN_ON_LEVEL);
+        tmc.hard_off = true;
         tmc5072_write(&tmc, TMC5072_CHOPCONF(MOTOR_THETA), 0);
         tmc5072_write(&tmc, TMC5072_CHOPCONF(MOTOR_RHO),   0);
-        tmc5072_stop(&tmc, MOTOR_THETA);                  /* VMAX=0 -> also halt the ramp */
-        tmc5072_stop(&tmc, MOTOR_RHO);
-        /* Pin target to the current position so nothing lurches when re-energized. */
-        tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_THETA), (uint32_t)tmc5072_position(&tmc, MOTOR_THETA));
-        tmc5072_write(&tmc, TMC5072_XTARGET(MOTOR_RHO),   (uint32_t)tmc5072_position(&tmc, MOTOR_RHO));
-        web_log("!! E-STOP — motors de-energized & ramp halted");
+        web_log("!! E-STOP — emergency brake, motors de-energized");
     }
 }
 
@@ -300,6 +304,13 @@ static void home_gondola(void)
     ESP_LOGI(TAG, "HOMING done: M1 pos=%ld  M2 pos=%ld",
              (long)tmc5072_position(&tmc, MOTOR_THETA),
              (long)tmc5072_position(&tmc, MOTOR_RHO));
+}
+
+/* Grid scripts set aff_tx/aff_ty to a cell centre; home/sethome must restore
+ * identity or position reads (0,0) steps as that offset in logical coords. */
+static void reset_affine_matrix(void)
+{
+    plotter_set_matrix(1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
 }
 
 static void set_origin_here(void)
@@ -520,8 +531,14 @@ static bool clamp_xy(float *x, float *y)
     return clamped;
 }
 
-static void pen_lift(void) { servo_write_deg(PEN_UP_DEG);   vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
-static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); }
+/* Logical pen state, tracked so a pause/STOP hold can restore it on resume: a
+ * continuous draw (the G-code digester's lift=0 segments) assumes the pen stays
+ * down across jobs, but the hold lifts it — without restoring, drawing resumes in
+ * the air. s_resume_pen_down asks the draw loop to re-drop before the next job. */
+static volatile bool s_pen_is_down     = false;
+static volatile bool s_resume_pen_down = false;
+static void pen_lift(void) { servo_write_deg(PEN_UP_DEG);   vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); s_pen_is_down = false; }
+static void pen_drop(void) { servo_write_deg(PEN_DOWN_DEG); vTaskDelay(pdMS_TO_TICKS(PEN_DWELL_MS)); s_pen_is_down = true;  }
 
 static void move_to_xy(float x, float y)
 {
@@ -563,6 +580,7 @@ static void path_begin(float x0, float y0)
 
 static void path_emit(bool last)
 {
+    if (g_estop) return;   /* stop feeding the chip new targets the instant e-stop fires */
     int32_t tl = s_path.pend_l, tr = s_path.pend_r;
     if (s_path.first || last)
         tmc5072_move_scaled_from(&tmc, tr, tl, s_path.cur_r, s_path.cur_l);
@@ -700,19 +718,50 @@ static void do_draw_goto(float x, float y)
     emit_pos_event();
 }
 
-static void do_draw_line(float x0, float y0, float x1, float y1, int cycles)
+/* lift = true: standalone line — pen up, travel to start, pen down, draw, pen up.
+ * lift = false: continuous-path mode (the G-code digester chains segments) — leave
+ * the pen wherever it is and just draw from the current point through (x0,y0)->(x1,y1)
+ * so back-to-back segments don't bob the pen up/down at every vertex. */
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift)
 {
     tmc5072_enable(&tmc, true);
-    pen_lift();
-    move_to_xy(x0, y0);
-    pen_drop();
+    if (lift) { pen_lift(); move_to_xy(x0, y0); pen_drop(); }
+    else      { move_to_xy(x0, y0); }   /* pen already down; no-op if already at x0,y0 */
     path_begin(x0, y0);
     for (int c = 0; c < cycles; c++) {
         if (c & 1) path_to(x0, y0);
         else       path_to(x1, y1);
     }
     path_end();
-    pen_lift();
+    if (lift) pen_lift();
+}
+
+/* Draw a circular arc from angle a0 to a1 (radians), direction cw/ccw, streamed as
+ * sub-segments (anti-bow, continuous). lift behaves like do_draw_line. Lets the console
+ * collapse a fitted circular run into ONE job instead of many lines. */
+static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool cw, int cycles, bool lift)
+{
+    if (r <= 0.0f) return;
+    float span = a1 - a0;
+    if (cw)  { while (span >= 0.0f) span -= PLT_TWO_PI; }   /* clockwise → negative sweep */
+    else     { while (span <= 0.0f) span += PLT_TWO_PI; }   /* ccw → positive sweep */
+    int nfull = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
+    int n = (int)ceilf((float)nfull * fabsf(span) / PLT_TWO_PI);
+    if (n < 1) n = 1;
+    float sx = cx2 + r * cosf(a0), sy = cy2 + r * sinf(a0);
+
+    tmc5072_enable(&tmc, true);
+    if (lift) { pen_lift(); move_to_xy(sx, sy); pen_drop(); }
+    else      { move_to_xy(sx, sy); }
+    path_begin(sx, sy);
+    for (int c = 0; c < cycles; c++) {
+        for (int k = 1; k <= n; k++) {
+            float t = a0 + span * ((float)k / (float)n);
+            path_to(cx2 + r * cosf(t), cy2 + r * sinf(t));
+        }
+    }
+    path_end();
+    if (lift) pen_lift();
 }
 
 static void do_draw_square(float cx2, float cy2, float size, int cycles, int fill_mode,
@@ -845,7 +894,7 @@ static void do_draw_border(void)
         float px = cx2 + rx2, py = cy2;
         move_to_xy(px, py);
         pen_drop();
-        for (int i = 1; i <= N; i++) {
+        for (int i = 1; i <= N && !motion_should_abort(); i++) {
             float th = (float)i / (float)N * 6.28318530718f;
             float nx = cx2 + rx2 * cosf(th);
             float ny = cy2 + ry2 * sinf(th);
@@ -855,20 +904,72 @@ static void do_draw_border(void)
     } else {
         move_to_xy(g_x_min, g_y_min);
         pen_drop();
-        draw_line_mm(g_x_min, g_y_min, g_x_max, g_y_min);
-        draw_line_mm(g_x_max, g_y_min, g_x_max, g_y_max);
-        draw_line_mm(g_x_max, g_y_max, g_x_min, g_y_max);
-        draw_line_mm(g_x_min, g_y_max, g_x_min, g_y_min);
+        if (!motion_should_abort()) draw_line_mm(g_x_min, g_y_min, g_x_max, g_y_min);
+        if (!motion_should_abort()) draw_line_mm(g_x_max, g_y_min, g_x_max, g_y_max);
+        if (!motion_should_abort()) draw_line_mm(g_x_max, g_y_max, g_x_min, g_y_max);
+        if (!motion_should_abort()) draw_line_mm(g_x_min, g_y_max, g_x_min, g_y_min);
     }
     pen_lift();
     emit_pos_event();
 }
 
+/* Insertion-sort a small float array ascending. */
+static void sort_floats_asc(float *a, int n)
+{
+    for (int i = 1; i < n; i++) {
+        float v = a[i]; int j = i - 1;
+        while (j >= 0 && a[j] > v) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = v;
+    }
+}
+
+/* Hatch-fill an arbitrary closed polygon (px,py,n) with parallel lines at angle_deg,
+ * spacing_mm apart. Per line: intersect every polygon edge, sort the hits along the
+ * line, ink between alternating pairs (even-odd) — so it follows a wavy / non-convex
+ * boundary. (cx2,cy2,maxr) bound the sweep. */
+static void hatch_polygon(const float *px, const float *py, int n,
+                          float cx2, float cy2, float maxr,
+                          float angle_deg, float spacing_mm)
+{
+    if (spacing_mm < 0.1f) spacing_mm = 0.1f;
+    float theta = angle_deg * (PLT_PI / 180.0f);
+    float cos_t = cosf(theta), sin_t = sinf(theta);
+    float extent = maxr + spacing_mm;
+    float hits[24];
+    for (float t = -extent + spacing_mm; t < extent; t += spacing_mm) {
+        if (motion_should_abort()) return;
+        float lx = cx2 + t * (-sin_t);
+        float ly = cy2 + t * ( cos_t);
+        int nh = 0;
+        for (int i = 0; i < n && nh < 24; i++) {
+            float ax = px[i], ay = py[i];
+            float bx = px[(i + 1) % n], by = py[(i + 1) % n];
+            float ex = bx - ax, ey = by - ay;
+            float det = ex * sin_t - cos_t * ey;
+            if (fabsf(det) < 1e-6f) continue;            /* edge ∥ hatch line */
+            float wx = ax - lx, wy = ay - ly;
+            float u = (cos_t * wy - sin_t * wx) / det;   /* param along edge [0,1) */
+            if (u >= 0.0f && u < 1.0f)
+                hits[nh++] = (ex * wy - ey * wx) / det;  /* param along hatch line */
+        }
+        if (nh < 2) continue;
+        sort_floats_asc(hits, nh);
+        for (int k = 0; k + 1 < nh; k += 2) {
+            float s0 = hits[k], s1 = hits[k + 1];
+            if (s1 - s0 < 0.5f) continue;
+            float x0 = lx + s0 * cos_t, y0 = ly + s0 * sin_t;
+            float x1 = lx + s1 * cos_t, y1 = ly + s1 * sin_t;
+            pen_lift(); move_to_xy(x0, y0); pen_drop(); draw_line_mm(x0, y0, x1, y1);
+        }
+    }
+}
+
 static void do_draw_wobbly(float cx2, float cy2, float r, float bound_r,
-                            float wobble, int harmonics, int seed, int cycles)
+                            float wobble, int harmonics, int seed, int cycles,
+                            int fill_mode, float hatch_angle, float hatch_spacing, bool outline)
 {
 #define WOBBLY_MAX_PTS 128
-    float px[WOBBLY_MAX_PTS], py[WOBBLY_MAX_PTS];
+    float ri[WOBBLY_MAX_PTS], px[WOBBLY_MAX_PTS], py[WOBBLY_MAX_PTS];
     if (harmonics < 1) harmonics = 1;
     if (harmonics > 8) harmonics = 8;
     int n = harmonics * 16;
@@ -881,26 +982,55 @@ static void do_draw_wobbly(float cx2, float cy2, float r, float bound_r,
         amp[h] = wobble * r / (float)(h + 1) * rand_scale;
         ph[h]  = (float)(rand() % 1000) / 1000.0f * PLT_TWO_PI;
     }
-    float min_r = r * 0.05f;
+    float min_r = r * 0.05f, maxr = 0.0f;
     for (int i = 0; i < n; i++) {
         float theta = PLT_TWO_PI * (float)i / (float)n;
-        float ri = r;
+        float rr = r;
         for (int h = 0; h < harmonics; h++)
-            ri += amp[h] * sinf((float)(h + 1) * theta + ph[h]);
-        if (bound_r > 0.0f && ri > bound_r) ri = bound_r;
-        if (ri < min_r) ri = min_r;
-        px[i] = cx2 + ri * cosf(theta);
-        py[i] = cy2 + ri * sinf(theta);
+            rr += amp[h] * sinf((float)(h + 1) * theta + ph[h]);
+        if (bound_r > 0.0f && rr > bound_r) rr = bound_r;
+        if (rr < min_r) rr = min_r;
+        ri[i] = rr;
+        if (rr > maxr) maxr = rr;
+        px[i] = cx2 + rr * cosf(theta);
+        py[i] = cy2 + rr * sinf(theta);
     }
     tmc5072_enable(&tmc, true);
-    pen_lift();
-    move_to_xy(px[0], py[0]);
-    pen_drop();
-    path_begin(px[0], py[0]);
-    for (int c = 0; c < cycles; c++)
-        for (int i = 1; i <= n; i++)
-            path_to(px[i % n], py[i % n]);
-    path_end();
+
+    /* Outline first (matches circle/square), then the fill. */
+    if (outline) {
+        pen_lift();
+        move_to_xy(px[0], py[0]);
+        pen_drop();
+        path_begin(px[0], py[0]);
+        for (int c = 0; c < cycles; c++)
+            for (int i = 1; i <= n; i++)
+                path_to(px[i % n], py[i % n]);
+        path_end();
+    }
+
+    if (fill_mode == 1) {
+        hatch_polygon(px, py, n, cx2, cy2, maxr, hatch_angle, hatch_spacing);
+    } else if (fill_mode == 2) {
+        /* Concentric: nested copies of the blob scaled inward ~spacing per ring. */
+        if (hatch_spacing < 0.1f) hatch_spacing = 0.1f;
+        float step = hatch_spacing / r;
+        float scale = outline ? 1.0f - step : 1.0f;
+        for (; scale > 0.0f && scale * maxr > hatch_spacing * 0.5f; scale -= step) {
+            if (motion_should_abort()) break;
+            for (int i = 0; i < n; i++) {
+                float theta = PLT_TWO_PI * (float)i / (float)n;
+                px[i] = cx2 + scale * ri[i] * cosf(theta);
+                py[i] = cy2 + scale * ri[i] * sinf(theta);
+            }
+            pen_lift();
+            move_to_xy(px[0], py[0]);
+            pen_drop();
+            path_begin(px[0], py[0]);
+            for (int i = 1; i <= n; i++) path_to(px[i % n], py[i % n]);
+            path_end();
+        }
+    }
     pen_lift();
 #undef WOBBLY_MAX_PTS
 }
@@ -1258,6 +1388,19 @@ void plotter_get_motion(uint32_t *vmax, uint32_t *amax, float *run_ma, float *ho
     if (run_ma)  *run_ma  = g_run_ma;
     if (hold_ma) *hold_ma = g_hold_ma;
 }
+/* Affine warp on the logical (x,y) before the belt math (session-only; identity
+ * by default). Exploratory: rotate/shear/scale/offset the whole drawing space. */
+void plotter_set_matrix(float a, float b, float c, float d, float tx, float ty)
+{
+    g_geom.aff_a = a; g_geom.aff_b = b; g_geom.aff_tx = tx;
+    g_geom.aff_c = c; g_geom.aff_d = d; g_geom.aff_ty = ty;
+}
+void plotter_get_matrix(float *a, float *b, float *c, float *d, float *tx, float *ty)
+{
+    if (a) *a = g_geom.aff_a; if (b) *b = g_geom.aff_b; if (tx) *tx = g_geom.aff_tx;
+    if (c) *c = g_geom.aff_c; if (d) *d = g_geom.aff_d; if (ty) *ty = g_geom.aff_ty;
+}
+bool plotter_pen_is_down(void) { return s_pen_is_down; }
 void plotter_abort_now(void)
 {
     g_job_abort = true;
@@ -1278,7 +1421,8 @@ void plotter_stop_hold(void)
     tmc5072_stop(&tmc, MOTOR_THETA);
     tmc5072_stop(&tmc, MOTOR_RHO);
     g_paused = true;
-    pen_lift();
+    /* The draw task's hold block lifts the pen AND remembers its state so resume
+     * can continue a stroke pen-down. Lifting here would clobber that capture. */
 }
 
 /* ---- web_draw_task — verbatim from ESP32 build ---- */
@@ -1289,6 +1433,7 @@ static const char *wcmd_name(wcmd_type_t t)
     case WCMD_CIRCLE:   return "circle";
     case WCMD_SQUARE:   return "square";
     case WCMD_LINE:     return "line";
+    case WCMD_ARC:      return "arc";
     case WCMD_GOTO:     return "goto";
     case WCMD_HOME:     return "home";
     case WCMD_PEN_UP:   return "pen up";
@@ -1320,16 +1465,22 @@ static void web_draw_task(void *arg)
          * draining the queue faster than the 1 Hz console can show it. The E-STOP latch
          * stays set (drivers cut in the ISR) until an explicit clear. */
         if (g_paused || g_estop) {
+            bool was_down  = s_pen_is_down;   /* remember so resume can continue a stroke pen-down */
+            bool was_estop = g_estop;         /* E-STOP cuts drivers → re-home; never auto-drop the pen */
             pen_lift();
             web_log(g_estop ? "!! E-STOP — motors cut, %lu job(s) held"
                             : "paused — %lu job(s) held in queue",
                     (unsigned long)(g_job_enqueued - g_job_done));
             while (g_paused || g_estop) vTaskDelay(pdMS_TO_TICKS(100));
             web_log("resumed");
+            s_resume_pen_down = was_down && !was_estop;
         }
 
         if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
         g_job_abort = false;
+        /* Restore a mid-stroke pen-down held across a pause/STOP so the next
+         * continuation segment (lift=0) draws instead of skating in the air. */
+        if (s_resume_pen_down) { pen_drop(); s_resume_pen_down = false; }
         ensure_configured();   /* self-heal if the TMC was power-cycled under us */
         if (cmd.id) {
             g_job_current = cmd.id;
@@ -1386,13 +1537,19 @@ static void web_draw_task(void *arg)
         case WCMD_LINE:
             web_log("line (%.1f,%.1f)->(%.1f,%.1f) x%d",
                     (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(int)cmd.p[4]);
-            do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4]);
+            do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4], cmd.p[5]!=0.0f);
             emit_pos_event(); web_log("line done"); break;
+        case WCMD_ARC:
+            web_log("arc (%.1f,%.1f) r=%.1f %.2f→%.2f %s",
+                    (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(double)cmd.p[4],
+                    cmd.p[5]!=0.0f?"cw":"ccw");
+            do_draw_arc(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],cmd.p[4], cmd.p[5]!=0.0f, (int)cmd.p[6], cmd.p[7]!=0.0f);
+            emit_pos_event(); web_log("arc done"); break;
         case WCMD_GOTO:
             web_log("goto (%.1f, %.1f)",(double)cmd.p[0],(double)cmd.p[1]);
             do_draw_goto(cmd.p[0],cmd.p[1]); web_log("goto done"); break;
         case WCMD_HOME:
-            web_log("home"); home_gondola(); emit_pos_event(); web_log("home done"); break;
+            web_log("home"); reset_affine_matrix(); home_gondola(); emit_pos_event(); web_log("home done"); break;
         case WCMD_STOP:
             web_log("stop");
             tmc5072_stop(&tmc, MOTOR_THETA); tmc5072_stop(&tmc, MOTOR_RHO); break;
@@ -1415,7 +1572,8 @@ static void web_draw_task(void *arg)
                     (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],
                     (double)cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7]);
             do_draw_wobbly(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],
-                           cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7]);
+                           cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7],
+                           (int)cmd.p[8],cmd.p[9],cmd.p[10],cmd.p[11]!=0.0f);
             emit_pos_event(); web_log("wobbly done"); break;
         case WCMD_TRUCHET:
             web_log("truchet n=%d spacing=%.1f angle=%.0f seed=%d motifs=0x%x",
@@ -1424,7 +1582,7 @@ static void web_draw_task(void *arg)
                             cmd.p[4],(int)cmd.p[5],(uint32_t)cmd.p[6]);
             web_log("truchet done"); break;
         case WCMD_SETHOME:
-            web_log("sethome"); set_origin_here(); web_log("sethome done"); break;
+            web_log("sethome"); reset_affine_matrix(); set_origin_here(); emit_pos_event(); web_log("sethome done"); break;
         case WCMD_BOUNDS:
             g_x_min=cmd.p[0]; g_x_max=cmd.p[1]; g_y_min=cmd.p[2]; g_y_max=cmd.p[3];
             g_bounds_ellipse=(cmd.p[4]!=0.0f);
@@ -1489,7 +1647,7 @@ static int cmd_spiraw(int argc, char **argv)
     }
     return 0;
 }
-static int cmd_home(int argc, char **argv)   { (void)argc;(void)argv; home_gondola(); return 0; }
+static int cmd_home(int argc, char **argv)   { (void)argc;(void)argv; reset_affine_matrix(); home_gondola(); return 0; }
 static int cmd_stat(int argc, char **argv)   { (void)argc;(void)argv; print_status(MOTOR_THETA); print_status(MOTOR_RHO); return 0; }
 static int cmd_status(int argc, char **argv) { (void)argc;(void)argv; print_global_status(); print_full_status(MOTOR_THETA); print_full_status(MOTOR_RHO); return 0; }
 static int cmd_reinit(int argc, char **argv)
@@ -1549,6 +1707,30 @@ static int cmd_setbounds(int argc, char **argv)
            g_bounds_ellipse?"ellipse":"rect");
     return 0;
 }
+static int cmd_setmatrix(int argc, char **argv)
+{
+    /* Affine warp of the logical command space (session-only, identity default).
+     *   x' = a*x + b*y + tx ;  y' = c*x + d*y + ty
+     * `setmatrix` (no args) prints; `setmatrix identity` resets to passthrough. */
+    if (argc < 2) {
+        float a,b,c,d,tx,ty; plotter_get_matrix(&a,&b,&c,&d,&tx,&ty);
+        printf("  matrix: a=%.5f b=%.5f tx=%.3f\n          c=%.5f d=%.5f ty=%.3f\n",
+               (double)a,(double)b,(double)tx,(double)c,(double)d,(double)ty);
+        printf("usage: setmatrix <a> <b> <c> <d> <tx> <ty>   |   setmatrix identity\n");
+        return 0;
+    }
+    if (strcmp(argv[1], "identity") == 0 || strcmp(argv[1], "off") == 0) {
+        plotter_set_matrix(1,0,0,1,0,0);
+        printf("matrix reset to identity (passthrough)\n");
+        return 0;
+    }
+    if (argc < 7) { printf("usage: setmatrix <a> <b> <c> <d> <tx> <ty>\n"); return 0; }
+    plotter_set_matrix(atof(argv[1]),atof(argv[2]),atof(argv[3]),
+                       atof(argv[4]),atof(argv[5]),atof(argv[6]));
+    printf("matrix set: a=%s b=%s c=%s d=%s tx=%s ty=%s\n",
+           argv[1],argv[2],argv[3],argv[4],argv[5],argv[6]);
+    return 0;
+}
 static int cmd_belt(int argc, char **argv)
 {
     if (argc < 3) { printf("usage: belt <x_mm> <y_mm>\n"); return 0; }
@@ -1592,7 +1774,7 @@ static int cmd_line(int argc, char **argv)
     float x0=atof(argv[1]),y0=atof(argv[2]),x1=atof(argv[3]),y1=atof(argv[4]);
     int cycles=(argc>=6)?parse_cycles(argv[5]):1;
     printf("line (%.1f,%.1f)->(%.1f,%.1f) x%d\n",(double)x0,(double)y0,(double)x1,(double)y1,cycles);
-    do_draw_line(x0,y0,x1,y1,cycles);
+    do_draw_line(x0,y0,x1,y1,cycles,true);
     printf("line done\n"); return 0;
 }
 static int cmd_circle(int argc, char **argv)
@@ -1642,8 +1824,11 @@ static int cmd_wobbly(int argc, char **argv)
     int harmonics=(argc>=7)?atoi(argv[6]):3;
     int seed=(argc>=8)?atoi(argv[7]):42;
     int cycles=(argc>=9)?parse_cycles(argv[8]):1;
+    int fill=(argc>=10)?atoi(argv[9]):0;
+    float hang=(argc>=11)?atof(argv[10]):0.0f;
+    float hsp=(argc>=12)?atof(argv[11]):3.0f;
     if (r<=0) { printf("r must be > 0\n"); return 0; }
-    do_draw_wobbly(cx2,cy2,r,bound_r,wobble,harmonics,seed,cycles);
+    do_draw_wobbly(cx2,cy2,r,bound_r,wobble,harmonics,seed,cycles, fill,hang,hsp,true);
     printf("wobbly done\n"); return 0;
 }
 static int cmd_truchet(int argc, char **argv)
@@ -1737,7 +1922,7 @@ static int cmd_sethome(int argc, char **argv)
                (long)tmc5072_position(&tmc, m));
         return 0;
     }
-    set_origin_here(); return 0;
+    reset_affine_matrix(); set_origin_here(); return 0;
 }
 
 /* ---- Simple console REPL (replaces esp_console) ---- */
@@ -1755,6 +1940,7 @@ static const cmd_entry_t s_cmds[] = {
     { "setspan",   "Set motor span (mm)",                               cmd_setspan   },
     { "setsteps",  "Set steps/mm",                                      cmd_setsteps  },
     { "setbounds", "Set drawable bounds (mm)",                          cmd_setbounds },
+    { "setmatrix", "Affine warp: setmatrix <a b c d tx ty> | identity", cmd_setmatrix },
     { "belt",      "DRY RUN: belt lengths for (x,y) mm",               cmd_belt      },
     { "goto",      "Move gondola to (x,y) mm",                         cmd_goto      },
     { "line",      "Draw line: line <x0> <y0> <x1> <y1> [cycles]",    cmd_line      },
