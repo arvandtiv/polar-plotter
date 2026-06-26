@@ -6,14 +6,15 @@ import type { Frame, Path, Pt } from "../frame";
 
 const CHORD_ERR_MM = 0.2;
 
-/** Segment count so a chord's bulge stays under maxErr (clamped 8..720). */
+/** Segment count so a chord's bulge stays under maxErr (clamped 32..720).
+ *  Minimum 32 ensures even tiny circles look round rather than octagonal. */
 export function arcSegments(radiusMm: number, maxErrMm: number): number {
-  if (radiusMm <= 0 || maxErrMm <= 0) return 8;
+  if (radiusMm <= 0 || maxErrMm <= 0) return 32;
   let ratio = 1 - maxErrMm / radiusMm;
   ratio = Math.max(-1, Math.min(1, ratio));
   const a = 2 * Math.acos(ratio);
   const n = a > 1e-6 ? Math.ceil((2 * Math.PI) / a) : 720;
-  return Math.max(8, Math.min(720, n));
+  return Math.max(32, Math.min(720, n));
 }
 
 export const circleModule: Module = {
@@ -46,7 +47,7 @@ export const circleModule: Module = {
       points.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
     }
     const path: Path = { points, closed: true, cycles };
-    return { widthMm: 2 * r, heightMm: 2 * r, paths: [path], meta: { title: "Circle" } };
+    return { widthMm: 2 * r, heightMm: 2 * r, paths: [path], meta: { title: "Circle", noSimplify: true } };
   },
 };
 

@@ -38,8 +38,11 @@ export function compileFrame(
   bounds: PipelineBounds,
   opts: RunPipelineOpts = {},
 ): string[] {
-  const tol = opts.simplifyTol ?? 0.2;
-  const opt = optimizeOrder(tol > 0 ? simplifyFrame(frame, tol) : frame);
+  const tol = (opts.simplifyTol ?? 0.2);
+  // noSimplify: frame was precisely tessellated by its generator (e.g. circle at exact
+  // chord-error intervals) — RDP at the same tolerance would destroy the detail.
+  const skipSimplify = frame.meta?.noSimplify || tol <= 0;
+  const opt = optimizeOrder(skipSimplify ? frame : simplifyFrame(frame, tol));
   return compile(opt, { clipBounds: clipBounds(bounds), arcTol: opts.arcTol });
 }
 
