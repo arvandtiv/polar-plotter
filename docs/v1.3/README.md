@@ -63,6 +63,5 @@ optional firmware adds (an `arc`/G2-G3 primitive, an export profile) clearly fla
 
 ## Branching
 
-These docs land on `v1.2` (current dev branch). When Phase 0 implementation starts,
-cut a **`v1.3`** branch from the latest dev tip. Each roadmap day is a small commit;
-each phase can be a PR. `main` stays the frozen release line.
+Developed on `v1.2`, merged to `main` as `v1.3.0` on 2026-06-26. `main` is now the
+v1.3 release line.
