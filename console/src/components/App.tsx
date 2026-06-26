@@ -953,7 +953,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, 
       if (bw !== 'ok') { pushLog('err', `[script] grid_select bounds failed (${bw})`); return false; }
       const mw = await sendRaw(cell.matrixQuery, line.raw);
       if (mw !== 'ok') { pushLog('err', `[script] grid_select matrix failed (${mw})`); return false; }
-      pushLog('ok', `[script] cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm`);
+      if (col === 0) pushLog('sys', `[script] row ${row}: cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm`);
       return true;
     };
 
@@ -977,6 +977,31 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, 
       setRun({ status: 'running', sent: 0, errors: 0, total: good.length });
       pushLog('cmd', `> script: grid mode — ${good.length} steps (flow-controlled draws)`);
       pushLog('sys', `[script] work area from Work Area tab: yn=${-bounds.up} yp=${bounds.down} (metadata.work_area ignored)`);
+
+      // Pre-flight: check that draw commands fit inside the computed cell dimensions.
+      // All cells in a uniform grid are the same size, so checking one is enough.
+      const firstGs = good.find(l => l.gridSelect);
+      if (firstGs) {
+        try {
+          const { cellW, cellH } = computeCell(firstGs.gridSelect!.gc, firstGs.gridSelect!.col, firstGs.gridSelect!.row);
+          const maxR = Math.min(cellW, cellH) / 2;
+          pushLog('sys', `[script] cell size ${cellW}×${cellH} mm — max safe radius = ${maxR.toFixed(1)} mm`);
+          const oversized = good.find(l => {
+            if (!l.query) return false;
+            const p = new URLSearchParams(l.query.split('?')[1] ?? '');
+            if (l.query.startsWith('circle?')) return Number(p.get('r') ?? 0) > maxR;
+            if (l.query.startsWith('square?')) return Number(p.get('size') ?? 0) / 2 > maxR;
+            return false;
+          });
+          if (oversized) {
+            const p = new URLSearchParams(oversized.query!.split('?')[1] ?? '');
+            const dim = oversized.query!.startsWith('circle?')
+              ? `r=${p.get('r')} (needs ±${p.get('r')}mm)`
+              : `size=${p.get('size')} (needs ±${(Number(p.get('size')) / 2).toFixed(1)}mm)`;
+            pushLog('warn', `[script] ⚠ ${dim} won't fit in ${cellW}×${cellH} mm cells — firmware will reject these. Reduce size or use fewer grid cells.`);
+          }
+        } catch { /* computeCell throws on bad gc — already caught later */ }
+      }
 
       // Draw commands are queued here and batch-streamed. sendAndWait(bounds) at each
       // grid_select / grid_clear acts as a FIFO barrier: bounds is queued after all pending
