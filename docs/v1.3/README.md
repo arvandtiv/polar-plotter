@@ -1,4 +1,8 @@
-# v1.3 — "Studio" — design & build plan
+# v1.3 — "Studio" — shipped ✅
+
+> **Status: shipped on 2026-06-26.** All 27 roadmap days complete. This document
+> records the original design rationale and implementation notes; the implementation
+> is the source of truth.
 
 v1.3 turns the plotter console from a fixed set of hand-wired shapes into a small
 **generative design studio**: pluggable generators, auto-built parameter panels, a

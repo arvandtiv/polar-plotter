@@ -29,11 +29,21 @@ Drive it three ways, all feeding the same draw queue:
 - **Streaming interpolation:** straight edges are sub‑segmented and issued with look‑ahead, so the gondola flows through a path and only truly stops at corners.
 - **Work area:** rectangle *or* the inscribed **ellipse** (for machines whose reachable Y tapers toward the X extremes); out‑of‑area targets are rejected and strays clamped back onto the boundary.
 
+**Generative design — Studio (v1.3)**
+- 🎨 **Studio** — a full‑page generative design tool (switch in the header). Build a layer stack of pluggable generators and modifiers; the preview updates live. Hit **Plot now** to stream the entire design to the machine.
+- **Frame pipeline** — every generator produces a declarative `Frame` (page size + polylines in mm) which flows through toolpath optimization (nearest‑neighbour travel order + RDP simplify) and compiles to the same `goto`/`line`/`pen` API the rest of the console uses.
+- **Generator library** — Klee grid, Truchet tiling, Circles / Squares / Wobbly, Random Walker, Noise Orbit, Noised Hatches, Sheets, Depth Map (image→surface), Stroke Text, and more.
+- **Modifier stack** — Warp (affine/radial/wave distortion), plus any module typed as `"modify"`.
+- **Live preview + scrubber** — see the optimized draw order at any percentage before sending; confirmed arc‑fitting collapses circular runs to `arc` primitives.
+- **Named documents** — save / load / rename named designs; JSON export & import.
+- **G‑code export** — export the current Frame as a `.gcode` file (G0/G1 + G2/G3 arcs).
+
 **Importing & transforms**
 - 📥 **G‑code digester** — paste a G‑code program *or* upload a `.gcode`/`.bgcode` file in the console's Autonomous tab; it translates to the plotter's `goto`/`line`/`pen` moves entirely in the browser and streams them flow‑controlled. A polar plotter has only X/Y + a pen, so Z/E/F are dropped: pen‑up → travel, pen‑down → drawn segment.
   - **Pen up/down** by selectable convention: auto‑detect · Z‑height · spindle `M3`/`M5` · servo `M280` · G0‑travel‑vs‑G1‑draw.
   - **Placement** into the active work area: auto‑fit + center + Y‑flip (default) · center · raw + Y‑flip · raw. (G‑code is corner‑origin Y‑up; the plotter is centre‑origin Y‑down.)
   - **Binary `.bgcode`** is decoded in‑browser — Prusa container + deflate, heatshrink (11/4 & 12/4), and MeatPack (a faithful port of libbgcode `unbinarize`).
+- 📋 **JSON Script** — paste or upload a JSON command list; supports all firmware primitives plus `generate` (run any Studio generator), `grid_select`/`grid_clear` (tiled grid compositions), `set_speed`/`set_current`, and comment objects.
 - 🔁 **Affine warp** (exploration layer) — an optional 2×3 matrix `x' = a·x + b·y + tx ; y' = c·x + d·y + ty` applied to the logical command *before* the belt math, for exploring rotation/shear/scale/offset of the drawing space. **Session‑only**, default identity (resets on boot); an affine is linear so it can't fix the line‑bow. Set via the console Calibrate tab, `setmatrix`, `/api/matrix`, or MCP `plot_set_matrix`.
 
 **Run control**
@@ -78,11 +88,19 @@ main/
 components/
   tmc5072/        — register-level SPI driver (datasheet §6 map; no Arduino dep)
   servo/          — SG90 via PWM
-console/          — Astro 4 + React 18 + Tailwind web UI  (npm run dev → :4321)
-  src/lib/gcode.ts   — G-code → goto/line/pen digester (pen + placement modes)
-  src/lib/bgcode.ts  — Prusa binary .bgcode decoder (deflate/heatshrink/MeatPack)
-  test/digest.test.ts— host test: digester + all bgcode paths (npx tsx)
-plotter-mcp/      — Node MCP server exposing the HTTP API as tools (index.js)
+console/          — Astro 6 + React 18 + Tailwind 4 web UI  (npm run dev → :4321)
+  src/lib/frame.ts      — Frame IR: page size + polyline list
+  src/lib/pipeline.ts   — evaluate layer stack → Frame
+  src/lib/compile.ts    — Frame → firmware query strings (arc-fit optional)
+  src/lib/toolpath.ts   — nearest-neighbour order + RDP simplification
+  src/lib/modules/      — generator + modifier modules (Klee, Walker, etc.)
+  src/lib/gridScript.ts — grid_select / grid_clear math for tiled compositions
+  src/lib/runPipeline.ts— shared compile entry for console + MCP
+  src/lib/gcode.ts      — G-code → goto/line/pen digester (pen + placement modes)
+  src/lib/bgcode.ts     — Prusa binary .bgcode decoder (deflate/heatshrink/MeatPack)
+  src/lib/mcp-core.ts   — Node/MCP bundle entry (same pipeline as browser)
+  test/                 — host tests: digester, bgcode, streamQueries, gridScript
+plotter-mcp/      — Node MCP server exposing the HTTP API + Studio pipeline as tools
 tools/
   kinematics_test/ — host-runnable geometry unit test
   weave/           — pattern generator
@@ -135,13 +153,16 @@ npm run dev          # → http://localhost:4321
 Set the plotter's IP in the header. The console opens `GET /events` (SSE) for live
 log + pen position and sends draw commands to `GET /api/<cmd>?<params>`.
 
-Tabs: **Draw** · **Move** (goto + jog pad) · **Work Area** (bounds + rect/ellipse) ·
-**Calibrate** (walk‑limits, bullseye, **affine matrix** card with raw 6‑value entry +
-saved presets) · **Autonomous** (job progress + driver health + errors, the **JSON
-Script** runner, and the **G‑code digester** — paste/upload `.gcode`/`.bgcode`, pick
-pen + placement, then stream). A header **PAUSE/RESUME** (hold), **STOP** (halt, keep
-queue), and **CLEAR** (flush the queue) drive the machine regardless of tab;
-STOP/CLEAR also halt the in‑flight script / G‑code batch.
+The app has two top‑level modes (switch in the header):
+
+**Console** — traditional controls:
+- **Draw** · **Move** (goto + jog pad) · **Work Area** (bounds + rect/ellipse) · **Calibrate** (walk‑limits, bullseye, **affine matrix** presets) · **Autonomous** (job progress + driver health + errors, **JSON Script** runner, **G‑code digester**)
+
+**Studio** — generative design (v1.3):
+- **Left pane:** live Frame preview with drawing‑order scrubber; **Plot now** button streams the design; arc‑fit toggle collapses circular runs to `arc` jobs.
+- **Right pane:** layer stack (add/reorder/remove generators + modifiers), per‑layer parameter panels, named‑document save/load/export, affine group transforms.
+
+A header **PAUSE/RESUME** (hold), **STOP** (halt, keep queue), and **CLEAR** (flush the queue) drive the machine regardless of mode; STOP/CLEAR also halt an in‑flight stream.
 
 Paper presets (work‑area sizes) and affine‑matrix presets are saved in the browser
 (localStorage) — save / rename / delete / apply, just like a named profile.
@@ -153,10 +174,12 @@ Paper presets (work‑area sizes) and affine‑matrix presets are saved in the b
 `plotter-mcp/` exposes the HTTP API as MCP tools so Claude can paint on its own.
 Set `PLOTTER_IP` / `PLOTTER_PORT` and register it in `.mcp.json`.
 
-- Drawing: `plot_goto/line/circle/square/wobbly/truchet/bullseye/grid/border`
-- Control: `plot_pen/home/sethome/stop/abort`, `plot_pause/plot_resume`, `plot_set_speed/accel/current`, `plot_set_matrix` (affine warp), `plot_clear_fault`
-- Orchestration: **`plot_script`** runs an ordered list, waiting for each job to *physically* finish (and pausing on a driver fault) before the next
-- Introspection: **`plot_status`** reports the coordinate frame, work‑area bounds, live position, queue health, and driver state
+- **Drawing:** `plot_goto/line/circle/square/wobbly/truchet/bullseye/grid/border/arc`
+- **Control:** `plot_pen/home/sethome/stop/abort`, `plot_pause/plot_resume`, `plot_set_speed/accel/current`, `plot_set_matrix` (affine warp), `plot_set_bounds`, `plot_clear_fault`
+- **Orchestration:** `plot_script` runs an ordered list, waiting for each job to *physically* finish (and pausing on a driver fault) before the next
+- **Studio pipeline (v1.3):** `plot_generate` runs any built‑in generator; `plot_list_generators` lists them with descriptions; `plot_polylines` sends raw polyline geometry
+- **Grid compositions (v1.3):** `plot_grid_plan` sets up a tiled grid; `plot_grid_select` activates one cell (clips bounds + translates origin); `plot_grid_clear` restores the full work area
+- **Introspection:** `plot_status` reports the coordinate frame, work‑area bounds, live position, queue health, and driver state
 
 The server ships with built‑in **coordinate guidance** (origin at top midpoint,
 `X+` right, **`Y+` down / `Y-` up**) and a directive to always read live bounds and
@@ -232,7 +255,8 @@ for the full diagnosis procedure.
 | File | Contents |
 |------|----------|
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, bring‑up history, gotchas, calibration deep‑dive |
-| [`docs/v1.3/`](docs/v1.3/README.md) | v1.3 "Studio" design + day‑by‑day build roadmap (Frame pipeline, generators, modifiers, toolpath optimization) |
+| [`docs/v1.3/`](docs/v1.3/README.md) | v1.3 "Studio" — Frame pipeline, generator library, modifier stack, toolpath optimization (shipped) |
+| [`docs/STUDIO_ARCHITECTURE.md`](docs/STUDIO_ARCHITECTURE.md) | Deep‑dive: Frame IR, pipeline stages, module API, arc fitting |
 | [`PICO2W.md`](PICO2W.md) | Pico 2 W bring‑up specifics |
 | [`polar_plotter_wiring.md`](polar_plotter_wiring.md) | Wiring table + diagram |
 | [`plotter-mcp/AGENT_GUIDE.md`](plotter-mcp/AGENT_GUIDE.md) | How an agent should drive the plotter |

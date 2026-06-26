@@ -1,6 +1,6 @@
 {
   "name": "plotter-mcp",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "MCP server for the polar plotter — lets Claude send drawing commands directly",
   "type": "module",
   "main": "index.js",
