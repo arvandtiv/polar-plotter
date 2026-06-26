@@ -29,12 +29,12 @@ Drive it three ways, all feeding the same draw queue:
 - **Streaming interpolation:** straight edges are sub‑segmented and issued with look‑ahead, so the gondola flows through a path and only truly stops at corners.
 - **Work area:** rectangle *or* the inscribed **ellipse** (for machines whose reachable Y tapers toward the X extremes); out‑of‑area targets are rejected and strays clamped back onto the boundary.
 
-**Generative design — Studio (v1.3)**
+**Generative design — Studio (v1.2)**
 - 🎨 **Studio** — a full‑page generative design tool (switch in the header). Build a layer stack of pluggable generators and modifiers; the preview updates live. Hit **Plot now** to stream the entire design to the machine.
 - **Frame pipeline** — every generator produces a declarative `Frame` (page size + polylines in mm) which flows through toolpath optimization (nearest‑neighbour travel order + RDP simplify) and compiles to the same `goto`/`line`/`pen` API the rest of the console uses.
-- **Generator library** — Klee grid, Truchet tiling, Circles / Squares / Wobbly, Random Walker, Noise Orbit, Noised Hatches, Sheets, Depth Map (image→surface), Stroke Text, and more.
-- **Modifier stack** — Warp (affine/radial/wave distortion), plus any module typed as `"modify"`.
-- **Live preview + scrubber** — see the optimized draw order at any percentage before sending; confirmed arc‑fitting collapses circular runs to `arc` primitives.
+- **Generator library** — Spirograph (hypotrochoid/epitrochoid), Orbital Weave (woven knot tracer), Noise Orbit (distorted concentric rings), Random Walker (drifting agents), Noised Hatches (blob‑masked texture), Sheets (curtain‑fold lines), Moiré Curtain (interference fringes), Pattern Maker (tiled shapes with per‑column rotation), Wobbly (radial Fourier blob), Stroke Text (OpenType outline), Image → Linework / Halftone / Squiggle / Surface (image‑to‑drawing conversions), and basic Box / Circle / Square shapes.
+- **Modifier stack** — **Warp** (sinusoidal water ripple or radial droplet distortion), **Mask** (clip paths to a shape), **Fill** (hatch overlay) — all stacked non‑destructively over any generator layer.
+- **Live preview + scrubber** — see the optimized draw order at any percentage before sending; arc‑fitting collapses circular runs to `arc` primitives.
 - **Named documents** — save / load / rename named designs; JSON export & import.
 - **G‑code export** — export the current Frame as a `.gcode` file (G0/G1 + G2/G3 arcs).
 
@@ -158,7 +158,7 @@ The app has two top‑level modes (switch in the header):
 **Console** — traditional controls:
 - **Draw** · **Move** (goto + jog pad) · **Work Area** (bounds + rect/ellipse) · **Calibrate** (walk‑limits, bullseye, **affine matrix** presets) · **Autonomous** (job progress + driver health + errors, **JSON Script** runner, **G‑code digester**)
 
-**Studio** — generative design (v1.3):
+**Studio** — generative design (v1.2):
 - **Left pane:** live Frame preview with drawing‑order scrubber; **Plot now** button streams the design; arc‑fit toggle collapses circular runs to `arc` jobs.
 - **Right pane:** layer stack (add/reorder/remove generators + modifiers), per‑layer parameter panels, named‑document save/load/export, affine group transforms.
 
@@ -177,8 +177,8 @@ Set `PLOTTER_IP` / `PLOTTER_PORT` and register it in `.mcp.json`.
 - **Drawing:** `plot_goto/line/circle/square/wobbly/truchet/bullseye/grid/border/arc`
 - **Control:** `plot_pen/home/sethome/stop/abort`, `plot_pause/plot_resume`, `plot_set_speed/accel/current`, `plot_set_matrix` (affine warp), `plot_set_bounds`, `plot_clear_fault`
 - **Orchestration:** `plot_script` runs an ordered list, waiting for each job to *physically* finish (and pausing on a driver fault) before the next
-- **Studio pipeline (v1.3):** `plot_generate` runs any built‑in generator; `plot_list_generators` lists them with descriptions; `plot_polylines` sends raw polyline geometry
-- **Grid compositions (v1.3):** `plot_grid_plan` sets up a tiled grid; `plot_grid_select` activates one cell (clips bounds + translates origin); `plot_grid_clear` restores the full work area
+- **Studio pipeline (v1.2):** `plot_generate` runs any built‑in generator; `plot_list_generators` lists them with descriptions; `plot_polylines` sends raw polyline geometry (with optional `clip_to_bounds`)
+- **Grid compositions (v1.2):** `plot_grid_plan` previews a tiled grid (sizes + centres, no firmware call); `plot_grid_select` activates one cell (clips bounds + translates origin); `plot_grid_clear` restores the full work area
 - **Introspection:** `plot_status` reports the coordinate frame, work‑area bounds, live position, queue health, and driver state
 
 The server ships with built‑in **coordinate guidance** (origin at top midpoint,
@@ -255,7 +255,7 @@ for the full diagnosis procedure.
 | File | Contents |
 |------|----------|
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, bring‑up history, gotchas, calibration deep‑dive |
-| [`docs/v1.3/`](docs/v1.3/README.md) | v1.3 "Studio" — Frame pipeline, generator library, modifier stack, toolpath optimization (shipped) |
+| [`docs/v1.3/`](docs/v1.3/README.md) | v1.2 Studio — Frame pipeline, generator library, modifier stack, toolpath optimization — design rationale & implementation notes |
 | [`docs/STUDIO_ARCHITECTURE.md`](docs/STUDIO_ARCHITECTURE.md) | Deep‑dive: Frame IR, pipeline stages, module API, arc fitting |
 | [`PICO2W.md`](PICO2W.md) | Pico 2 W bring‑up specifics |
 | [`polar_plotter_wiring.md`](polar_plotter_wiring.md) | Wiring table + diagram |
