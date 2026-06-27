@@ -279,6 +279,11 @@ static bool wait_reached(int m, int timeout_ms)
         waited += 20;
         if (waited >= timeout_ms) {
             ESP_LOGW(TAG, "M%d move timeout", m + 1);
+            /* Surface stuck segments on the WiFi/SSE log too — the serial-only
+             * ESP_LOGW above is invisible to anyone running a big job over WiFi,
+             * which is exactly when a stalling move needs to show in the console. */
+            web_log("!! move timeout on M%d (%d ms) — segment did not reach target",
+                    m + 1, timeout_ms);
             return false;
         }
     }

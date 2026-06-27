@@ -415,12 +415,21 @@ export const BATCH_OPS = new Set(['pen', 'goto', 'line', 'arc']);
 export function isBatchableQuery(query: string): boolean {
   return BATCH_OPS.has(query.split('?')[0]);
 }
+/** Board health snapshot the runner's watchdog reads from one /api/status poll. */
+export interface StreamHealth {
+  pending: number; done: number; current: number; x: number; y: number;
+  drvOk: boolean; drvFlags: string; estop: boolean; aborting: boolean; paused: boolean;
+}
 export interface StreamHandlers {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   /** Optional: enqueue many ops in one request. When present, streamQueries uses it
    *  (≈80× fewer connections); otherwise it falls back to one request per op. */
   sendBatch?: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
+  /** Optional richer poll: when present the runner uses it for flow control AND a
+   *  progress/health watchdog, so a board that stops draining surfaces a real error
+   *  instead of an infinite silent wait. Falls back to getPending when absent. */
+  getHealth?: () => Promise<StreamHealth | null>;
   isCancelled: () => boolean;
   onProgress?: (sent: number, errors: number) => void;
   pushLog: (kind: LogEntry['kind'], text: string) => void;
@@ -429,9 +438,16 @@ export interface StreamHandlers {
 export async function streamQueries(items: StreamItem[], h: StreamHandlers): Promise<{ sent: number; errors: number; stopped: boolean }> {
   const CAP = 256, HIGH = 220, BATCH = 64;
   const MAX_NET_FAILS = 60;          // consecutive transient failures before we give up
+  const STALL_MS = 20000;            // board enqueued but no motion for this long → halt w/ reason
+  const BEAT_MS = 5000;              // progress heartbeat cadence (so a halt leaves a trail)
   const label = h.label ?? 'stream';
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  let errors = 0, i = 0, warned = false, netFails = 0;
+  let errors = 0, i = 0, warned = false, netFails = 0, pausedWarned = false;
+  // Watchdog: "progress" = the board's done/current/x/y fingerprint changing. A
+  // single job (circle/grid cell) can run minutes without `done` advancing, so we
+  // also watch x/y — a live plot moves the pen continuously; a true stall freezes
+  // all four. lastMoveAt resets whenever the fingerprint changes.
+  let fp = '', lastMoveAt = Date.now(), lastBeatAt = Date.now();
 
   const onTransient = async (): Promise<boolean> => {
     // returns true if we should give up
@@ -445,14 +461,62 @@ export async function streamQueries(items: StreamItem[], h: StreamHandlers): Pro
   };
 
   while (i < items.length && !h.isCancelled()) {
-    const pend = await h.getPending();
-    if (pend === null || pend >= HIGH) {
-      if (pend !== null && !warned) {
+    // One poll drives flow control AND the watchdog. getHealth (full status) is
+    // preferred; getPending is the legacy fallback (no health/progress data).
+    const health = h.getHealth ? await h.getHealth() : null;
+    const pend = health ? health.pending : (h.getHealth ? null : await h.getPending());
+
+    if (pend === null) {
+      // Status unreadable — the link is stalled/wedged. Route through the backoff
+      // so it can't spin here forever; eventually aborts with a real error.
+      if (await onTransient()) {
+        h.pushLog('err', `[${label}] HALT — lost contact with board (status unreadable). ${i}/${items.length} sent.`);
+        return { sent: i, errors, stopped: true };
+      }
+      continue;
+    }
+    netFails = 0;                     // a readable status clears the transient counter
+
+    if (health) {
+      // Health bail-outs: a board that stopped draining for a known reason should
+      // surface the cause immediately instead of waiting at the watermark forever.
+      if (health.estop)
+        { h.pushLog('err', `[${label}] HALT — board E-STOP latched. ${i}/${items.length} sent; ${pend} still queued.`); return { sent: i, errors, stopped: true }; }
+      if (!health.drvOk)
+        { h.pushLog('err', `[${label}] HALT — driver fault (${health.drvFlags || '?'}). ${i}/${items.length} sent. Fix cause, clear fault, re-run.`); return { sent: i, errors, stopped: true }; }
+      if (health.aborting)
+        { h.pushLog('err', `[${label}] HALT — board is flushing its queue (abort). ${i}/${items.length} sent.`); return { sent: i, errors, stopped: true }; }
+      if (health.paused) {
+        if (!pausedWarned) { h.pushLog('sys', `[${label}] board paused — holding (press Resume on the board/console).`); pausedWarned = true; }
+        lastMoveAt = Date.now();      // an intentional pause is not a stall
+        await sleep(400);
+        continue;
+      }
+      pausedWarned = false;
+
+      // Progress watchdog + heartbeat.
+      const now = Date.now();
+      const nfp = `${health.done}|${health.current}|${Math.round(health.x * 10)}|${Math.round(health.y * 10)}`;
+      if (nfp !== fp) { fp = nfp; lastMoveAt = now; }
+      if (now - lastBeatAt >= BEAT_MS) {
+        lastBeatAt = now;
+        h.pushLog('sys', `[${label}] streaming ${i}/${items.length} · queue ${pend}/${CAP} · done ${health.done} · pen (${health.x.toFixed(0)},${health.y.toFixed(0)})`);
+      }
+      if (pend > 0 && now - lastMoveAt >= STALL_MS) {
+        h.pushLog('err', `[${label}] HALT — board stopped advancing for ${Math.round((now - lastMoveAt) / 1000)}s `
+          + `(done stuck at ${health.done}, ${pend} queued, pen frozen at ${health.x.toFixed(0)},${health.y.toFixed(0)}). `
+          + `Likely a blocked move or a wedged link. ${i}/${items.length} sent.`);
+        return { sent: i, errors, stopped: true };
+      }
+    }
+
+    if (pend >= HIGH) {
+      if (!warned) {
         h.pushLog('sys', `[${label}] board busy (${pend}/${CAP} queued) — waiting for room…`);
         warned = true;
       }
       await sleep(400);
-      continue;                       // do NOT send while full / unknown
+      continue;                       // do NOT send while full
     }
     warned = false;
     const room = HIGH - pend;         // room reserved → a batch sized ≤ room can't overflow
@@ -1250,6 +1314,22 @@ export function usePlotter() {
     try { return (await getStatus(ipRef.current)).pending; } catch { return null; }
   }, []);
 
+  // One status read that surfaces everything streamQueries' watchdog needs:
+  // queue depth (flow control), the done/current/x/y progress fingerprint, and
+  // the board-health flags. Returns null if status can't be read (link stalled).
+  const getHealth = useCallback(async (): Promise<StreamHealth | null> => {
+    if (!ipRef.current) return null;
+    try {
+      const s = await getStatus(ipRef.current);
+      return {
+        pending: s.pending, done: s.done ?? 0, current: s.current ?? 0,
+        x: s.x ?? 0, y: s.y ?? 0,
+        drvOk: s.drv_ok !== false, drvFlags: s.drv_flags ?? '',
+        estop: !!s.estop, aborting: !!s.aborting, paused: !!s.paused,
+      };
+    } catch { return null; }
+  }, []);
+
   // Motion setters
   const setMotion = useCallback((key: keyof MotionParams, val: number) => {
     setMotionState((m) => ({ ...m, [key]: val }));
@@ -1369,7 +1449,7 @@ export function usePlotter() {
     applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
+    enqueue, sendRaw, sendAndWait, sendBatch, getPending, getHealth, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
     DEFAULTS,
   };
 }

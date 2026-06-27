@@ -4,6 +4,7 @@ import {
   parseJsonScript,
   streamQueries,
   type SendResult,
+  type StreamHealth,
   type ParsedLine,
   type GeneratorSpec,
   type PlotterBounds,
@@ -901,11 +902,12 @@ function plotterBounds(b: PlotterBounds) {
   return { left: b.left, right: b.right, up: b.up, down: b.down };
 }
 
-function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
+function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   sendAndWait: (ep: string, json?: string) => Promise<SendResult>;
   sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
+  getHealth: () => Promise<StreamHealth | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: 'cmd'|'ok'|'err'|'warn'|'sys'|'fw', text: string) => void;
   bounds: PlotterBounds;
@@ -1013,7 +1015,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, 
         const batch = pendingDraws.splice(0);
         const { stopped, errors: errs } = await streamQueries(
           batch,
-          { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
+          { sendRaw, sendBatch, getPending, getHealth, isCancelled: cancelled, pushLog, label: 'script',
             onProgress: () => setRun(r => ({ ...r, sent, errors })) },
         );
         errors += errs;
@@ -1097,7 +1099,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, 
     pushLog('cmd', `> script: queuing ${items.length} commands (flow-controlled)`);
     const { sent, errors, stopped } = await streamQueries(
       items,
-      { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'script',
+      { sendRaw, sendBatch, getPending, getHealth, isCancelled: cancelled, pushLog, label: 'script',
         onProgress: (s, e) => setRun(r => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
@@ -1106,7 +1108,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, 
               : `[script] done — ${sent - errors} queued` +
                 (errors ? `, ${errors} rejected (NOT queue-full — check bounds/syntax)` : ', no rejections'));
     setRun(r => ({ ...r, status: 'done' }));
-  }, [good, bounds, sendRaw, sendAndWait, sendBatch, getPending, runCancelRef, pushLog]);
+  }, [good, bounds, sendRaw, sendAndWait, sendBatch, getPending, getHealth, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
 
@@ -1308,7 +1310,7 @@ function StudioPage({ P, status, moving, bounds }: {
   moving: boolean;
   bounds: PlotterBounds;
 }) {
-  const { sendRaw, sendBatch, getPending, runCancelRef, pushLog } = P;
+  const { sendRaw, sendBatch, getPending, getHealth, runCancelRef, pushLog } = P;
   const allMods = useMemo(() => listModules(), []);
   const makes = useMemo(() => listModules('make'), []);
   const [studioData] = useState<StudioData>(() => loadStudioData());
@@ -1441,14 +1443,14 @@ function StudioPage({ P, status, moving, bounds }: {
     pushLog('cmd', `> studio: [${layerNames}] → ${queries.length} ops (${draws} lines, ${travels} travels${arcCount ? `, ${arcCount} arcs` : ''})`);
     const { sent, errors, stopped } = await streamQueries(
       queries.map((q) => ({ query: q })),
-      { sendRaw, sendBatch, getPending, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
+      { sendRaw, sendBatch, getPending, getHealth, isCancelled: () => abortRef.current || runCancelRef.current, pushLog, label: 'studio',
         onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors ? 'warn' : 'ok'),
       stopped ? `[studio] halted — ${sent}/${queries.length} sent`
               : `[studio] done — ${sent - errors} queued${errors ? `, ${errors} rejected` : ''}`);
     setRun((r) => ({ ...r, status: 'done' }));
-  }, [queries, layers, draws, travels, sendRaw, getPending, runCancelRef, pushLog]);
+  }, [queries, layers, draws, travels, sendRaw, getPending, getHealth, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
   const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
@@ -1684,10 +1686,11 @@ function StudioPage({ P, status, moving, bounds }: {
   );
 }
 
-function GcodeTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bounds }: {
+function GcodeTab({ sendRaw, sendBatch, getPending, getHealth, runCancelRef, pushLog, bounds }: {
   sendRaw: (ep: string, json?: string) => Promise<SendResult>;
   sendBatch: (queries: string[]) => Promise<{ accepted: number; rejected: number } | 'error'>;
   getPending: () => Promise<number | null>;
+  getHealth: () => Promise<StreamHealth | null>;
   runCancelRef: React.MutableRefObject<boolean>;
   pushLog: (kind: LogEntry['kind'], text: string) => void;
   bounds: PlotterBounds;
@@ -1746,7 +1749,7 @@ function GcodeTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bound
     const cancelled = () => abortRef.current || runCancelRef.current;
     const { sent, errors, stopped } = await streamQueries(
       result.queries.map((q) => ({ query: q })),
-      { sendRaw, sendBatch, getPending, isCancelled: cancelled, pushLog, label: 'gcode',
+      { sendRaw, sendBatch, getPending, getHealth, isCancelled: cancelled, pushLog, label: 'gcode',
         onProgress: (s, e) => setRun((r) => ({ ...r, sent: s, errors: e })) },
     );
     pushLog(stopped ? 'warn' : (errors === 0 ? 'ok' : 'warn'),
@@ -1754,7 +1757,7 @@ function GcodeTab({ sendRaw, sendBatch, getPending, runCancelRef, pushLog, bound
               ? `[gcode] halted by STOP/CLEAR — ${sent}/${result.queries.length} sent`
               : `[gcode] done — ${sent - errors} queued` + (errors ? `, ${errors} rejected` : ''));
     setRun((r) => ({ ...r, status: 'done' }));
-  }, [result, sendRaw, getPending, runCancelRef, pushLog]);
+  }, [result, sendRaw, getPending, getHealth, runCancelRef, pushLog]);
 
   const abort = useCallback(() => { abortRef.current = true; }, []);
   const pct = run.total ? Math.round((run.sent / run.total) * 100) : 0;
@@ -2455,9 +2458,9 @@ export default function App() {
                   </div>
                 </LogCard>
 
-                <ScriptTab sendRaw={P.sendRaw} sendAndWait={P.sendAndWait} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+                <ScriptTab sendRaw={P.sendRaw} sendAndWait={P.sendAndWait} sendBatch={P.sendBatch} getPending={P.getPending} getHealth={P.getHealth} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
-                <GcodeTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
+                <GcodeTab sendRaw={P.sendRaw} sendBatch={P.sendBatch} getPending={P.getPending} getHealth={P.getHealth} runCancelRef={P.runCancelRef} pushLog={P.pushLog} bounds={bounds} />
 
                 <LogCard title="Errors" icon="⚠" accent="#dc2626">
                   <ErrorsPanel log={log} />

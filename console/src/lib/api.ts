@@ -18,11 +18,30 @@ export interface ApiResult {
   id?: number;   // job id returned by enqueue endpoints
 }
 
+// fetch() has NO default timeout — a board whose TCP link stalls without
+// resetting the connection makes a request hang forever (never resolves, never
+// rejects), which silently wedges the script runner mid-job. AbortController
+// turns that stall into a typed error within `ms` so callers can retry/abort.
+async function fetchT(url: string, ms: number, opts?: RequestInit): Promise<Response> {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctl.signal });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error(`timeout after ${ms}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // All firmware API calls are plain HTTP GETs. The firmware returns JSON
 // { status: "ok"|"error", msg: "…" } for every endpoint.
 export async function apiGet(ip: string, endpoint: string): Promise<ApiResult> {
   const base = ip ? `http://${ip}` : '';
-  const r = await fetch(`${base}/api/${endpoint}`);
+  const r = await fetchT(`${base}/api/${endpoint}`, 8000);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json() as Promise<ApiResult>;
 }
@@ -32,7 +51,9 @@ export async function apiGet(ip: string, endpoint: string): Promise<ApiResult> {
 export interface BatchResult { status: string; accepted: number; rejected: number; id?: number; }
 export async function apiBatch(ip: string, body: string): Promise<BatchResult> {
   const base = ip ? `http://${ip}` : '';
-  const r = await fetch(`${base}/api/batch`, { method: 'POST', body });
+  // Longer budget than a plain GET: the firmware's per-socket recv timeout is 3 s
+  // and a full batch of draw ops takes a moment to enqueue.
+  const r = await fetchT(`${base}/api/batch`, 12000, { method: 'POST', body });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json() as Promise<BatchResult>;
 }
@@ -54,7 +75,9 @@ export interface RawStatus {
 
 export async function getStatus(ip: string): Promise<RawStatus> {
   const base = ip ? `http://${ip}` : '';
-  const r = await fetch(`${base}/api/status`);
+  // Short budget: status is the runner's flow-control & watchdog poll — a stalled
+  // status must surface fast so the watchdog reacts instead of hanging.
+  const r = await fetchT(`${base}/api/status`, 6000);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json() as Promise<RawStatus>;
 }

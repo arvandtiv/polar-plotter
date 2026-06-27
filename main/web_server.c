@@ -837,6 +837,12 @@ static void http_server_task(void *arg)
         /* 3-second receive timeout so a stalled client doesn't block the loop. */
         struct timeval tv = { .tv_sec = 3, .tv_usec = 0 };
         setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        /* AND a send timeout: this server is single-threaded, so a blocked send()
+         * (full TCP window when the WiFi link hiccups) would otherwise freeze the
+         * whole accept loop forever — no status, no batch, every client hangs. With
+         * SO_SNDTIMEO the send fails fast, we close the socket, and keep serving. */
+        struct timeval snd = { .tv_sec = 4, .tv_usec = 0 };
+        setsockopt(client_sock, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof(snd));
 
         /* Accumulate until we see the end of headers (\r\n\r\n). */
         int total = 0; bool got_end = false;
