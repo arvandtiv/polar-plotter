@@ -111,7 +111,9 @@ Returns a JSON list of all built-in generators with key, label, description, and
 #### `plot_generate`
 Run a named generator, compile its output to firmware commands, and dispatch everything.
 The generator uses the current work area bounds (read automatically from firmware).
-Out-of-bounds paths are clipped at the boundary.
+Out-of-bounds paths are **clipped** at the boundary: the inside parts draw, and where the
+path leaves the area the pen lifts and drops again when it re-enters — it never drags ink
+along the edge (no boundary-walk).
 
 ```json
 {
@@ -133,6 +135,31 @@ Optionally apply a warp modifier after generation:
   "warp_params": { "amplitude": 12, "wavelength": 80 }
 }
 ```
+
+##### Fit-in-bounds (auto-reseed) — `fit_in_bounds`
+Some generators (especially the noise-driven ones: `noiseOrbit`, `noisedHatches`,
+`randomWalker`, `sheets`) wander and **spill outside the area** for some seeds. Set
+`fit_in_bounds: true` to make `plot_generate` **retry the generator's `seed`** until its
+art fits *entirely* inside the current bounds, and draw the first seed that fits.
+
+```json
+{
+  "generator": "noiseOrbit",
+  "params": { "seed": 1, "rings": 6, "maxRadius": 70 },
+  "fit_in_bounds": true,
+  "max_seeds": 2000,
+  "fit_tol_mm": 0
+}
+```
+
+- `fit_in_bounds` (default **false**) — off = single pass (still clipped to pen-up gaps).
+- `max_seeds` (default **2000**) — how many seeds to sweep before giving up.
+- `fit_tol_mm` (default **0**) — allow this much overshoot before counting it a spill;
+  raise it (e.g. `1`–`2`) to tolerate a tiny edge nick instead of rejecting the seed.
+- The result text reports the outcome: `Fit: ✓ fits … at seed N (after K tries)`, or
+  `Fit: ✗ NO seed in 2000 fit — drawn clipped` when nothing fits (then shrink the
+  generator's radius/size params, raise `max_seeds`, or raise `fit_tol_mm`).
+- Only generators that expose a `seed` param can be reseeded; others report `Fit: SKIPPED`.
 
 #### `plot_polylines`
 Send raw point arrays as firmware strokes — the lowest-level drawing primitive.
@@ -184,6 +211,13 @@ Each draw command waits until physically done; configuration commands (`bounds`,
 **Draw types:** `goto, line, arc, circle, square, wobbly, truchet, bullseye, grid, border, pen, home, sethome, stop, speed, accel, current`
 
 **Config types (immediate, no queue):** `bounds, matrix, grid_select, grid_clear`
+
+**Fit-in-bounds for `generate` steps:** put `"fit_in_bounds": true` in the document's
+`metadata` to make **every** `generate` step reseed until its art fits inside the active
+cell (same behaviour as `plot_generate`'s `fit_in_bounds`; tune with `metadata.max_seeds`
+and `metadata.fit_tol_mm`). Override per step with `"fit": true/false`. At the end of the
+run, `plot_script` prints a **summary of how many cells could not fit** even after all
+seeds — e.g. `Fit: ✗ 7/100 cell(s) could NOT fit after 2000 seeds: (3,1), (4,4), …`. See §9.
 
 ---
 
@@ -610,6 +644,46 @@ full bounds from your first `plot_status` call and pass the same `full_xn/xp/yn/
 `plot_generate` reads the firmware bounds after `plot_grid_select`, so it automatically
 gets the cell dimensions as its canvas. No extra steps — just call `plot_grid_select`
 then `plot_generate` directly.
+
+### Keeping generative art inside the cell — `fit_in_bounds`
+The MANDATORY fit check above is about **fixed-size primitives** (circle/square radius).
+**Generative** modules are different: noise-driven generators (`noiseOrbit`, `noisedHatches`,
+`randomWalker`, `sheets`) wander and often **poke outside the cell for some seeds** — you
+cannot predict it from the params alone. Two safety nets, both automatic:
+
+1. **Clipping (always on).** Any spill is drawn with the pen **up** outside the cell and
+   **down** again when the path re-enters — it never walks the cell edge. So a spill never
+   ruins neighbouring cells; it just loses the outside portion.
+2. **Reseeding (opt-in).** Set `fit_in_bounds: true` so the generator's `seed` is swept
+   (up to `max_seeds`, default 2000) until a seed lands **entirely inside the cell**. The
+   first fitting seed is used; if none fit, the last attempt is drawn clipped and counted.
+
+In a `plot_script` grid run, switch it on once via `metadata` — it applies to every cell:
+
+```json
+{
+  "metadata": {
+    "work_area": { "x_min": -240, "x_max": 240, "y_min": -110, "y_max": 300 },
+    "grid": { "cols": 4, "rows": 4, "padding_mm": 8 },
+    "fit_in_bounds": true,
+    "max_seeds": 2000
+  },
+  "commands": [
+    { "type": "grid_select", "col": 0, "row": 0 },
+    { "type": "generate", "generator": "noiseOrbit", "params": { "seed": 1, "maxRadius": 40 } },
+    { "type": "grid_select", "col": 1, "row": 0 },
+    { "type": "generate", "generator": "randomWalker", "params": { "count": 6, "seed": 1 } },
+    { "type": "grid_clear" },
+    { "type": "home" }
+  ]
+}
+```
+
+At the end the run reports how many cells couldn't be contained, e.g.
+`Fit: ✗ 3/16 cell(s) could NOT fit after 2000 seeds: (1,2), (3,0), (3,3)`. When that
+happens, the generator is simply too large for the cell — **shrink its size params**
+(radius / maxRadius / blobRadius), use fewer cells, or raise `fit_tol_mm` to allow a small
+nick. A generator with **no `seed` param** can't be reseeded and is reported as skipped.
 
 ### Using `plot_script` for grid work
 

@@ -78,12 +78,12 @@ register(boxModule);
 // ../console/src/lib/modules/circle.ts
 var CHORD_ERR_MM = 0.2;
 function arcSegments(radiusMm, maxErrMm) {
-  if (radiusMm <= 0 || maxErrMm <= 0) return 8;
+  if (radiusMm <= 0 || maxErrMm <= 0) return 32;
   let ratio = 1 - maxErrMm / radiusMm;
   ratio = Math.max(-1, Math.min(1, ratio));
   const a = 2 * Math.acos(ratio);
   const n = a > 1e-6 ? Math.ceil(2 * Math.PI / a) : 720;
-  return Math.max(8, Math.min(720, n));
+  return Math.max(32, Math.min(720, n));
 }
 var circleModule = {
   key: "circle",
@@ -115,7 +115,7 @@ var circleModule = {
       points.push({ x: cx + r2 * Math.cos(a), y: cy + r2 * Math.sin(a) });
     }
     const path = { points, closed: true, cycles };
-    return { widthMm: 2 * r2, heightMm: 2 * r2, paths: [path], meta: { title: "Circle" } };
+    return { widthMm: 2 * r2, heightMm: 2 * r2, paths: [path], meta: { title: "Circle", noSimplify: true } };
   }
 };
 register(circleModule);
@@ -1741,13 +1741,14 @@ function clipBounds(b) {
 }
 function compileFrame(frame, bounds2, opts = {}) {
   const tol = opts.simplifyTol ?? 0.2;
-  const opt = optimizeOrder(tol > 0 ? simplifyFrame(frame, tol) : frame);
+  const skipSimplify = frame.meta?.noSimplify || tol <= 0;
+  const opt = optimizeOrder(skipSimplify ? frame : simplifyFrame(frame, tol));
   return compile(opt, { clipBounds: clipBounds(bounds2), arcTol: opts.arcTol });
 }
-function expandGenerator(spec, bounds2, opts = {}) {
+function buildGeneratorFrame(spec, bounds2, paramsOverride) {
   const mod = getModule(spec.key);
   if (!mod) throw new Error(`Unknown generator: "${spec.key}"`);
-  let frame = mod.generate(spec.params, { bounds: bounds2 });
+  let frame = mod.generate(paramsOverride ?? spec.params, { bounds: bounds2 });
   if (spec.warp) {
     const warpMod = getModule("warp");
     if (warpMod) {
@@ -1757,7 +1758,64 @@ function expandGenerator(spec, bounds2, opts = {}) {
       );
     }
   }
-  return compileFrame(frame, bounds2, opts);
+  return frame;
+}
+function expandGenerator(spec, bounds2, opts = {}) {
+  return compileFrame(buildGeneratorFrame(spec, bounds2), bounds2, opts);
+}
+function frameFitsBounds(frame, bounds2, tolMm = 0, ellipse = false) {
+  const xMin = -bounds2.left - tolMm, xMax = bounds2.right + tolMm;
+  const yMin = -bounds2.up - tolMm, yMax = bounds2.down + tolMm;
+  const cx = (xMin + xMax) / 2, cy = (yMin + yMax) / 2;
+  const rx = (xMax - xMin) / 2, ry = (yMax - yMin) / 2;
+  for (const path of frame.paths) {
+    for (const p of path.points) {
+      if (ellipse) {
+        if (rx <= 0 || ry <= 0) return false;
+        const nx = (p.x - cx) / rx, ny = (p.y - cy) / ry;
+        if (nx * nx + ny * ny > 1) return false;
+      } else if (p.x < xMin || p.x > xMax || p.y < yMin || p.y > yMax) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+function expandGeneratorFitted(spec, bounds2, o = {}) {
+  const mod = getModule(spec.key);
+  if (!mod) throw new Error(`Unknown generator: "${spec.key}"`);
+  const hasSeed = mod.sections.some((s) => s.fields.some((f) => f.key === "seed"));
+  const tol = o.fitTolMm ?? 0;
+  if (!o.fit || !hasSeed) {
+    const frame = buildGeneratorFrame(spec, bounds2);
+    return {
+      queries: compileFrame(frame, bounds2, o),
+      fit: frameFitsBounds(frame, bounds2, tol, o.ellipse),
+      seed: hasSeed ? Math.round(Number(spec.params.seed ?? 0)) : null,
+      attempts: 1,
+      hasSeed
+    };
+  }
+  const maxSeeds = Math.max(1, Math.floor(o.maxSeeds ?? 2e3));
+  const base = Number.isFinite(o.baseSeed) ? Number(o.baseSeed) : Math.round(Number(spec.params.seed ?? 0));
+  let lastFrame = null;
+  let lastSeed = base;
+  for (let k = 0; k < maxSeeds; k++) {
+    const seed = ((base + k) % 1e4 + 1e4) % 1e4;
+    const frame = buildGeneratorFrame(spec, bounds2, { ...spec.params, seed });
+    if (frameFitsBounds(frame, bounds2, tol, o.ellipse)) {
+      return { queries: compileFrame(frame, bounds2, o), fit: true, seed, attempts: k + 1, hasSeed };
+    }
+    lastFrame = frame;
+    lastSeed = seed;
+  }
+  return {
+    queries: compileFrame(lastFrame, bounds2, o),
+    fit: false,
+    seed: lastSeed,
+    attempts: maxSeeds,
+    hasSeed
+  };
 }
 function runLayerStack(layers, bounds2, groups = [], image, opts = {}) {
   const frame = evaluate(layers, bounds2, groups, image);
@@ -1881,11 +1939,12 @@ function pathsToFrame(paths, bounds2) {
   return {
     widthMm: bounds2.left + bounds2.right,
     heightMm: bounds2.up + bounds2.down,
-    paths: paths.map((p) => ({
-      points: p.points,
-      closed: p.closed,
-      cycles: p.cycles
-    }))
+    paths: paths.map((p) => {
+      const path = { points: p.points };
+      if (p.closed !== void 0) path.closed = p.closed;
+      if (p.cycles !== void 0) path.cycles = p.cycles;
+      return path;
+    })
   };
 }
 function compilePaths(paths, bounds2, opts = {}) {
@@ -1913,7 +1972,9 @@ export {
   computeCell,
   defaultsOf,
   expandGenerator,
+  expandGeneratorFitted,
   firmwareWorkAreaFromPlotter,
+  frameFitsBounds,
   getModule,
   gridClearQueries,
   gridCtxFromMetadata,

@@ -21,6 +21,7 @@ import {
   compilePaths,
   compilePathsWithWarp,
   expandGenerator,
+  expandGeneratorFitted,
   boundsFromFirmware,
   listGenerators,
   gridCtxFromMetadata,
@@ -704,9 +705,17 @@ Configuration commands (take effect instantly, do not queue a draw job):
 Studio generators (same unified pipeline as the console Script tab):
   { "type": "generate", "generator": "randomWalker", "params": { "count": 5, "seed": 42 } }
 
+Fit-in-bounds (reseed): set metadata.fit_in_bounds=true to make every "generate" reseed
+until its art fits ENTIRELY inside the active cell/work-area; the first fitting seed is
+used. Misses (no seed fit within metadata.max_seeds, default 2000) are drawn CLIPPED with
+pen-up gaps — never an edge-walk — and the run ends with a summary of how many cells could
+not fit. Override per command with "fit": true/false (and optional "max_seeds","fit_tol_mm").
+Off by default: spills are still clipped to pen-up gaps, just not reseeded.
+
 Wrapped document (grid tests — metadata supplies work_area + grid for grid_select):
   { "metadata": { "work_area": { "x_min": -276, "x_max": 263, "y_min": -115, "y_max": 273 },
-                  "grid": { "cols": 10, "rows": 10, "padding_mm": 10 } },
+                  "grid": { "cols": 10, "rows": 10, "padding_mm": 10 },
+                  "fit_in_bounds": true, "max_seeds": 2000 },
     "commands": [ … ] }`,
   {
     commands: z.union([
@@ -722,7 +731,7 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
     ),
   },
   async ({ commands: raw, stop_on_error }) => {
-    let { commands: all, gridCtx } = unwrapScriptCommands(raw);
+    let { commands: all, gridCtx, metadata } = unwrapScriptCommands(raw);
     if (gridCtx) {
       const s = await api('status');
       const fb = boundsFromFirmware(s.bounds ?? {});
@@ -732,9 +741,22 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
     const commands = all.filter((c) => c?.type && c.type !== 'status');
     const results = [];
 
+    // Reseed-until-fits feature (toggle): script-wide via metadata.fit_in_bounds,
+    // per-generate override via cmd.fit. When on, each cell's generator is reseeded
+    // until its art fits inside the cell; misses are drawn clipped (pen-up gaps) and
+    // counted. See expandGeneratorFitted.
+    const fitOn      = metadata?.fit_in_bounds ?? metadata?.fit ?? false;
+    const fitMaxSeed = Number(metadata?.max_seeds ?? 2000);
+    const fitTolMm   = Number(metadata?.fit_tol_mm ?? 0);
+    let activeCell = null;                 // "(col,row)" of the current grid cell
+    const fitMisses = [];                  // cells/generators that never fit
+    let fitContained = 0, fitSkipped = 0;  // counters for the summary
+
     for (let i = 0; i < commands.length; i++) {
       const cmd = commands[i];
       const isDirect = DIRECT_CMD_TYPES.has(cmd.type);
+      if (cmd.type === 'grid_select') activeCell = `(${cmd.col ?? 0},${cmd.row ?? 0})`;
+      else if (cmd.type === 'grid_clear') activeCell = null;
 
       let json;
       try {
@@ -748,8 +770,21 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
               ? { mode: cmd.warp.mode ?? 'water', params: cmd.warp.params ?? {} }
               : undefined,
           };
-          const queries = expandGenerator(spec, bounds);
-          json = await batchSend(queries);
+          // Per-command cmd.fit overrides the script-wide toggle.
+          const wantFit = cmd.fit ?? fitOn;
+          const ex = expandGeneratorFitted(spec, bounds, {
+            fit: wantFit,
+            maxSeeds: Number(cmd.max_seeds ?? fitMaxSeed),
+            fitTolMm: Number(cmd.fit_tol_mm ?? fitTolMm),
+            ellipse: !!s.bounds?.ellipse,
+          });
+          if (wantFit) {
+            const where = activeCell ? `cell ${activeCell}` : `${spec.key}`;
+            if (!ex.hasSeed) { fitSkipped++; results.push(`   ↳ fit skipped (${where}): "${spec.key}" has no seed param.`); }
+            else if (ex.fit) { fitContained++; }
+            else { fitMisses.push(where); results.push(`   ↳ ⚠ fit MISS (${where}): no seed in ${ex.attempts} fit — drawn clipped.`); }
+          }
+          json = await batchSend(ex.queries);
         } else if (isDirect) {
           // Configuration commands bypass the draw queue and execute immediately.
           json = await executeDirectCmd(cmd, gridCtx);
@@ -791,6 +826,20 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
           : 'Script aborted (firmware returned error).');
         break;
       }
+    }
+
+    // Fit summary — the headline the user wants: how many cells could not be made
+    // to fit inside their bound even after exhausting every seed.
+    if (fitOn) {
+      const tried = fitContained + fitSkipped + fitMisses.length;
+      results.push('');
+      if (fitMisses.length === 0) {
+        results.push(`Fit: ✓ all ${fitContained} generated cell(s) fit inside their bounds.`);
+      } else {
+        results.push(`Fit: ✗ ${fitMisses.length}/${tried} cell(s) could NOT fit after ${fitMaxSeed} seeds ` +
+                     `(drawn clipped with pen-up gaps): ${fitMisses.join(', ')}`);
+      }
+      if (fitSkipped > 0) results.push(`     (${fitSkipped} generator(s) had no seed param to vary — fit not applicable.)`);
     }
 
     return { content: [{ type: 'text', text: results.join('\n') }] };
@@ -958,8 +1007,21 @@ Available generators (call plot_list_generators for descriptions):
       cx:         z.number().default(0).describe('Warp centre X (mm, droplet mode)'),
       cy:         z.number().default(0).describe('Warp centre Y (mm, droplet mode)'),
     }).default({}).describe('Parameters for the warp modifier (only used when warp_mode != "none")'),
+
+    fit_in_bounds: z.boolean().default(false).describe(
+      'Reseed until the art fits ENTIRELY inside the work area. Sweeps the generator\'s ' +
+      'seed (only generators with a seed param) and uses the first that fits. If none of ' +
+      'max_seeds fit, the last attempt is drawn clipped (pen-up gaps, never an edge-walk) ' +
+      'and the miss is reported. Off (default) = single shot, still clipped.',
+    ),
+    max_seeds: z.number().int().min(1).max(10000).default(2000).describe(
+      'When fit_in_bounds is on, how many seeds to try before giving up (default 2000).',
+    ),
+    fit_tol_mm: z.number().min(0).default(0).describe(
+      'Overshoot tolerance for the fit test (mm). 0 = strictly inside the edge.',
+    ),
   },
-  async ({ generator, params, warp_mode, warp_params }) => {
+  async ({ generator, params, warp_mode, warp_params, fit_in_bounds, max_seeds, fit_tol_mm }) => {
     const s = await api('status');
     const bounds = boundsFromFirmware(s.bounds ?? {});
     if (![bounds.left, bounds.right, bounds.up, bounds.down].every(v => isFinite(v) && v > 0)) {
@@ -974,17 +1036,32 @@ Available generators (call plot_list_generators for descriptions):
         ? { mode: warp_mode, params: warp_params ?? {} }
         : undefined,
     };
-    const queries = expandGenerator(spec, bounds);
-    const result = await batchSend(queries);
+    const ex = expandGeneratorFitted(spec, bounds, {
+      fit: fit_in_bounds,
+      maxSeeds: max_seeds,
+      fitTolMm: fit_tol_mm,
+      ellipse: !!s.bounds?.ellipse,
+    });
+    const result = await batchSend(ex.queries);
 
     const gens = listGenerators();
     const label = gens.find((g) => g.key === generator)?.label ?? generator;
 
+    let fitLine = null;
+    if (fit_in_bounds) {
+      if (!ex.hasSeed)        fitLine = `Fit: SKIPPED — "${generator}" has no seed param to vary; drawn clipped.`;
+      else if (ex.fit)        fitLine = `Fit: ✓ fits inside bounds at seed ${ex.seed} (after ${ex.attempts} tr${ex.attempts === 1 ? 'y' : 'ies'}).`;
+      else                    fitLine = `Fit: ✗ NO seed in ${ex.attempts} fit — drawn clipped (pen-up gaps). Retune params or raise max_seeds.`;
+    } else if (!ex.fit) {
+      fitLine = `Note: art spills outside the bounds — drawn clipped (pen-up gaps). Set fit_in_bounds to reseed for a contained result.`;
+    }
+
     return {
       content: [{ type: 'text', text: [
         `Generator: ${label}`,
-        `Firmware commands: ${queries.length}`,
+        `Firmware commands: ${ex.queries.length}`,
         warp_mode !== 'none' ? `Warp applied: ${warp_mode} (amplitude ${warp_params?.amplitude ?? 8} mm)` : null,
+        fitLine,
         `Result: ${result.status}${result.msg ? ` — ${result.msg}` : ''}`,
       ].filter(Boolean).join('\n') }],
     };
@@ -1173,10 +1250,10 @@ server.tool(
 
 /** Accept a bare command array or { metadata, commands } — same as the console Script tab. */
 function unwrapScriptCommands(raw) {
-  if (Array.isArray(raw)) return { commands: raw, gridCtx: null };
+  if (Array.isArray(raw)) return { commands: raw, gridCtx: null, metadata: null };
   if (raw && typeof raw === 'object' && Array.isArray(raw.commands)) {
     const gridCtx = gridCtxFromMetadata(raw);
-    return { commands: hydrateGridCommands(raw.commands, gridCtx), gridCtx };
+    return { commands: hydrateGridCommands(raw.commands, gridCtx), gridCtx, metadata: raw.metadata ?? null };
   }
   throw new Error('Expected a JSON command array or { metadata, commands } document');
 }

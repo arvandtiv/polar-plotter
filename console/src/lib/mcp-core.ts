@@ -9,11 +9,15 @@ import type { Frame } from "./frame";
 import {
   compileFrame,
   expandGenerator,
+  expandGeneratorFitted,
+  frameFitsBounds,
   runLayerStack,
   boundsFromFirmware,
   type GeneratorSpec,
   type PipelineBounds,
   type RunPipelineOpts,
+  type FitOpts,
+  type FittedExpansion,
 } from "./runPipeline";
 import type { Layer, LayerGroup } from "./pipeline";
 
@@ -32,13 +36,15 @@ export {
   compile,
   compileFrame,
   expandGenerator,
+  expandGeneratorFitted,
+  frameFitsBounds,
   runLayerStack,
   boundsFromFirmware,
   getModule,
   defaultsOf,
   listModules,
 };
-export type { GeneratorSpec, PipelineBounds, RunPipelineOpts, Layer, LayerGroup };
+export type { GeneratorSpec, PipelineBounds, RunPipelineOpts, FitOpts, FittedExpansion, Layer, LayerGroup };
 
 /** Summary for plot_list_generators — mirrors the old pipeline.js shape. */
 export function listGenerators(): {

@@ -173,12 +173,17 @@ Traces the current work-area boundary once, pen-down. No params. Use to visually
 Returns all available generators with keys, labels, descriptions, and params. **Call this before `plot_generate`** to see what's available.
 
 #### `plot_generate`
-Runs a named generator, compiles it to firmware commands, and dispatches. Reads current work-area bounds automatically. Out-of-bounds paths are clipped at the boundary.
+Runs a named generator, compiles it to firmware commands, and dispatches. Reads current work-area bounds automatically. Out-of-bounds paths are **clipped**: the inside parts draw, and where the path leaves the area the pen lifts and re-drops on return — it never drags ink along the edge.
 ```
-generator    key string (from plot_list_generators)
-params       object — generator-specific params (see below)
-warp         optional warp modifier object: { mode, params }
+generator      key string (from plot_list_generators)
+params         object — generator-specific params (see below)
+warp           optional warp modifier object: { mode, params }
+fit_in_bounds  optional bool (default false) — reseed until the art fits fully inside
+max_seeds      optional int (default 2000) — seeds to try when fit_in_bounds is on
+fit_tol_mm     optional mm (default 0) — overshoot tolerated before it counts as a spill
 ```
+
+**Fit-in-bounds (auto-reseed).** The noise generators (`noiseOrbit`, `noisedHatches`, `randomWalker`, `sheets`) wander and sometimes spill outside the area for a given seed — unpredictably. Set `fit_in_bounds: true` to sweep the generator's `seed` until one fits *entirely* inside the current bounds, and draw that one. The reply tells you the seed used, or `Fit: ✗ NO seed in N fit` when none do (then shrink the generator's size params, raise `max_seeds`, or raise `fit_tol_mm` to allow a tiny edge nick). Only generators with a `seed` param can be reseeded. This is the right tool when a generated shape **must** stay inside its cell/area; without it, a spill is simply clipped (pen-up gaps).
 
 **Available generators and their params:**
 
@@ -357,6 +362,16 @@ row         0 – (rows−1)        Row index (0 = topmost / most-negative Y)
 full_xn, full_xp, full_yn, full_yp   Full canvas bounds — pass same value to every call
 ```
 After `plot_grid_select`: draw commands use **cell-local coordinates**. `(0,0)` = cell centre. `plot_generate` reads cell bounds automatically.
+
+**Keeping generated art inside each cell.** Noise generators often spill past the cell edge. Spills are always clipped to pen-up gaps (never an edge-walk), but to *guarantee containment* use `fit_in_bounds` (see `plot_generate`). In a `plot_script` grid run, turn it on once in `metadata` and it applies to every cell:
+```json
+{ "metadata": { "work_area": {…}, "grid": { "cols": 4, "rows": 4, "padding_mm": 8 },
+                "fit_in_bounds": true, "max_seeds": 2000 },
+  "commands": [ { "type": "grid_select", "col": 0, "row": 0 },
+                { "type": "generate", "generator": "noiseOrbit", "params": { "seed": 1, "maxRadius": 40 } },
+                … , { "type": "grid_clear" }, { "type": "home" } ] }
+```
+Override per step with `"fit": true/false`. The run ends with a summary of how many cells could **not** fit even after all seeds — e.g. `Fit: ✗ 3/16 cell(s) could NOT fit after 2000 seeds: (1,2), (3,0), (3,3)` — your cue to shrink those generators' size params or use fewer cells.
 
 #### `plot_grid_clear`
 Restores full work area. Pass the same `full_xn/xp/yn/yp` you used for `plot_grid_select`.
