@@ -167,6 +167,7 @@ import type { GeneratorSpec } from '../lib/runPipeline';
 import {
   gridCtxFromMetadata,
   gridCtxFromPlotterBounds,
+  resolveGridCtx,
   computeCell,
   gridClearQueries,
   hydrateGridCommands,
@@ -204,8 +205,12 @@ export function parseJsonScript(
       // Also extract grid context from outer metadata (klee-style composition files).
       const wrap = parsed as Record<string, unknown>;
       gridCtx = gridCtxFromMetadata(wrap as { metadata?: { work_area?: Record<string, number>; grid?: Record<string, number> } });
-      if (gridCtx && opts?.plotterBounds) {
-        gridCtx = gridCtxFromPlotterBounds(opts.plotterBounds, gridCtx);
+      if (opts?.plotterBounds) {
+        // Live work area is authoritative: re-derive the grid bounds from the machine so
+        // a script's inline/metadata full_* (possibly stale or wrong-convention) can't
+        // place cells off-canvas. Keep the grid shape (cols/rows/padding) from metadata
+        // when present; otherwise a placeholder the per-command shape overrides.
+        gridCtx = gridCtxFromPlotterBounds(opts.plotterBounds, gridCtx ?? { cols: 1, rows: 1, padding_mm: 5 });
       }
       const inner = Array.isArray(wrap.commands) ? wrap.commands
                   : Array.isArray(wrap.script)   ? wrap.script
@@ -335,14 +340,8 @@ export function parseJsonScript(
         return;
       }
       case 'grid_select': {
-        let gc: GridCtx | null = gridCtx;
-        if (isFinite(Number(o.cols)) && isFinite(Number(o.full_xn))) {
-          gc = {
-            cols: num('cols', 1), rows: num('rows', 1), padding_mm: num('padding_mm', 5),
-            full_xn: num('full_xn', 0), full_xp: num('full_xp', 0),
-            full_yn: num('full_yn', 0), full_yp: num('full_yp', 0),
-          };
-        }
+        // Live machine bounds (gridCtx) win over inline full_*; shape comes from the command.
+        const gc = resolveGridCtx(o, gridCtx);
         if (!gc) { results.push({ idx, raw, error: 'grid_select: need cols/rows/full_xn/xp/yn/yp or outer metadata.grid + metadata.work_area' }); return; }
         const col = num('col', 0), row = num('row', 0);
         try {
@@ -354,10 +353,7 @@ export function parseJsonScript(
         return;
       }
       case 'grid_clear': {
-        let gc: GridCtx | null = gridCtx;
-        if (isFinite(Number(o.full_xn))) {
-          gc = { cols: 1, rows: 1, padding_mm: 5, full_xn: num('full_xn', 0), full_xp: num('full_xp', 0), full_yn: num('full_yn', 0), full_yp: num('full_yp', 0) };
-        }
+        const gc = resolveGridCtx(o, gridCtx);
         if (!gc) { results.push({ idx, raw, error: 'grid_clear: need full_xn/xp/yn/yp or outer metadata.work_area' }); return; }
         results.push({ idx, raw, gridClear: { gc } });
         return;

@@ -112,6 +112,44 @@ export function computeCell(gc: GridCtx, col: number, row: number): CellLayout {
   };
 }
 
+/**
+ * Resolve the effective GridCtx for a single grid_select / grid_clear command.
+ *
+ * Grid SHAPE (cols/rows/padding) is taken from the command's own fields when it carries
+ * them, else from `ctx`. The work-area BOUNDS (full_xn…yp) ALWAYS come from `ctx` when one
+ * is given, because `ctx` is the live machine work area (read from firmware) — it is
+ * authoritative over any inline full_* a script baked in, which may be stale or in the
+ * wrong (UI-label) convention. This is what stops a Y-flipped generated script from
+ * placing cells off the canvas: the machine's real bounds win, not the script's numbers.
+ *
+ * With no `ctx` (no live bounds available), fall back to the command's own full grid
+ * definition (legacy self-contained behaviour).
+ */
+export function resolveGridCtx(
+  cmd: Record<string, unknown>,
+  ctx: GridCtx | null,
+): GridCtx | null {
+  const n = (k: string) => Number(cmd[k]);
+  const hasShape = isFinite(n("cols")) && isFinite(n("rows"));
+  if (!ctx) {
+    if (!isFinite(n("full_xn"))) return null;     // nothing to build from
+    return {
+      cols: hasShape ? n("cols") : 1,
+      rows: hasShape ? n("rows") : 1,
+      padding_mm: isFinite(n("padding_mm")) ? n("padding_mm") : 5,
+      full_xn: n("full_xn"), full_xp: n("full_xp"),
+      full_yn: n("full_yn"), full_yp: n("full_yp"),
+    };
+  }
+  return {
+    cols: hasShape ? n("cols") : ctx.cols,
+    rows: hasShape ? n("rows") : ctx.rows,
+    padding_mm: isFinite(n("padding_mm")) ? n("padding_mm") : ctx.padding_mm,
+    full_xn: ctx.full_xn, full_xp: ctx.full_xp,   // ← live machine bounds win over inline
+    full_yn: ctx.full_yn, full_yp: ctx.full_yp,
+  };
+}
+
 export function gridClearQueries(gc: GridCtx): { boundsQuery: string; matrixQuery: string } {
   return {
     boundsQuery: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0`,

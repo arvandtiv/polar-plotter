@@ -27,6 +27,7 @@ import {
   gridCtxFromMetadata,
   gridCtxFromPlotterBounds,
   computeCell,
+  resolveGridCtx,
   gridClearQueries,
   hydrateGridCommands,
 } from './core.js';
@@ -732,11 +733,18 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
   },
   async ({ commands: raw, stop_on_error }) => {
     let { commands: all, gridCtx, metadata } = unwrapScriptCommands(raw);
-    if (gridCtx) {
+    // If the script does any grid work, make the LIVE firmware work area authoritative:
+    // re-derive gridCtx from the machine's real bounds so a script carrying stale or
+    // wrong-convention inline full_* (e.g. a Y-flipped work area) can't place cells off
+    // the canvas. Grid shape (cols/rows/padding) still comes from metadata/the command.
+    const hasGrid = all.some((c) => c?.type === 'grid_select' || c?.type === 'grid_clear');
+    if (hasGrid) {
       const s = await api('status');
       const fb = boundsFromFirmware(s.bounds ?? {});
-      gridCtx = gridCtxFromPlotterBounds(fb, gridCtx);
-      all = hydrateGridCommands(all, gridCtx);
+      if ([fb.left, fb.right, fb.up, fb.down].every((v) => isFinite(v) && v !== 0)) {
+        gridCtx = gridCtxFromPlotterBounds(fb, gridCtx ?? { cols: 1, rows: 1, padding_mm: 5 });
+        all = hydrateGridCommands(all, gridCtx);
+      }
     }
     const commands = all.filter((c) => c?.type && c.type !== 'status');
     const results = [];
@@ -1271,15 +1279,8 @@ async function executeDirectCmd(cmd, gridCtx = null) {
       return api(`matrix?a=${p.a ?? 1}&b=${p.b ?? 0}&c=${p.c ?? 0}&d=${p.d ?? 1}&tx=${p.tx ?? 0}&ty=${p.ty ?? 0}`);
 
     case 'grid_select': {
-      let gc = gridCtx;
-      if (isFinite(Number(p.cols)) && isFinite(Number(p.full_xn))) {
-        gc = {
-          cols: Number(p.cols), rows: Number(p.rows),
-          padding_mm: Number(p.padding_mm ?? 5),
-          full_xn: Number(p.full_xn), full_xp: Number(p.full_xp),
-          full_yn: Number(p.full_yn), full_yp: Number(p.full_yp),
-        };
-      }
+      // gridCtx (live firmware bounds) is authoritative; shape comes from the command.
+      const gc = resolveGridCtx(p, gridCtx);
       if (!gc) throw new Error('grid_select: need metadata.work_area+grid on the document, or cols/rows/full_xn…yp on the command');
       const col = Number(p.col ?? 0);
       const row = Number(p.row ?? 0);
@@ -1292,14 +1293,7 @@ async function executeDirectCmd(cmd, gridCtx = null) {
 
     case 'grid_clear': {
       const ellipse = p.ellipse ?? false;
-      let gc = gridCtx;
-      if (isFinite(Number(p.full_xn))) {
-        gc = {
-          cols: 1, rows: 1, padding_mm: 5,
-          full_xn: Number(p.full_xn), full_xp: Number(p.full_xp),
-          full_yn: Number(p.full_yn), full_yp: Number(p.full_yp),
-        };
-      }
+      const gc = resolveGridCtx(p, gridCtx);
       if (!gc) throw new Error('grid_clear: need metadata.work_area on the document, or full_xn…yp on the command');
       const q = gridClearQueries(gc);
       const shape = ellipse ? 1 : 0;

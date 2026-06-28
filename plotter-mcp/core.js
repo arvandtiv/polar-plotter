@@ -1895,6 +1895,32 @@ function computeCell(gc, col, row) {
     matrixQuery: `matrix?a=1&b=0&c=0&d=1&tx=${cx}&ty=${cy}`
   };
 }
+function resolveGridCtx(cmd, ctx) {
+  const n = (k) => Number(cmd[k]);
+  const hasShape = isFinite(n("cols")) && isFinite(n("rows"));
+  if (!ctx) {
+    if (!isFinite(n("full_xn"))) return null;
+    return {
+      cols: hasShape ? n("cols") : 1,
+      rows: hasShape ? n("rows") : 1,
+      padding_mm: isFinite(n("padding_mm")) ? n("padding_mm") : 5,
+      full_xn: n("full_xn"),
+      full_xp: n("full_xp"),
+      full_yn: n("full_yn"),
+      full_yp: n("full_yp")
+    };
+  }
+  return {
+    cols: hasShape ? n("cols") : ctx.cols,
+    rows: hasShape ? n("rows") : ctx.rows,
+    padding_mm: isFinite(n("padding_mm")) ? n("padding_mm") : ctx.padding_mm,
+    full_xn: ctx.full_xn,
+    full_xp: ctx.full_xp,
+    // ← live machine bounds win over inline
+    full_yn: ctx.full_yn,
+    full_yp: ctx.full_yp
+  };
+}
 function gridClearQueries(gc) {
   return {
     boundsQuery: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0`,
@@ -1983,5 +2009,6 @@ export {
   listGenerators,
   listModules,
   normalizeMetadataWorkArea,
+  resolveGridCtx,
   runLayerStack
 };

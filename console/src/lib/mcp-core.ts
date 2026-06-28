@@ -27,6 +27,7 @@ export {
   firmwareWorkAreaFromPlotter,
   normalizeMetadataWorkArea,
   computeCell,
+  resolveGridCtx,
   gridClearQueries,
   hydrateGridCommands,
 } from "./gridScript";
