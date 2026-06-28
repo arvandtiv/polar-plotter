@@ -261,9 +261,9 @@ for the full diagnosis procedure.
 
 | File | Contents |
 |------|----------|
+| [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | **Start here** — the whole product explained in one friendly read (machine, doorways, Studio engine, grids, safety) |
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, bring‑up history, gotchas, calibration deep‑dive |
 | [`docs/v1.3/`](docs/v1.3/README.md) | v1.2 Studio — Frame pipeline, generator library, modifier stack, toolpath optimization — design rationale & implementation notes |
-| [`docs/STUDIO_ARCHITECTURE.md`](docs/STUDIO_ARCHITECTURE.md) | Deep‑dive: Frame IR, pipeline stages, module API, arc fitting |
 | [`PICO2W.md`](PICO2W.md) | Pico 2 W bring‑up specifics |
 | [`polar_plotter_wiring.md`](polar_plotter_wiring.md) | Wiring table + diagram |
 | [`plotter-mcp/AGENT_GUIDE.md`](plotter-mcp/AGENT_GUIDE.md) | How an agent should drive the plotter |

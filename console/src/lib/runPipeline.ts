@@ -1,6 +1,6 @@
 // Unified studio pipeline — every surface (Studio Run, Script "generate", MCP)
 // flows through the same evaluate → simplify → optimize → compile chain.
-// See docs/STUDIO_ARCHITECTURE.md.
+// See docs/OVERVIEW.md (§5 The Studio).
 
 import { compile, type CompileOpts } from "./compile";
 import { evaluate, type Layer, type LayerGroup } from "./pipeline";
