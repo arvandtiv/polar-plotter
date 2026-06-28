@@ -22,6 +22,9 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "pico/time.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
+#include <stddef.h>      /* offsetof — for the bounds-persistence checksum */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -61,6 +64,69 @@ static float    g_y_min         = Y_MIN_MM;
 static float    g_y_max         = Y_MAX_MM;
 static bool     g_bounds_ellipse = false;
 static bool     g_aimode        = false;
+
+/* ---- Work-area bounds persistence (last flash sector) -------------------------
+ * Bounds are RAM state seeded from board_config defaults at boot, so a reboot /
+ * power-cycle (the Pico keeps no battery-backed RAM) wipes a calibrated work area
+ * back to the 480x400 default — which is why a fresh MCP session sees the default.
+ * We mirror the bounds to the LAST flash sector and reload them on boot.
+ *
+ * Single-core FreeRTOS, so a write only needs interrupts disabled for the
+ * erase+program (~tens of ms); we ONLY persist on a deliberate "set work area"
+ * (persist flag / serial setbounds), never on the transient cell bounds a grid run
+ * pushes every cell — that would hammer flash and stall mid-grid. */
+#define BOUNDS_FLASH_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
+#define BOUNDS_MAGIC        0x424E4432u   /* "BND2" — bump if the record layout changes */
+
+typedef struct {
+    uint32_t magic;
+    float    x_min, x_max, y_min, y_max;
+    uint32_t ellipse;
+    uint32_t sum;        /* FNV-1a of every preceding byte — guards partial writes */
+} bounds_rec_t;
+
+static uint32_t bounds_checksum(const bounds_rec_t *r)
+{
+    const uint8_t *b = (const uint8_t *)r;
+    uint32_t h = 0x811C9DC5u;
+    for (size_t i = 0; i < offsetof(bounds_rec_t, sum); i++) { h ^= b[i]; h *= 0x01000193u; }
+    return h;
+}
+
+static void bounds_load_from_flash(void)
+{
+    const bounds_rec_t *r = (const bounds_rec_t *)(XIP_BASE + BOUNDS_FLASH_OFFSET);
+    if (r->magic != BOUNDS_MAGIC || r->sum != bounds_checksum(r))
+        return;   /* nothing valid stored — keep the board_config.h defaults */
+    g_x_min = r->x_min; g_x_max = r->x_max;
+    g_y_min = r->y_min; g_y_max = r->y_max;
+    g_bounds_ellipse = (r->ellipse != 0u);
+    printf("[bounds] restored from flash: x=[%.1f,%.1f] y=[%.1f,%.1f] (%s)\n",
+           (double)g_x_min,(double)g_x_max,(double)g_y_min,(double)g_y_max,
+           g_bounds_ellipse ? "ellipse" : "rect");
+}
+
+static void bounds_save_to_flash(void)
+{
+    bounds_rec_t r = { .magic = BOUNDS_MAGIC,
+        .x_min = g_x_min, .x_max = g_x_max, .y_min = g_y_min, .y_max = g_y_max,
+        .ellipse = g_bounds_ellipse ? 1u : 0u };
+    r.sum = bounds_checksum(&r);
+
+    /* Already holds these exact values? Skip the erase — saves flash wear and the stall. */
+    const bounds_rec_t *cur = (const bounds_rec_t *)(XIP_BASE + BOUNDS_FLASH_OFFSET);
+    if (cur->magic == BOUNDS_MAGIC && memcmp(cur, &r, sizeof(r)) == 0)
+        return;
+
+    uint8_t page[FLASH_PAGE_SIZE];
+    memset(page, 0xFF, sizeof(page));
+    memcpy(page, &r, sizeof(r));
+    uint32_t ints = save_and_disable_interrupts();
+    flash_range_erase(BOUNDS_FLASH_OFFSET, FLASH_SECTOR_SIZE);
+    flash_range_program(BOUNDS_FLASH_OFFSET, page, FLASH_PAGE_SIZE);
+    restore_interrupts(ints);
+    web_log("bounds saved to flash (persists across reboot)");
+}
 
 static plotter_geom_t g_geom = {
     .span_mm      = MOTOR_SPAN_MM,
@@ -1594,6 +1660,9 @@ static void web_draw_task(void *arg)
             web_log("bounds: x=[%.1f,%.1f] y=[%.1f,%.1f] mm (%s)",
                     (double)g_x_min,(double)g_x_max,(double)g_y_min,(double)g_y_max,
                     g_bounds_ellipse?"ellipse":"rect");
+            /* p[5] = persist flag: only a deliberate "set work area" saves to flash;
+             * transient grid cell bounds (p[5]=0) never do. */
+            if (cmd.p[5]!=0.0f) bounds_save_to_flash();
             break;
         case WCMD_SPEED:
             g_vmax=(uint32_t)cmd.p[0]; apply_speed(g_vmax);
@@ -1707,6 +1776,7 @@ static int cmd_setbounds(int argc, char **argv)
     g_x_min=atof(argv[1]); g_x_max=atof(argv[2]);
     g_y_min=atof(argv[3]); g_y_max=atof(argv[4]);
     if (argc >= 6) g_bounds_ellipse = (atoi(argv[5]) != 0);
+    bounds_save_to_flash();   /* deliberate calibration → persist across reboot */
     printf("bounds set: x=[%.1f, %.1f]  y=[%.1f, %.1f] mm (%s)\n",
            (double)g_x_min,(double)g_x_max,(double)g_y_min,(double)g_y_max,
            g_bounds_ellipse?"ellipse":"rect");
@@ -2169,6 +2239,7 @@ static void main_task(void *arg)
            __DATE__, __TIME__, MEMP_NUM_NETCONN, MEMP_NUM_TCP_PCB, TCP_MSL);
 
     init_geometry();
+    bounds_load_from_flash();   /* restore a saved work area over the board_config defaults */
 
     servo_init(PIN_SERVO);
     servo_write_deg(PEN_UP_DEG);

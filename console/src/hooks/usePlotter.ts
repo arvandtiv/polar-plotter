@@ -391,10 +391,11 @@ export function parseJsonScript(
   return results;
 }
 
-export function boundsToQuery(b: PlotterBounds): string {
+export function boundsToQuery(b: PlotterBounds, persist = false): string {
   // Firmware params: xn = X−, xp = X+, yn = Y−, yp = Y+, shape 0=rect 1=ellipse
   // up = distance above origin (|yn|), down = distance below origin (yp)
-  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.up}&yp=${b.down}&shape=${b.shape === 'ellipse' ? 1 : 0}`;
+  // persist=1 saves to flash (survives reboot) — only for a deliberate work-area set.
+  return `bounds?xn=${-b.left}&xp=${b.right}&yn=${-b.up}&yp=${b.down}&shape=${b.shape === 'ellipse' ? 1 : 0}${persist ? '&persist=1' : ''}`;
 }
 
 // ---- shared flow-controlled query streamer -----------------------
@@ -1343,7 +1344,7 @@ export function usePlotter() {
   }, []);
 
   const commitBounds = useCallback((b: PlotterBounds) => {
-    const ep = boundsToQuery(b);
+    const ep = boundsToQuery(b, true);   // deliberate set → persist to flash
     pushLog('cmd', `> ${ep}`);
     if (ipRef.current) send(ep);
   }, [send, pushLog]);
@@ -1358,7 +1359,7 @@ export function usePlotter() {
   const applyPaper = useCallback((p: Paper) => {
     const b: PlotterBounds = { left: p.left, right: p.right, up: p.up, down: p.down, shape: 'rect' };
     setBoundsState(b);
-    if (ipRef.current) apiGet(ipRef.current, boundsToQuery(b)).catch(() => {});
+    if (ipRef.current) apiGet(ipRef.current, boundsToQuery(b, true)).catch(() => {});   // deliberate → persist
     pushLog('ok', `[paper] ${p.name}`);
   }, [pushLog]);
 

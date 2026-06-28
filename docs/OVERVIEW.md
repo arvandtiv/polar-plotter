@@ -81,6 +81,11 @@ machines whose reachable height tapers at the left/right extremes). Targets outs
 area are rejected; strays are clipped back onto the boundary. `border` traces the active
 edge so you can see exactly where the machine thinks the limit is.
 
+The work area boots from a compiled default (`board_config.h`), but a deliberate set
+(`plot_set_bounds`, the console Work Area tab, or serial `setbounds`) is **saved to a flash
+sector and restored on boot** — so a calibrated area survives reboots/power-cycles. (Grid
+cell bounds are transient and never persisted.)
+
 ---
 
 ## 4. The firmware primitives

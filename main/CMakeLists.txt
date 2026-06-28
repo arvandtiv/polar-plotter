@@ -16,6 +16,8 @@ target_link_libraries(polar_plotter
     hardware_spi
     hardware_pwm
     hardware_gpio
+    hardware_flash
+    hardware_sync
     tmc5072
     servo
 )

@@ -1095,8 +1095,9 @@ server.tool(
     ),
   },
   async ({ xn, xp, yn, yp, ellipse }) => ({
+    // persist=1 — a deliberate work-area set is saved to flash so it survives a reboot.
     content: [{ type: 'text', text: ok(await api(
-      `bounds?xn=${xn}&xp=${xp}&yn=${yn}&yp=${yp}&shape=${ellipse ? 1 : 0}`,
+      `bounds?xn=${xn}&xp=${xp}&yn=${yn}&yp=${yp}&shape=${ellipse ? 1 : 0}&persist=1`,
     )) }],
   }),
 );
@@ -1273,7 +1274,8 @@ async function executeDirectCmd(cmd, gridCtx = null) {
   const p = cmd;
   switch (p.type) {
     case 'bounds':
-      return api(`bounds?xn=${p.xn}&xp=${p.xp}&yn=${p.yn}&yp=${p.yp}&shape=${p.ellipse ? 1 : 0}`);
+      // Explicit work-area command (not grid tiling) → persist across reboot.
+      return api(`bounds?xn=${p.xn}&xp=${p.xp}&yn=${p.yn}&yp=${p.yp}&shape=${p.ellipse ? 1 : 0}&persist=1`);
 
     case 'matrix':
       return api(`matrix?a=${p.a ?? 1}&b=${p.b ?? 0}&c=${p.c ?? 0}&d=${p.d ?? 1}&tx=${p.tx ?? 0}&ty=${p.ty ?? 0}`);

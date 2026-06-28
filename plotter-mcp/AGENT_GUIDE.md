@@ -191,7 +191,7 @@ This makes `plot_polylines` safe even for spirals that naturally overshoot.
 | `plot_set_accel(amax)` | Acceleration. Lower = smoother starts. |
 | `plot_set_current(run_ma, hold_ma)` | Coil current. run ≤ 600 mA (hard limit). |
 | `plot_set_matrix(a,b,c,d,tx,ty)` | Affine warp of the logical space. Session-only. Identity = (1,0,0,1,0,0). |
-| `plot_set_bounds(xn,xp,yn,yp,ellipse)` | Set work area bounds directly on the firmware. |
+| `plot_set_bounds(xn,xp,yn,yp,ellipse)` | Set the work area on the firmware **and save it to flash** — it now survives reboots/power-cycles. (Grid cell bounds set by `plot_grid_select` are transient and are NOT persisted.) Set this once per machine; if `plot_status` ever shows the symmetric default (≈ ±240 × ±200), the saved area was never written or the layout magic changed — just call this again. |
 | `plot_clear_fault` | Clear a latched driver fault or E-STOP latch. Re-home after E-STOP. |
 
 ### 4.5 Grid tiling — multiple cells in one session (§9 for full workflow)

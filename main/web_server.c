@@ -429,6 +429,9 @@ static void handle_bounds(int sock, const char *qs)
     c.p[2] = qf(qs, "yn", -600.0f);
     c.p[3] = qf(qs, "yp",  400.0f);
     c.p[4] = qf(qs, "shape", 0.0f);
+    /* persist=1 → save to flash (survives reboot). Default 0 so grid cell bounds,
+     * which churn every cell, never touch flash. */
+    c.p[5] = qf(qs, "persist", 0.0f);
     resp_enqueue(sock, "bounds queued", &c);
 }
 
