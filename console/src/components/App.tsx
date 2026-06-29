@@ -272,8 +272,10 @@ function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, de
         <span className="text-[12px] font-medium text-ink-300">{label}</span>
         <div className="flex items-center gap-2">
           <input type="number" value={value}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => onInput(Math.min(max, Math.max(min, parseFloat(e.target.value) || min)))}
             onBlur={(e) => onCommit(Math.min(max, Math.max(min, parseFloat(e.target.value) || min)))}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
             className="w-24 rounded-md border border-ink-700 bg-ink-850 px-2 py-1 text-right font-mono text-[13px] text-ink-100 outline-none focus:border-cyanx/50"
           />
           <span className="w-20 font-mono text-[10px] text-ink-500">{unit}</span>
@@ -317,9 +319,10 @@ function FieldInline({ label, value, onChange, unit, step = 1, min = -100000, ma
       <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{label}</span>
       <div className="flex items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50 transition-colors">
         <input ref={ref} type="text" inputMode="numeric" defaultValue={String(value)}
+          onFocus={(e) => e.currentTarget.select()}   /* first keystroke replaces the old value */
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') commit();
+            if (e.key === 'Enter') { commit(); e.currentTarget.blur(); }
             if (e.key === 'ArrowUp')   { onChange(Math.min(max, value + step)); if (ref.current) ref.current.value = String(value + step); }
             if (e.key === 'ArrowDown') { onChange(Math.max(min, value - step)); if (ref.current) ref.current.value = String(value - step); }
           }}
@@ -449,7 +452,7 @@ function TextPromptModal({ title, label, initial, confirmText, onConfirm, onCanc
       <div className="w-80 rounded-xl border border-ink-700 bg-ink-900 p-4 shadow-card" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-2 text-[13px] font-semibold text-ink-100">{title}</h3>
         <label className="text-[11px] text-ink-500">{label}</label>
-        <input autoFocus value={val} onChange={(e) => setVal(e.target.value)}
+        <input autoFocus value={val} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) onConfirm(val.trim()); if (e.key === 'Escape') onCancel(); }}
           className="mt-1 w-full rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50" />
         <div className="mt-3 flex justify-end gap-2">
@@ -514,7 +517,9 @@ function BoundsControl({ bounds, setBounds, commitBounds }: {
       <span className="w-24 shrink-0 text-[12px] text-ink-400">{label}</span>
       <div className="flex flex-1 items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50">
         <input ref={ref} type="text" inputMode="numeric" defaultValue={String(init)}
-          onKeyDown={onKey}
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => { onKey(e); if (e.key === 'Enter') e.currentTarget.blur(); }}
+          onBlur={() => apply()}   /* Tab/click-away also takes effect */
           className="min-w-0 w-full bg-transparent px-3 py-2 font-mono text-[13px] text-ink-200 outline-none"
         />
         <span className="pr-3 text-[11px] text-ink-500 font-mono">mm</span>
@@ -1304,11 +1309,14 @@ function saveStudioData(layers: Layer[], groups: LayerGroup[]): void {
 // v1.3: the Studio is its own full-page product — a layer STACK (generators + modifiers,
 // evaluated bottom→top), a big live preview on the left, controls on the right. New
 // modules appear in the Add picker automatically.
-function StudioPage({ P, status, moving, bounds }: {
+function StudioPage({ P, status, moving, bounds, topControls }: {
   P: ReturnType<typeof usePlotter>;
   status: PlotterStatus | null;
   moving: boolean;
   bounds: PlotterBounds;
+  /** Cards rendered at the top of the right column, above the Design section
+   *  (Work area boundaries + Affine matrix — built in App so they close over its state). */
+  topControls?: React.ReactNode;
 }) {
   const { sendRaw, sendBatch, getPending, getHealth, runCancelRef, pushLog } = P;
   const allMods = useMemo(() => listModules(), []);
@@ -1514,6 +1522,9 @@ function StudioPage({ P, status, moving, bounds }: {
         <div className="flex flex-col lg:min-h-0">
           <div className="rounded-xl border border-ink-750 bg-ink-900 shadow-card p-4 flex flex-col gap-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
 
+            {/* Machine setup — Work area + Affine, moved here above the design (collapsible) */}
+            {topControls}
+
             {/* Documents */}
             <div>
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Design</p>
@@ -1580,6 +1591,7 @@ function StudioPage({ P, status, moving, bounds }: {
                               <input
                                 type="text" value={grp.name}
                                 onClick={(e) => { e.stopPropagation(); setSelId(grp.id); }}
+                                onFocus={(e) => e.currentTarget.select()}
                                 onChange={(e) => updateGroup(grp.id, 'name', e.target.value)}
                                 className="flex-1 bg-transparent text-[12px] font-semibold text-violet-300 outline-none min-w-0 focus:text-violet-200" />
                             </button>
@@ -1595,7 +1607,9 @@ function StudioPage({ P, status, moving, bounds }: {
                                 </span>
                                 <input type="number" step={k === 'rotateDeg' ? 1 : 0.5}
                                   value={grp[k]}
+                                  onFocus={(e) => e.currentTarget.select()}
                                   onChange={(e) => updateGroup(grp.id, k, parseFloat(e.target.value) || 0)}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                                   className="w-16 rounded bg-ink-950 border border-ink-700 px-1.5 py-0.5 text-[11px] text-ink-100 font-mono focus:outline-none focus:border-violet-500/50" />
                               </label>
                             ))}
@@ -2015,7 +2029,158 @@ export default function App() {
 
       <main className="flex-1 overflow-y-auto lg:min-h-0 lg:overflow-hidden">
         {view === 'studio' ? (
-          <StudioPage P={P} status={status} moving={moving} bounds={bounds} />
+          <StudioPage P={P} status={status} moving={moving} bounds={bounds}
+            topControls={(
+              <>
+                <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
+                  <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
+                    Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
+                    Updates the canvas and sends to firmware.
+                  </p>
+                  <BoundsControl bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
+                  <div className="mt-4 flex gap-2">
+                    <Btn variant="go" onClick={() => setPaperModal({ mode: 'save', initial: '' })}>💾 Save as paper…</Btn>
+                  </div>
+
+                  {/* Saved papers — apply / rename / delete. New ones come from "Save as paper". */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper types</p>
+                  <div className="space-y-1.5">
+                    {papers.map((p) => {
+                      const active = p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down;
+                      return (
+                        <div key={p.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                          <button onClick={() => P.applyPaper(p)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                            {p.name} <span className="font-mono text-[11px] text-ink-500">{p.left + p.right}×{p.up + p.down} mm</span>
+                          </button>
+                          <button onClick={() => setPaperModal({ mode: 'rename', initial: p.name, target: p.name })}
+                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
+                          <button onClick={() => P.deletePaper(p.name)}
+                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
+                        </div>
+                      );
+                    })}
+                    {papers.length === 0 && <p className="text-[11px] text-ink-600">No papers saved yet.</p>}
+                  </div>
+
+                  {/* ---- Grid tiling ---- */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Grid tiling</p>
+                  <p className="mb-3 text-[11px] leading-relaxed text-ink-500">
+                    Subdivide the work area into cells. Selecting a cell remaps <span className="font-mono text-ink-300">(0,0)</span> to its
+                    centre and clips all jobs to its bounds.
+                  </p>
+
+                  {/* Active cell banner */}
+                  {grid.active && (
+                    <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                      <span className="flex-1 text-[11px] font-semibold text-amber-300">
+                        Cell col {grid.selCol + 1} · row {grid.selRow + 1} active
+                        {grid.fullBounds && <span className="ml-2 font-normal text-amber-500/70">
+                          ({Math.round(grid.fullBounds.left + grid.fullBounds.right)}×{Math.round(grid.fullBounds.up + grid.fullBounds.down)} mm full area)
+                        </span>}
+                      </span>
+                      <Btn onClick={clearGridCell}>↩ Full area</Btn>
+                    </div>
+                  )}
+
+                  {/* Cols / Rows / Padding */}
+                  <div className="mb-3 grid grid-cols-3 gap-3">
+                    <FieldInline label="Cols" value={grid.cols} min={1} max={12} step={1}
+                      onChange={(v) => setGridState((g) => ({ ...g, cols: Math.max(1, Math.round(v as number)) }))} />
+                    <FieldInline label="Rows" value={grid.rows} min={1} max={12} step={1}
+                      onChange={(v) => setGridState((g) => ({ ...g, rows: Math.max(1, Math.round(v as number)) }))} />
+                    <FieldInline label="Gap" unit="mm" value={grid.paddingMm} min={0} max={50} step={0.5}
+                      onChange={(v) => setGridState((g) => ({ ...g, paddingMm: Math.max(0, v as number) }))} />
+                  </div>
+
+                  {/* Visual cell picker */}
+                  {(() => {
+                    const fb = grid.active ? grid.fullBounds! : bounds;
+                    const tw = fb.left + fb.right;
+                    const th = fb.up + fb.down;
+                    // Show cell dimensions in the picker tooltip
+                    const cellW = Math.round((tw - (grid.cols - 1) * grid.paddingMm) / grid.cols);
+                    const cellH = Math.round((th - (grid.rows - 1) * grid.paddingMm) / grid.rows);
+                    return (
+                      <div>
+                        <div className="inline-grid gap-1 w-full"
+                          style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}>
+                          {Array.from({ length: grid.rows * grid.cols }).map((_, i) => {
+                            const col = i % grid.cols;
+                            const row = Math.floor(i / grid.cols);
+                            const isActive = grid.active && grid.selCol === col && grid.selRow === row;
+                            return (
+                              <button key={`${col}-${row}`}
+                                onClick={() => applyGridCell(col, row)}
+                                title={`Col ${col + 1}, Row ${row + 1} · ${cellW}×${cellH} mm`}
+                                className={`h-9 rounded border text-[10px] font-mono transition-colors ${
+                                  isActive
+                                    ? 'border-cyanx bg-cyanx/20 text-cyanx font-bold'
+                                    : 'border-ink-700 bg-ink-900 text-ink-500 hover:border-cyanx/50 hover:bg-ink-850 hover:text-ink-200'
+                                }`}>
+                                {col + 1},{row + 1}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-[10px] text-ink-600">
+                          Each cell ≈ {cellW} × {cellH} mm · click a cell to activate
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </Card>
+
+                <Card title="Affine matrix" icon="⧉" accent="#7c3aed" collapsible>
+                  <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
+                    Warps the logical drawing space before the belt math:
+                    <span className="font-mono text-ink-300"> x′ = a·x + b·y + tx</span>,
+                    <span className="font-mono text-ink-300"> y′ = c·x + d·y + ty</span>.
+                    Session-only (never saved to the board); resets to identity on power-up.
+                    For exploring rotation/shear/scale/offset — it can't fix the line bow.
+                  </p>
+                  {/* 2×3 grid: [a b tx] / [c d ty]. Keyed by value so applying a preset
+                      remounts the uncontrolled inputs with the new numbers. */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <FieldInline key={`a-${matrix.a}`}  label="a"  value={matrix.a}  step={0.01} onChange={(v) => P.setMatrixVal('a', v)} />
+                    <FieldInline key={`b-${matrix.b}`}  label="b"  value={matrix.b}  step={0.01} onChange={(v) => P.setMatrixVal('b', v)} />
+                    <FieldInline key={`tx-${matrix.tx}`} label="tx" unit="mm" value={matrix.tx} step={1} onChange={(v) => P.setMatrixVal('tx', v)} />
+                    <FieldInline key={`c-${matrix.c}`}  label="c"  value={matrix.c}  step={0.01} onChange={(v) => P.setMatrixVal('c', v)} />
+                    <FieldInline key={`d-${matrix.d}`}  label="d"  value={matrix.d}  step={0.01} onChange={(v) => P.setMatrixVal('d', v)} />
+                    <FieldInline key={`ty-${matrix.ty}`} label="ty" unit="mm" value={matrix.ty} step={1} onChange={(v) => P.setMatrixVal('ty', v)} />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Btn variant="go" onClick={() => P.applyMatrixVals()}>✓ Apply</Btn>
+                    <Btn variant="default" onClick={() => P.resetMatrix()}>↺ Identity</Btn>
+                    <Btn variant="default" onClick={() => setMatrixModal({ mode: 'save', initial: '' })}>💾 Save as preset…</Btn>
+                  </div>
+
+                  {/* Saved matrix presets — apply / rename / delete. */}
+                  <div className="my-4 h-px bg-ink-800" />
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Presets</p>
+                  <div className="space-y-1.5">
+                    {matrices.map((m) => {
+                      const active = m.a === matrix.a && m.b === matrix.b && m.c === matrix.c
+                        && m.d === matrix.d && m.tx === matrix.tx && m.ty === matrix.ty;
+                      return (
+                        <div key={m.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
+                          <button onClick={() => P.applyMatrix(m)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
+                            {m.name} <span className="font-mono text-[11px] text-ink-500">[{m.a} {m.b} {m.tx} / {m.c} {m.d} {m.ty}]</span>
+                          </button>
+                          <button onClick={() => setMatrixModal({ mode: 'rename', initial: m.name, target: m.name })}
+                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
+                          <button onClick={() => P.deleteMatrix(m.name)}
+                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
+                        </div>
+                      );
+                    })}
+                    {matrices.length === 0 && <p className="text-[11px] text-ink-600">No presets saved yet.</p>}
+                  </div>
+                </Card>
+              </>
+            )}
+          />
         ) : (
         <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6 lg:h-full">
         <div className="grid grid-cols-1 gap-4 lg:h-full lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:[grid-template-rows:minmax(0,1fr)]">
@@ -2025,6 +2190,33 @@ export default function App() {
             <Card title="Position" icon="◎" accent="#0284c7" defaultCollapsed={false} right={
               <span className={`font-mono text-[12px] ${pen.down ? 'text-go' : 'text-ink-500'}`}>{pen.down ? '▼ pen down' : '△ pen up'}</span>
             }>
+              {/* Quick controls — jog + home/pen pinned to the top for fast access */}
+              <div className="mb-4 space-y-3">
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
+                  <JogPad onJog={(dx, dy) => {
+                    const nx = pen.x + dx, ny = pen.y + dy;
+                    setGoto({ x: nx, y: ny });
+                    P.enqueue({ type: 'goto', x: nx, y: ny });
+                  }} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
+                  <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
+                  <Btn variant={pen.down ? 'default' : 'go'} onClick={() => P.enqueue({ type: 'pen', pos: 'up' })}>Pen Up</Btn>
+                  <Btn variant={pen.down ? 'go' : 'default'} onClick={() => P.enqueue({ type: 'pen', pos: 'down' })}>Pen Down</Btn>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper</span>
+                    <select
+                      value={papers.find((p) => p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down)?.name ?? ''}
+                      onChange={(e) => { const p = papers.find((x) => x.name === e.target.value); if (p) P.applyPaper(p); }}
+                      className="rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50">
+                      <option value="" disabled hidden>Custom…</option>
+                      {papers.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
               <PlotterCanvas bounds={bounds} pen={pen} moving={moving} />
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Readout label="X" value={pen.x.toFixed(1)} unit="mm" />
@@ -2060,33 +2252,8 @@ export default function App() {
                   <Btn variant="primary" className="col-span-2 sm:col-span-1"
                     onClick={() => P.enqueue({ type: 'goto', ...gotoF })}>Go →</Btn>
                 </div>
-                <div className="mt-3">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Jog</p>
-                  <JogPad onJog={(dx, dy) => {
-                    const nx = pen.x + dx, ny = pen.y + dy;
-                    setGoto({ x: nx, y: ny });
-                    P.enqueue({ type: 'goto', x: nx, y: ny });
-                  }} />
-                </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
-                <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
-                <Btn variant={pen.down ? 'default' : 'go'} onClick={() => P.enqueue({ type: 'pen', pos: 'up' })}>Pen Up</Btn>
-                <Btn variant={pen.down ? 'go' : 'default'} onClick={() => P.enqueue({ type: 'pen', pos: 'down' })}>Pen Down</Btn>
-                {/* Paper type selector — right-aligned; manage papers in the Calibration tab. */}
-                <div className="ml-auto flex items-center gap-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper</span>
-                  <select
-                    value={papers.find((p) => p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down)?.name ?? ''}
-                    onChange={(e) => { const p = papers.find((x) => x.name === e.target.value); if (p) P.applyPaper(p); }}
-                    className="rounded-md border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-100 outline-none focus:border-cyanx/50">
-                    <option value="" disabled hidden>Custom…</option>
-                    {papers.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-                  </select>
-                </div>
-              </div>
             </Card>
 
           </div>
@@ -2237,106 +2404,6 @@ export default function App() {
             {/* ---- Work area tab (work area + calibration) ---- */}
             {tab === 'area' && (
               <>
-                <Card title="Work area boundaries" icon="⛶" accent="#7c3aed" collapsible>
-                  <p className="mb-4 text-[12px] leading-relaxed text-ink-400">
-                    Distance from origin <span className="font-mono text-ink-300">(0,0)</span> to each edge.
-                    Updates the canvas and sends to firmware.
-                  </p>
-                  <BoundsControl bounds={bounds} setBounds={P.setBounds} commitBounds={P.commitBounds} />
-                  <div className="mt-4 flex gap-2">
-                    <Btn variant="go" onClick={() => setPaperModal({ mode: 'save', initial: '' })}>💾 Save as paper…</Btn>
-                  </div>
-
-                  {/* Saved papers — apply / rename / delete. New ones come from "Save as paper". */}
-                  <div className="my-4 h-px bg-ink-800" />
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Paper types</p>
-                  <div className="space-y-1.5">
-                    {papers.map((p) => {
-                      const active = p.left === bounds.left && p.right === bounds.right && p.up === bounds.up && p.down === bounds.down;
-                      return (
-                        <div key={p.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
-                          <button onClick={() => P.applyPaper(p)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
-                            {p.name} <span className="font-mono text-[11px] text-ink-500">{p.left + p.right}×{p.up + p.down} mm</span>
-                          </button>
-                          <button onClick={() => setPaperModal({ mode: 'rename', initial: p.name, target: p.name })}
-                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
-                          <button onClick={() => P.deletePaper(p.name)}
-                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
-                        </div>
-                      );
-                    })}
-                    {papers.length === 0 && <p className="text-[11px] text-ink-600">No papers saved yet.</p>}
-                  </div>
-
-                  {/* ---- Grid tiling ---- */}
-                  <div className="my-4 h-px bg-ink-800" />
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Grid tiling</p>
-                  <p className="mb-3 text-[11px] leading-relaxed text-ink-500">
-                    Subdivide the work area into cells. Selecting a cell remaps <span className="font-mono text-ink-300">(0,0)</span> to its
-                    centre and clips all jobs to its bounds.
-                  </p>
-
-                  {/* Active cell banner */}
-                  {grid.active && (
-                    <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-                      <span className="flex-1 text-[11px] font-semibold text-amber-300">
-                        Cell col {grid.selCol + 1} · row {grid.selRow + 1} active
-                        {grid.fullBounds && <span className="ml-2 font-normal text-amber-500/70">
-                          ({Math.round(grid.fullBounds.left + grid.fullBounds.right)}×{Math.round(grid.fullBounds.up + grid.fullBounds.down)} mm full area)
-                        </span>}
-                      </span>
-                      <Btn onClick={clearGridCell}>↩ Full area</Btn>
-                    </div>
-                  )}
-
-                  {/* Cols / Rows / Padding */}
-                  <div className="mb-3 grid grid-cols-3 gap-3">
-                    <FieldInline label="Cols" value={grid.cols} min={1} max={12} step={1}
-                      onChange={(v) => setGridState((g) => ({ ...g, cols: Math.max(1, Math.round(v as number)) }))} />
-                    <FieldInline label="Rows" value={grid.rows} min={1} max={12} step={1}
-                      onChange={(v) => setGridState((g) => ({ ...g, rows: Math.max(1, Math.round(v as number)) }))} />
-                    <FieldInline label="Gap" unit="mm" value={grid.paddingMm} min={0} max={50} step={0.5}
-                      onChange={(v) => setGridState((g) => ({ ...g, paddingMm: Math.max(0, v as number) }))} />
-                  </div>
-
-                  {/* Visual cell picker */}
-                  {(() => {
-                    const fb = grid.active ? grid.fullBounds! : bounds;
-                    const tw = fb.left + fb.right;
-                    const th = fb.up + fb.down;
-                    // Show cell dimensions in the picker tooltip
-                    const cellW = Math.round((tw - (grid.cols - 1) * grid.paddingMm) / grid.cols);
-                    const cellH = Math.round((th - (grid.rows - 1) * grid.paddingMm) / grid.rows);
-                    return (
-                      <div>
-                        <div className="inline-grid gap-1 w-full"
-                          style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}>
-                          {Array.from({ length: grid.rows * grid.cols }).map((_, i) => {
-                            const col = i % grid.cols;
-                            const row = Math.floor(i / grid.cols);
-                            const isActive = grid.active && grid.selCol === col && grid.selRow === row;
-                            return (
-                              <button key={`${col}-${row}`}
-                                onClick={() => applyGridCell(col, row)}
-                                title={`Col ${col + 1}, Row ${row + 1} · ${cellW}×${cellH} mm`}
-                                className={`h-9 rounded border text-[10px] font-mono transition-colors ${
-                                  isActive
-                                    ? 'border-cyanx bg-cyanx/20 text-cyanx font-bold'
-                                    : 'border-ink-700 bg-ink-900 text-ink-500 hover:border-cyanx/50 hover:bg-ink-850 hover:text-ink-200'
-                                }`}>
-                                {col + 1},{row + 1}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <p className="mt-1 text-[10px] text-ink-600">
-                          Each cell ≈ {cellW} × {cellH} mm · click a cell to activate
-                        </p>
-                      </div>
-                    );
-                  })()}
-                </Card>
-
                 <Card title="Helper" icon="✛" accent="#db2777" collapsible>
                   {/* Limit path: walk the active work-area boundary once (pen down). */}
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Limit path</p>
@@ -2376,53 +2443,6 @@ export default function App() {
                       onInput={(v) => P.setMotion('run', v)} onCommit={(v) => { P.setMotion('run', v); P.commitMotion('run', v); }} />
                     <ParamSlider label="Hold current" unit="mA" value={motion.hold} min={320} max={560} step={20} def={DEFAULTS.motion.hold} accent="#ea580c"
                       onInput={(v) => P.setMotion('hold', v)} onCommit={(v) => { P.setMotion('hold', v); P.commitMotion('hold', v); }} />
-                  </div>
-                </Card>
-
-                <Card title="Affine matrix" icon="⧉" accent="#7c3aed" collapsible>
-                  <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
-                    Warps the logical drawing space before the belt math:
-                    <span className="font-mono text-ink-300"> x′ = a·x + b·y + tx</span>,
-                    <span className="font-mono text-ink-300"> y′ = c·x + d·y + ty</span>.
-                    Session-only (never saved to the board); resets to identity on power-up.
-                    For exploring rotation/shear/scale/offset — it can't fix the line bow.
-                  </p>
-                  {/* 2×3 grid: [a b tx] / [c d ty]. Keyed by value so applying a preset
-                      remounts the uncontrolled inputs with the new numbers. */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <FieldInline key={`a-${matrix.a}`}  label="a"  value={matrix.a}  step={0.01} onChange={(v) => P.setMatrixVal('a', v)} />
-                    <FieldInline key={`b-${matrix.b}`}  label="b"  value={matrix.b}  step={0.01} onChange={(v) => P.setMatrixVal('b', v)} />
-                    <FieldInline key={`tx-${matrix.tx}`} label="tx" unit="mm" value={matrix.tx} step={1} onChange={(v) => P.setMatrixVal('tx', v)} />
-                    <FieldInline key={`c-${matrix.c}`}  label="c"  value={matrix.c}  step={0.01} onChange={(v) => P.setMatrixVal('c', v)} />
-                    <FieldInline key={`d-${matrix.d}`}  label="d"  value={matrix.d}  step={0.01} onChange={(v) => P.setMatrixVal('d', v)} />
-                    <FieldInline key={`ty-${matrix.ty}`} label="ty" unit="mm" value={matrix.ty} step={1} onChange={(v) => P.setMatrixVal('ty', v)} />
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Btn variant="go" onClick={() => P.applyMatrixVals()}>✓ Apply</Btn>
-                    <Btn variant="default" onClick={() => P.resetMatrix()}>↺ Identity</Btn>
-                    <Btn variant="default" onClick={() => setMatrixModal({ mode: 'save', initial: '' })}>💾 Save as preset…</Btn>
-                  </div>
-
-                  {/* Saved matrix presets — apply / rename / delete. */}
-                  <div className="my-4 h-px bg-ink-800" />
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Presets</p>
-                  <div className="space-y-1.5">
-                    {matrices.map((m) => {
-                      const active = m.a === matrix.a && m.b === matrix.b && m.c === matrix.c
-                        && m.d === matrix.d && m.tx === matrix.tx && m.ty === matrix.ty;
-                      return (
-                        <div key={m.name} className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${active ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-800 bg-ink-850'}`}>
-                          <button onClick={() => P.applyMatrix(m)} className={`flex-1 text-left text-[13px] ${active ? 'text-cyanx' : 'text-ink-200 hover:text-cyanx'}`}>
-                            {m.name} <span className="font-mono text-[11px] text-ink-500">[{m.a} {m.b} {m.tx} / {m.c} {m.d} {m.ty}]</span>
-                          </button>
-                          <button onClick={() => setMatrixModal({ mode: 'rename', initial: m.name, target: m.name })}
-                            title="Rename" className="text-ink-500 hover:text-cyanx text-[12px]">✎</button>
-                          <button onClick={() => P.deleteMatrix(m.name)}
-                            title="Delete" className="text-ink-500 hover:text-stop text-[12px]">✕</button>
-                        </div>
-                      );
-                    })}
-                    {matrices.length === 0 && <p className="text-[11px] text-ink-600">No presets saved yet.</p>}
                   </div>
                 </Card>
 

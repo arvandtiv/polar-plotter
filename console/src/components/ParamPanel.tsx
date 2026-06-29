@@ -24,7 +24,9 @@ function RangeField({ field, value, onChange }: {
         <span className="text-[12px] font-medium text-ink-300">{field.label}</span>
         <div className="flex items-center gap-2">
           <input type="number" value={value}
+            onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => onChange(clamp(parseFloat(e.target.value) || min))}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
             className="w-20 rounded-md border border-ink-700 bg-ink-850 px-2 py-1 text-right font-mono text-[13px] text-ink-100 outline-none focus:border-cyanx/50" />
           {field.unit && <span className="w-10 font-mono text-[10px] text-ink-500">{field.unit}</span>}
         </div>
@@ -59,7 +61,8 @@ function NumberField({ field, value, onChange }: {
       <span className="text-[12px] font-medium text-ink-300">{field.label}</span>
       <div className="flex items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50">
         <input key={value} ref={ref} type="text" inputMode="numeric" defaultValue={String(value)}
-          onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { commit(); e.currentTarget.blur(); } }}
           className="w-24 bg-transparent px-2 py-1.5 text-right font-mono text-[13px] text-ink-200 outline-none" />
         {field.unit && <span className="pr-2 text-[10px] text-ink-500 font-mono">{field.unit}</span>}
       </div>
@@ -114,6 +117,7 @@ function TextField({ field, value, onChange }: {
     <label className="flex flex-col gap-1">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{field.label}</span>
       <input type="text" value={value} placeholder={field.placeholder}
+        onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => onChange(e.target.value)}
         className="rounded-lg border border-ink-700 bg-ink-850 px-2 py-1.5 text-[13px] text-ink-200 outline-none focus:border-cyanx/50" />
     </label>
