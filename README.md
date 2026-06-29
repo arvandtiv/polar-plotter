@@ -262,6 +262,7 @@ for the full diagnosis procedure.
 | File | Contents |
 |------|----------|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | **Start here** — the whole product explained in one friendly read (machine, doorways, Studio engine, grids, safety) |
+| [`docs/HOSTING_ON_PI.md`](docs/HOSTING_ON_PI.md) | Host the console on a Raspberry Pi behind Cloudflare — board sizing, the reverse-proxy gotcha, and driving big jobs unattended |
 | [`CLAUDE.md`](CLAUDE.md) | Architecture, bring‑up history, gotchas, calibration deep‑dive |
 | [`docs/v1.3/`](docs/v1.3/README.md) | v1.2 Studio — Frame pipeline, generator library, modifier stack, toolpath optimization — design rationale & implementation notes |
 | [`PICO2W.md`](PICO2W.md) | Pico 2 W bring‑up specifics |
