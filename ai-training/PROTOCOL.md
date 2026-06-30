@@ -16,8 +16,15 @@ the executions, the human's ranking says which execution best honours it.
 
 **Selection is sequential, in CSV order, one instruction per round.** Round 1 = the first
 row of `lewitt_instructions.csv` (id 11), round 2 = the second row (id 16), … straight down
-the list (74 rows). Do **not** cherry-pick — go top to bottom. (Whenever an instruction can't
-be expressed with the current toolset, add the generator it needs rather than skipping it.)
+the list (74 rows). Do **not** cherry-pick — go top to bottom.
+
+**⚠️ REVIEW EACH INSTRUCTION WITH THE USER FIRST.** Do NOT autonomously decide doability,
+interpretation, or skip an instruction, and do NOT pre-plan a roadmap of upcoming rounds. For
+each round: bring the next row's **verbatim instruction text** to the user, discuss together
+whether it's doable on a monochrome pen plotter and how to interpret it, and **only build once
+you agree**. If it needs a new generator, propose that and confirm. If an instruction seems
+undoable or redundant (e.g. it only adds colour), raise it — the user decides whether to skip
+or adapt, never Claude alone.
 
 Record the round's instruction (`id` + verbatim `instruction` + `year`) as its `rule`, and
 add any extra hard limits in `restrictions`.

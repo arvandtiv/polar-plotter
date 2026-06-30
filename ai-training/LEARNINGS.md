@@ -130,5 +130,7 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   sank; jitter ceiling is context-dependent; pushing extremes differentiates.
 - **Round 11 (2026-06-30)** — LeWitt #86 (stroke fields). Big hit. Dense + directional FLOW +
   hand-drawn = gold standard; flow > random scatter; crisp explicitly rejected; long straight =
-  mechanical. New `strokeField` generator. Note: #87 skipped (= #56 + colour; monochrome can't add
-  colour; #56 already done organically in round 9). Next: #88.
+  mechanical. New `strokeField` generator. #87 skipped (= #56 + colour; user later confirmed skip).
+- **Round 12 (2026-06-30)** — LeWitt #88. UNRANKED — "not worthy." Grid + 4-direction quantization
+  of a flow = a stiff, inferior #86; don't quantize organic flow onto a grid. Also the moment the
+  user asked to **review each instruction together before building** (I'd built #88 autonomously).
