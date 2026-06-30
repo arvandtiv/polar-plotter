@@ -1,0 +1,16 @@
+{
+  "round": 7,
+  "title": "Fifteen parts — all combinations of the four directions",
+  "rule": {
+    "lewittId": 47,
+    "instruction": "A wall divided into fifteen equal parts, each with a different line direction, and all combinations.",
+    "year": 1970,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution. 'Fifteen parts ... all combinations' = the 15 non-empty combinations of the four kinds of lines (4 singles + 6 pairs + 4 triples + 1 all-four). The 300x300mm wall is a 5x3 grid of 15 cells; each cell is filled with ONE distinct combination superimposed, and all 15 combinations are used exactly once. Monochrome black on white. Per learnings: FINE, even spacing (dense reads rich) and a GENTLE hand (jitter ~0-4, never 'too broken'). The 16 executions span DISTINCT sub-ideas, not a smooth sweep: tonal gradients (cells ordered by combination-complexity so density ramps light->dark), random scatters (seeded), and reversed/diagonal orderings, crossed with crisp vs gentle hand.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 15,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

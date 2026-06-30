@@ -1,0 +1,3968 @@
+{
+  "round": 7,
+  "rule": {
+    "lewittId": 47,
+    "instruction": "A wall divided into fifteen equal parts, each with a different line direction, and all combinations.",
+    "year": 1970
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "gradient L→R, crisp",
+      "intent": "all 15 combos ordered simple→complex across reading order — a light→dark tonal ramp (Klee #9, #15).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 710
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 711
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 712
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 713
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 714
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 715
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 716
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 717
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 718
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 719
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 724
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "gradient L→R, gentle",
+      "intent": "same tonal ramp, gentle hand (Klee #3, #9).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 711
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 712
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 713
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 714
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 715
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 716
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 717
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 718
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 719
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 725
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "gradient cols, gentle",
+      "intent": "complexity ramps down each column then across — vertical tonal flow (Klee #9).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 712
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 713
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 714
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 715
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 716
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 717
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 718
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 719
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 726
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "gradient diagonal",
+      "intent": "density ramps along the diagonal — corner-to-corner tonal sweep (Klee #15).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 713
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 714
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 715
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 716
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 717
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 718
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 719
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 727
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "gradient reversed",
+      "intent": "complex→simple, dark→light ramp (Klee #9).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 714
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 715
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 716
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 717
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 718
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 719
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 728
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "gradient L→R, fine",
+      "intent": "the tonal ramp at finer spacing — denser, richer (R5/R6 fine preference).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 715
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 716
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 717
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 718
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 719
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 729
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "scatter A, crisp",
+      "intent": "combinations scattered — no tonal order, pure enumeration (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 720
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 729
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 734
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "scatter A, gentle",
+      "intent": "same scatter, gentle hand (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 729
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 735
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "scatter B, gentle",
+      "intent": "a different scatter seed (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 729
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 736
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "scatter C, fine",
+      "intent": "scatter at fine spacing (R5/R6 fine).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 729
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 737
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "scatter D, soft",
+      "intent": "scatter, softer hand (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 724
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 729
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 737
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 738
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "scatter E, crisp fine",
+      "intent": "crisp fine scatter — dense crisp enumeration (R5 fine).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 725
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 726
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 727
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 728
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 729
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 737
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 738
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 739
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "gradient cols, crisp",
+      "intent": "vertical tonal ramp, crisp (Klee #9).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 730
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 737
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 738
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 739
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 740
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 741
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 742
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 743
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 744
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "gradient diagonal fine",
+      "intent": "diagonal tonal sweep, fine + gentle — predicted sweet spot (R5/R6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 737
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 738
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 739
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 740
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 741
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 742
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 743
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 744
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 745
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "scatter F, gentle",
+      "intent": "another scatter, gentle (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 737
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 738
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 739
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 740
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 741
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 742
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 743
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 744
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 745
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 746
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "gradient reversed fine",
+      "intent": "dark→light ramp, fine + gentle (Klee #9, R5/R6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 734
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 735
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 736
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": -100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 737
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 738
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 739
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 740
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 741
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 0,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 742
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 743
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 744
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 745
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 746
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 120,
+            "cy": 100,
+            "w": 56,
+            "h": 96,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 747
+          }
+        }
+      ]
+    }
+  ]
+}
