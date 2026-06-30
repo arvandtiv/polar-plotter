@@ -1,0 +1,16 @@
+{
+  "round": 11,
+  "title": "Ten thousand short lines, covering the wall evenly",
+  "rule": {
+    "lewittId": 86,
+    "instruction": "Ten thousand lines about 10 inches (25 cm) long, covering the wall evenly.",
+    "year": 1971,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful in spirit, scaled to the 300x300mm wall: a dense field of MANY short strokes (the new strokeField generator places them on a jittered grid so they cover the wall EVENLY) of roughly uniform length, hand-drawn. Stroke count and length scaled down from 'ten thousand / 10 inches'. Monochrome black on white. Squarely on the governing organic taste, so the 16 lean DENSE + ENERGETIC (per R10): mostly smooth FLOW-FIELD orientations (organic swirling coverage) plus random scatters, a couple aligned controls; energetic hand (jitter 4-6); spanning density (count) and flow scale for range.",
+  "allowedModules": ["strokeField"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

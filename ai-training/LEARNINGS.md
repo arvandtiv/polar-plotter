@@ -35,6 +35,9 @@ engaged, enthusiastic ranking ("love the feel"). So:
   loved** when the round has range; **wild (j ≥ 8) reads as "too broken" and loses naturality.**
 - At moderate jitter, **some seeds wander gracefully, some look noisy** — prefer gentle seeds;
   when unsure, lower the amplitude rather than hunt seeds.
+- **The jitter ceiling is context-dependent (R10).** In *sparse/superimposed* layouts keep the
+  hand gentle (≤~5; ≥8 looked "too broken"). In *dense* fields the user wants an **energetic** line
+  — jitter **5–7 wins**, gentle ranks low. Bias dense + lively; push extremes (it differentiates).
 
 ## ⚠️ Vary the GENRE, not just params (R3/R6/R7)
 The user has now said "everything feels similar" three times — root cause: rounds 1–7 are all the
