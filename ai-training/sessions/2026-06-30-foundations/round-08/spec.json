@@ -1,0 +1,16 @@
+{
+  "round": 8,
+  "title": "Architectural points connected by straight lines",
+  "rule": {
+    "lewittId": 51,
+    "instruction": "All architectural points connected by straight lines.",
+    "year": 1970,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution and a deliberate GENRE SHIFT (rounds 1-7 were all line-fills; per learnings, change the visual language). 'Architectural points' of the wall = its corners, edge midpoints, centre, or a regular/irregular set of marked points; ALL pairs are joined by straight lines -> a complete-graph web (new connectDots generator). Monochrome black on white. The 16 executions span distinct sub-ideas: the minimal corner web (square + diagonals), corners+midpoints(+centre), regular-polygon perimeter webs (string-art), grid meshes, and irregular random point-sets — a few rendered with a gentle hand-drawn line (jitter). Per learnings, denser webs are included since fine/dense has been preferred.",
+  "allowedModules": ["connectDots"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

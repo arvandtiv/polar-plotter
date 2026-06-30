@@ -5,6 +5,7 @@ import "./circle";
 import "./square";
 import "./wobbly";
 import "./ruledLines";
+import "./connectDots";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

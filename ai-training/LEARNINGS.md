@@ -24,6 +24,14 @@ engaged, enthusiastic ranking ("love the feel"). So:
 - At moderate jitter, **some seeds wander gracefully, some look noisy** — prefer gentle seeds;
   when unsure, lower the amplitude rather than hunt seeds.
 
+## ⚠️ Vary the GENRE, not just params (R3/R6/R7)
+The user has now said "everything feels similar" three times — root cause: rounds 1–7 are all the
+**same visual family** (fill regions with ruled/hatched lines). Within-family variety (jitter, tonal
+gradients, scatter) is not enough once a family is explored. **Prioritise instructions that change
+the visual language entirely** — webs/networks, arcs/circles, geometric figures, scribbles, growth.
+When the next CSV instruction is yet another line-fill, still execute it, but push its *one* novel
+angle hard; and welcome the non-line-fill instructions as palate cleansers.
+
 ## Composition & negative space
 - **Keep the structural division legible — leave it breathing room.** When a rule divides the
   field into parts (quadrants, bands…), the *parts must stay readable as parts*; don't let the
@@ -91,3 +99,5 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
 - **Round 6 (2026-06-30)** — LeWitt #46. Fine+gentle vertical fields won; widest/most-flowing
   omitted. Promoted "fine+dense+even" to a standing cross-round preference; span distinct
   sub-ideas (not a smooth param sweep) so a one-genre round still differentiates.
+- **Round 7 (2026-06-30)** — LeWitt #47. Fine held (4th time); ordered gradient ≈ crisp scatter.
+  Identified GENRE fatigue (rounds 1–7 all line-fills) — must vary the visual language, not params.
