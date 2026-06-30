@@ -1,0 +1,1024 @@
+{
+  "round": 3,
+  "rule": {
+    "lewittId": 17,
+    "instruction": "Four-part drawing with a different line direction in each part.",
+    "year": 1969
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "reading order",
+      "intent": "all four kinds in reading order; orthogonals top, diagonals bottom (Klee #10).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "diagonals top",
+      "intent": "diagonals above, orthogonals below — a horizon of character (Klee #10).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "rotating CW",
+      "intent": "directions rotate clockwise around the centre — a turning of kinds (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "rotating CCW",
+      "intent": "directions rotate counter-clockwise — mirror of #3 (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "diag corners",
+      "intent": "diagonals on one corner-pair, orthogonals on the other — all four kinds (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "all-different C",
+      "intent": "all four kinds; orthogonals on the diagonal, diagonals off it (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "all-different E",
+      "intent": "all four; verticals and horizontals adjacent, diagonals adjacent (Klee #14).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "all-different F",
+      "intent": "all four; a different rotation of the kinds (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "ortho + diag mix A",
+      "intent": "each quadrant a different kind; max contrast at the centre seam (Klee #14).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "ortho + diag mix B",
+      "intent": "another all-different permutation, diagonals on a diagonal (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "all-different airy",
+      "intent": "all four, wide spacing — maximal breathing (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 16,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 16,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 16,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "all-different fine",
+      "intent": "all four, finer — denser but each part still legible (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "all-different D",
+      "intent": "all four kinds; another distinct seam pattern (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "diag top / ortho mix",
+      "intent": "chevron roof over an orthogonal base, airy (Klee #10, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 14,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 14,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 14,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 14,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "rotating CW fine",
+      "intent": "the clockwise turn, finer lines (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "all-different mid",
+      "intent": "all four kinds, a balanced mix (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true
+          }
+        }
+      ]
+    }
+  ]
+}

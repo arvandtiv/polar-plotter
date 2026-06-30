@@ -1,0 +1,16 @@
+{
+  "round": 3,
+  "title": "Four parts, a different line direction in each",
+  "rule": {
+    "lewittId": 17,
+    "instruction": "Four-part drawing with a different line direction in each part.",
+    "year": 1969,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution. The 300x300mm square is divided into four equal quadrants; each quadrant is filled with evenly-spaced straight parallel lines in ONE direction, and all four quadrants use a DIFFERENT one of the four kinds of lines (vertical, horizontal, diagonal /, diagonal \\). Monochrome black on white. The 16 executions vary the assignment of directions to quadrants (the permutation) and the line spacing. Applying learnings: each part is inherently legible (single direction), so pursue per-part variety via the permutation and keep moderate, breathing spacing; avoid over-density.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 4,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}
