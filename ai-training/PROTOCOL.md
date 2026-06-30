@@ -14,10 +14,13 @@ Follow this exactly so every round is reproducible and the learning signal stays
 executions," which is exactly this loop: the instruction is the rule, the 16 designs are
 the executions, the human's ranking says which execution best honours it.
 
-Pick one instruction (`id` + verbatim `instruction` + `year`) and record it as the round's
-`rule`. Then add any extra hard limits in `restrictions`. Choose an instruction the current
-toolset can actually express (many LeWitt pieces are colour-wash / wall-division pieces that
-don't map to monochrome linework — favour the line/arc/scribble/whirl/grid instructions).
+**Selection is sequential, in CSV order, one instruction per round.** Round 1 = the first
+row of `lewitt_instructions.csv` (id 11), round 2 = the second row (id 16), … straight down
+the list (74 rows). Do **not** cherry-pick — go top to bottom. (Whenever an instruction can't
+be expressed with the current toolset, add the generator it needs rather than skipping it.)
+
+Record the round's instruction (`id` + verbatim `instruction` + `year`) as its `rule`, and
+add any extra hard limits in `restrictions`.
 
 ```json
 {

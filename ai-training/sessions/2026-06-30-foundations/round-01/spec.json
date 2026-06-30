@@ -1,15 +1,15 @@
 {
   "round": 1,
-  "title": "Whirls and twirls",
+  "title": "Four-part superimposed line directions",
   "rule": {
-    "lewittId": 1152,
-    "instruction": "Whirls and twirls. (Met)",
-    "year": 2005,
+    "lewittId": 11,
+    "instruction": "A wall divided horizontally and vertically into four equal parts. Within each part, three of the four kinds of lines are superimposed.",
+    "year": 1969,
     "source": "github.com/maximalmargin/lewitt_instructions"
   },
-  "restrictions": "Every design must read as a whirl or a twirl — a coherent rotational / spiralling form. Monochrome black on white, centred in a 300×300mm frame. One generator per design (a modifier or a second generator allowed on a few). Leave some negative space rather than flooding the page. No Truchet.",
-  "allowedModules": ["spirograph", "wobbly", "orbitalWeave", "noiseOrbit", "warp", "fill", "circle"],
-  "maxLayers": 2,
+  "restrictions": "Faithful execution. The square (the 300x300mm work area) is divided into four equal quadrants. Each quadrant is filled with evenly-spaced STRAIGHT parallel lines in three of the four kinds of lines (vertical |, horizontal -, diagonal /, diagonal \\), superimposed — each quadrant omits a different one (the drafter's choice). Monochrome black on white. The 16 executions vary line spacing and which direction each quadrant omits.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 4,
   "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
   "palette": ["#101216"],
   "createdAt": "2026-06-30"

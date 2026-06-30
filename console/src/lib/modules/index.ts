@@ -4,6 +4,7 @@ import "./box";
 import "./circle";
 import "./square";
 import "./wobbly";
+import "./ruledLines";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";
