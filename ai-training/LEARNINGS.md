@@ -12,6 +12,10 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
 - **Prefer:** irregular/random point-sets, asymmetric arrangements, the living not-straight hand,
   dense/complex fields, the unexpected.
 - **Avoid:** clean symmetry, tidy geometry, simple regular figures, the mechanical/CAD look.
+- **Gold standard (R11):** dense + **coherent directional FLOW** + hand-drawn ("great balance of
+  density and directional flow"). Flow fields > random scatter (chaos alone isn't enough — give it
+  a current). **NEVER crisp** — the one jitter=0 design was explicitly rejected; always hand-draw.
+  Keep strokes moderate length (long + straight reads mechanical).
 - This **subsumes** earlier findings (fine/dense = complexity; hand-drawn = living line; genre
   fatigue = wanted richer). When a LeWitt instruction is inherently geometric/symmetric, execute it
   **through the organic lens** (hand-drawn, irregular, asymmetric) — a clean rendering is a known dud.
@@ -122,3 +126,9 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
 - **Round 9 (2026-06-30)** — LeWitt #56 (organic-ized). "Eye-pleasing, none rejectable" — organic
   lens is a safe floor. But within-round sameness again (5th time); combination-grid family
   (#11/17/19/47/56) is saturated. To differentiate, push EXTREMES not gentle steps.
+- **Round 10 (2026-06-30)** — LeWitt #85. Dense + energetic hand (jitter 5–7) won; open/gentle
+  sank; jitter ceiling is context-dependent; pushing extremes differentiates.
+- **Round 11 (2026-06-30)** — LeWitt #86 (stroke fields). Big hit. Dense + directional FLOW +
+  hand-drawn = gold standard; flow > random scatter; crisp explicitly rejected; long straight =
+  mechanical. New `strokeField` generator. Note: #87 skipped (= #56 + colour; monochrome can't add
+  colour; #56 already done organically in round 9). Next: #88.

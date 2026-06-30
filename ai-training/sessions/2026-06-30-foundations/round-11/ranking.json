@@ -1,6 +1,7 @@
-{
+  {
   "round": 11,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [15,10,4,3,13,16,7,8,5,6,10,9,1],
+  "notes": {"15":"great balance between dencity and directional flow","10":"it can be used as a less dense artistic moder option",
+  "1":"needs to be rejected, the long lines are not matching the organic aplication.","4":"also beautiful, ","7": "in total this among others in good work! "},
+  "scoredAt": "2028-006-30"
 }

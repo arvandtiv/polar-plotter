@@ -1,0 +1,16 @@
+{
+  "round": 12,
+  "title": "Grid of squares, not-straight lines, one direction each",
+  "rule": {
+    "lewittId": 88,
+    "instruction": "A 6-inch (15 cm) grid covering the wall. Within each square, not straight lines in either of four directions. Only one direction in each square but as many as desired, and at least one line in each square.",
+    "year": 1971,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution AND on the governing organic taste. A grid covers the wall; each square is filled with NOT-STRAIGHT (hand-drawn) lines in ONE of the four directions, as many as desired (variable density per square), at least one line per square. Monochrome black on white. Combining the strongest learnings: FINE grid (R5), always hand-drawn never crisp (R11), and — the gold standard — the per-square DIRECTION follows a smooth FLOW FIELD so neighbouring squares share direction and the grid grows large-scale directional CURRENTS (R11), versus a few random-direction controls. Dense + energetic hand (R10). The 16 span grid fineness, flow vs random direction, density variation, and hand strength.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 144,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}
