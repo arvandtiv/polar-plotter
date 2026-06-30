@@ -1,6 +1,7 @@
 {
   "round": 4,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [1,5,9,4,3,10,2,6,7,8,14,11,12,13,15,16],
+  "notes": {"1":"love the feel and choise of hatches goes the same for the first 10 in the ranking",
+  "16":"too broken avoid so many brojen ness it takes away the naturality, goes for the last 5 in the list of ranks"},
+  "scoredAt":  "2026-06-30"
 }

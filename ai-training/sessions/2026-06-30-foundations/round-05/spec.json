@@ -1,0 +1,16 @@
+{
+  "round": 5,
+  "title": "Pegboard filled randomly — a tonal mosaic",
+  "rule": {
+    "lewittId": 38,
+    "instruction": "Tissue paper cut into 1½-inch (4 cm) squares and inserted into holes in the gray pegboard walls. All holes in the walls are filled randomly.",
+    "year": 1970,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "#38 is a physical pegboard/tissue-paper installation, not linework — translated in SPIRIT for the pen plotter: a grid of square cells (the 'holes') covering the 300x300mm wall, with EVERY cell filled (all holes filled) by a square of hatching whose direction and spacing are chosen RANDOMLY — so spacing varies the tone, giving a random tonal/textural mosaic (the 'tissue squares'). Monochrome black on white. Applying round-4 learnings: a gentle, NATURAL hand-drawn quality (jitter ~2-4, never 'too broken'); the 16 executions span a range — grid resolution (coarse->fine), tonal contrast (even->high), and softness (crisp->hand-drawn).",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 100,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

@@ -12,14 +12,17 @@
 > As lessons accumulate below, phrase them in Klee's vocabulary (e.g. "asymmetric weight with a
 > local imperative beat dead symmetry") so the method and the learnings reinforce each other.
 
-## ⚠️ Avoid sameness — the biggest lesson so far (R3)
-After three straight-line rounds the user called the whole batch **"boring and predictable —
-the same feel as the rest."** Mechanical straight ruled lines plateau fast, and varying only
-*permutation/spacing* produces 16 near-twins. Two standing rules now:
-- **Give lines character.** Prefer **not-straight / hand-drawn** lines (Klee's living line, #3/#4;
-  and LeWitt's own "lines, not straight" instructions). `ruledLines` has a `jitter` param for this.
-- **Vary the most salient axis, boldly.** Each round should visibly *span a range* (e.g. straight →
-  hand-drawn → wild), not repeat one look 16 times. Sameness across rounds is itself a failure.
+## ⚠️ Span a range, with a NATURAL hand — the core lesson (R3→R4)
+R3 (all straight, samey) got "boring and predictable." R4 spanned straight→wild and got an
+engaged, enthusiastic ranking ("love the feel"). So:
+- **Span a perceptual range every round.** 16 near-twins (varying only permutation/spacing) =
+  boredom. A visible spread = engagement. Sameness *across* rounds is also a failure.
+- **Give lines character — but keep it natural.** Hand-drawn / not-straight lines (Klee's living
+  line #3/#4; LeWitt's own "lines, not straight") are welcomed. The R4 sweet spot is
+  **`ruledLines` jitter ≈ 2–5 mm (cap ~6)** — a *careful human hand*. **Straight (j0) is still
+  loved** when the round has range; **wild (j ≥ 8) reads as "too broken" and loses naturality.**
+- At moderate jitter, **some seeds wander gracefully, some look noisy** — prefer gentle seeds;
+  when unsure, lower the amplitude rather than hunt seeds.
 
 ## Composition & negative space
 - **Keep the structural division legible — leave it breathing room.** When a rule divides the
@@ -69,3 +72,7 @@ the same feel as the rest."** Mechanical straight ruled lines plateau fast, and 
   per-part variety beats uniformity; spacing ≤ 8 mm = mud; "boringly balanced" is a failure mode.
 - **Round 2 (2026-06-30)** — LeWitt #16. Added: stagger overlaid sets but don't dislocate them;
   fine lines are fine *inside well-gapped bands* (refined the mud rule — gap is the real lever).
+- **Round 3 (2026-06-30)** — LeWitt #17. Plateau: straight-line geometric pieces feel "boring/
+  predictable." Added the `jitter` (not-straight) tool; mandated spanning a range each round.
+- **Round 4 (2026-06-30)** — LeWitt #19. Confirmed range→engagement. Pinned the hand-drawn sweet
+  spot: jitter ≈ 2–5 (cap ~6); straight still loved; wild (≥8) is "too broken."
