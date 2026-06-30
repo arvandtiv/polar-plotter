@@ -4,6 +4,18 @@
 > cross-round principles distilled from human rankings — apply them when authoring designs.
 > Each entry should cite the round(s) that established or revised it.
 
+## ⭐⭐ THE GOVERNING TASTE (R8, explicit)
+**Organic · irregular · asymmetric · complex · hand-drawn.** The user, ranking the webs of #51:
+"avoid such simple things, as well as geometric and symmetric" — and put EVERY clean symmetric
+geometric design (corner webs, polygon string-art, grid meshes) at the bottom, the irregular +
+hand-drawn ones at the top (#15, irregular + living line = "very interesting").
+- **Prefer:** irregular/random point-sets, asymmetric arrangements, the living not-straight hand,
+  dense/complex fields, the unexpected.
+- **Avoid:** clean symmetry, tidy geometry, simple regular figures, the mechanical/CAD look.
+- This **subsumes** earlier findings (fine/dense = complexity; hand-drawn = living line; genre
+  fatigue = wanted richer). When a LeWitt instruction is inherently geometric/symmetric, execute it
+  **through the organic lens** (hand-drawn, irregular, asymmetric) — a clean rendering is a known dud.
+
 ## Standing constraints (not learned — given)
 - Every round is governed by a **Sol LeWitt instruction** as its rule (`lewitt_instructions.csv`).
 - Every execution takes a **Klee stance** (`klee_principles.md`) — the method behind the rule.
@@ -101,3 +113,6 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   sub-ideas (not a smooth param sweep) so a one-genre round still differentiates.
 - **Round 7 (2026-06-30)** — LeWitt #47. Fine held (4th time); ordered gradient ≈ crisp scatter.
   Identified GENRE fatigue (rounds 1–7 all line-fills) — must vary the visual language, not params.
+- **Round 8 (2026-06-30)** — LeWitt #51. THE governing taste reveal: organic/irregular/asymmetric/
+  complex/hand-drawn wins; clean geometric symmetry explicitly rejected (#1–9 = "avoid"). Promoted
+  to the top of this file; execute geometric instructions through the organic lens.

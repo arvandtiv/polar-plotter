@@ -1,6 +1,6 @@
 {
   "round": 8,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [15,10,12,11,13,14,16,9,7,6,8,5,4,3,2,1],
+  "notes": {"15":"very intresting ","1":"avoid such simple things as well as gemetric and symetric, same goes for 2 3 4 5 6 7 8 9 "},
+  "scoredAt": "2026-06-30"
 }

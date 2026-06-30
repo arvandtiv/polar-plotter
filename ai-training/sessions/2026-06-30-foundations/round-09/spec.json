@@ -1,0 +1,16 @@
+{
+  "round": 9,
+  "title": "Four parts, directions superimposed progressively — organic",
+  "rule": {
+    "lewittId": 56,
+    "instruction": "A square is divided horizontally and vertically into four equal parts, each with lines in four directions superimposed progressively.",
+    "year": 1970,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful structure: the square is divided into four equal quadrants; the four kinds of lines are superimposed PROGRESSIVELY across the parts — one part has 1 direction, the next 2, the next 3, the last all 4 (a density progression, light->dark). BUT executed entirely through the governing organic taste (R8): every part is HAND-DRAWN (not-straight, jitter ~3-7, the living-line sweet spot), FINE/DENSE spacing, and ASYMMETRIC (each quadrant wobbles on its own seed; the progression is arranged irregularly, not a tidy ramp). No clean/crisp/symmetric renderings (explicitly disliked). The 16 span the organic range: gentle->wild hand, finer/denser, and varied progression arrangements + base direction orders.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 4,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

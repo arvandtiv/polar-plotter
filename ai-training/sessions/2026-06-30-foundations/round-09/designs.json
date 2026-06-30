@@ -1,0 +1,1152 @@
+{
+  "round": 9,
+  "rule": {
+    "lewittId": 56,
+    "instruction": "A square is divided horizontally and vertically into four equal parts, each with lines in four directions superimposed progressively.",
+    "year": 1970
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "asc ramp, soft",
+      "intent": "density ramps 1->4 directions, hand-drawn (Klee #3, #15 growth).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 561
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 578
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 595
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 612
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "desc ramp, soft",
+      "intent": "ramp reversed, dark->light, living line (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 562
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 579
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 596
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 613
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "pinwheel, fine",
+      "intent": "progression pinwheeled, finer + wavier (Klee #3, #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 563
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 580
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 597
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 614
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "scatter ramp",
+      "intent": "irregular progression order — asymmetric (Klee #11, #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 564
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 581
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 598
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 615
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "asc, dense",
+      "intent": "fine/dense ramp, different base order (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 565
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 582
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 599
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 616
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "scatter, wavy",
+      "intent": "scattered counts, clear wave (Klee #3, #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 566
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 583
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 600
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 617
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "desc, fine",
+      "intent": "dark->light, fine hand (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 567
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 584
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 601
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 618
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "scatter, strong",
+      "intent": "irregular + stronger hand (Klee #3, #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 568
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 585
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 602
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 619
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "asc, dense wild",
+      "intent": "dense ramp, wild organic hand (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 569
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 586
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 603
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 620
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "pinwheel, wavy",
+      "intent": "pinwheeled counts, organic (Klee #3, #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 570
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 587
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 604
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 621
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "scatter, gentle",
+      "intent": "the gentlest hand this round — for range (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 571
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 588
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 605
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 622
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "scatter, dense",
+      "intent": "dense irregular thicket (Klee #3, #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 572
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 589
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 606
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 623
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "asc, alt base",
+      "intent": "ramp with a rotated base order (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 573
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 590
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 607
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 624
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "scatter, mid",
+      "intent": "scattered counts, balanced organic (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 574
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 591
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 608
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 625
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "scatter, wildest",
+      "intent": "densest + wildest hand — most organic (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 7,
+            "jitterSeed": 575
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 7,
+            "jitterSeed": 592
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 7,
+            "jitterSeed": 609
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 7,
+            "jitterSeed": 626
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "desc, alt base",
+      "intent": "reversed ramp, soft hand, open spacing (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 576
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 593
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 610
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 627
+          }
+        }
+      ]
+    }
+  ]
+}
