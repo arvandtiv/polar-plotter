@@ -1,0 +1,16 @@
+{
+  "round": 10,
+  "title": "Four rows: singles, pairs, triples, all-four — organic tableau",
+  "rule": {
+    "lewittId": 85,
+    "instruction": "A wall is divided into four horizontal parts. In the top row are four equal divisions, each with lines in a different direction. In the second row, six double combinations; in the third row, four triple combinations; in the bottom row, all four combinations superimposed.",
+    "year": 1971,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful structure: four horizontal rows — top row = the 4 single directions (4 cells), second row = the 6 double combinations (6 cells), third row = the 4 triple combinations (4 cells), bottom row = all four superimposed. By construction this is a TOP-LIGHT -> BOTTOM-DARK tonal tableau. Executed through the governing organic taste: all HAND-DRAWN (jitter), FINE/DENSE, asymmetric per-cell seeds. Per round-9 lesson, the 16 push EXTREMES (very open vs very dense spacing, gentle vs wild hand) and shuffle the cell orderings, to fight within-round sameness — the last combination-grid before the organic 'not straight' instructions.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 15,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

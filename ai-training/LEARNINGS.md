@@ -116,3 +116,6 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
 - **Round 8 (2026-06-30)** — LeWitt #51. THE governing taste reveal: organic/irregular/asymmetric/
   complex/hand-drawn wins; clean geometric symmetry explicitly rejected (#1–9 = "avoid"). Promoted
   to the top of this file; execute geometric instructions through the organic lens.
+- **Round 9 (2026-06-30)** — LeWitt #56 (organic-ized). "Eye-pleasing, none rejectable" — organic
+  lens is a safe floor. But within-round sameness again (5th time); combination-grid family
+  (#11/17/19/47/56) is saturated. To differentiate, push EXTREMES not gentle steps.
