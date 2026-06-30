@@ -1,6 +1,7 @@
 {
   "round": 3,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+  "notes": {"1":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.",
+"2":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","3":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","4":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","5":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","6":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","7":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","8":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","9":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","10":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","11":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","12":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","13":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","14":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","15":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable.","16":"this is exactly the same feel as the rest of the designs, it is a bit boring and predictable."},
+  "scoredAt": "2026-06-30"
 }

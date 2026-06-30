@@ -12,6 +12,15 @@
 > As lessons accumulate below, phrase them in Klee's vocabulary (e.g. "asymmetric weight with a
 > local imperative beat dead symmetry") so the method and the learnings reinforce each other.
 
+## ⚠️ Avoid sameness — the biggest lesson so far (R3)
+After three straight-line rounds the user called the whole batch **"boring and predictable —
+the same feel as the rest."** Mechanical straight ruled lines plateau fast, and varying only
+*permutation/spacing* produces 16 near-twins. Two standing rules now:
+- **Give lines character.** Prefer **not-straight / hand-drawn** lines (Klee's living line, #3/#4;
+  and LeWitt's own "lines, not straight" instructions). `ruledLines` has a `jitter` param for this.
+- **Vary the most salient axis, boldly.** Each round should visibly *span a range* (e.g. straight →
+  hand-drawn → wild), not repeat one look 16 times. Sameness across rounds is itself a failure.
+
 ## Composition & negative space
 - **Keep the structural division legible — leave it breathing room.** When a rule divides the
   field into parts (quadrants, bands…), the *parts must stay readable as parts*; don't let the

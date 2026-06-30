@@ -1,0 +1,16 @@
+{
+  "round": 4,
+  "title": "Six parts, two directions each — straight to hand-drawn",
+  "rule": {
+    "lewittId": 19,
+    "instruction": "A wall divided vertically into six equal parts, with two of the four kinds of line directions superimposed in each part.",
+    "year": 1969,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful structure: the 300x300mm wall is divided vertically into SIX equal columns; each column is filled with TWO of the four kinds of lines (vertical, horizontal, diagonal /, diagonal \\) superimposed. Monochrome black on white. RESPONDING TO ROUND-3 FEEDBACK ('boring/predictable, same feel'): line CHARACTER is the headline variable this round — the 16 executions span machine-straight -> lightly hand-drawn -> clearly not-straight -> wild (via ruledLines jitter), alongside which-pair-per-column and spacing. This injects the living/not-straight line (Klee #3/#4, and LeWitt's own 'not straight' instructions) and lets the ranking say how much life is wanted.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 6,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

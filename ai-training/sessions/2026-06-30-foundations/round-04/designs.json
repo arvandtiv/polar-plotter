@@ -1,0 +1,1664 @@
+{
+  "round": 4,
+  "rule": {
+    "lewittId": 19,
+    "instruction": "A wall divided vertically into six equal parts, with two of the four kinds of line directions superimposed in each part.",
+    "year": 1969
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "straight, all pairs",
+      "intent": "machine-straight, the six pairs in order — the round-1..3 look (Klee #4 medial).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 10
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 11
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 12
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 13
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 14
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "straight, reversed",
+      "intent": "straight, pair order reversed (Klee #11).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 20
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 21
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 22
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 23
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 24
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 25
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "straight, tight",
+      "intent": "straight, finer (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 30
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 31
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 32
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 33
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 34
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 35
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "straight, airy",
+      "intent": "straight, wide spacing — maximal calm (Klee #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 40
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 41
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 42
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 43
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 0,
+            "jitterSeed": 44
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 0,
+            "jitterSeed": 45
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "hand-drawn light",
+      "intent": "a faint not-straight wobble — the line begins to breathe (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 11
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 12
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 13
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 14
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 15
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 16
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "hand-drawn light, rev",
+      "intent": "light hand-drawn, reversed order (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 21
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 22
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 23
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 24
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 25
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 26
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "hand-drawn light, tight",
+      "intent": "light hand-drawn, finer (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 31
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 32
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 33
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 34
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 2.5,
+            "jitterSeed": 35
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 36
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "hand-drawn light, airy",
+      "intent": "light hand-drawn, airy (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 41
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 42
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 43
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 44
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 45
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 46
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "not-straight",
+      "intent": "clearly not-straight lines — the living hand (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 12
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 13
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 14
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 15
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 16
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 17
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "not-straight, rev",
+      "intent": "not-straight, reversed (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 22
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 23
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 24
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 25
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 26
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 27
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "not-straight, tight",
+      "intent": "not-straight, denser weave (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 32
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 33
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 34
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 35
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 36
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 37
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "not-straight, airy",
+      "intent": "not-straight, airy — wandering lines on white (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 42
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 43
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 44
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 45
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 6,
+            "jitterSeed": 46
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 15,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 47
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "wild",
+      "intent": "wild not-straight — lines truly wander (Klee #3 line-for-a-walk).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 13
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 14
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 8,
+            "jitterSeed": 15
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 16
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 8,
+            "jitterSeed": 17
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 8,
+            "jitterSeed": 18
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "wild, rev",
+      "intent": "wild, reversed (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 9,
+            "jitterSeed": 23
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 9,
+            "jitterSeed": 24
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 9,
+            "jitterSeed": 25
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 9,
+            "jitterSeed": 26
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 9,
+            "jitterSeed": 27
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 9,
+            "jitterSeed": 28
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "wild, tight",
+      "intent": "wild and dense — busy organic field (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 33
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 34
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 8,
+            "jitterSeed": 35
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 8,
+            "jitterSeed": 36
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 8,
+            "jitterSeed": 37
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 38
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "wild, airy",
+      "intent": "wild and airy — the most alive, least mechanical (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 10,
+            "jitterSeed": 43
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 16,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 10,
+            "jitterSeed": 44
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 10,
+            "jitterSeed": 45
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 25,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 16,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 10,
+            "jitterSeed": 46
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 10,
+            "jitterSeed": 47
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 125,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 16,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 10,
+            "jitterSeed": 48
+          }
+        }
+      ]
+    }
+  ]
+}
