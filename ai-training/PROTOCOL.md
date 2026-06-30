@@ -18,7 +18,13 @@ the executions, the human's ranking says which execution best honours it.
 row of `lewitt_instructions.csv` (id 11), round 2 = the second row (id 16), … straight down
 the list (74 rows). Do **not** cherry-pick — go top to bottom.
 
-**⚠️ REVIEW EACH INSTRUCTION WITH THE USER FIRST.** Do NOT autonomously decide doability,
+**Skip colour instructions.** Any instruction whose distinguishing element is colour (red/blue/
+yellow lines, colour ink washes, "four colours in combinations", "bars/planes of colour", etc.)
+is **skipped** — a monochrome pen plotter can't render it. This is a standing rule (user's call);
+note each colour skip in the revision log, but don't stop to re-ask. Black/white/gray and "India
+ink wash" tonal instructions are NOT colour — those are doable as tone.
+
+**⚠️ REVIEW EACH NON-COLOUR INSTRUCTION WITH THE USER FIRST.** Do NOT autonomously decide doability,
 interpretation, or skip an instruction, and do NOT pre-plan a roadmap of upcoming rounds. For
 each round: bring the next row's **verbatim instruction text** to the user, discuss together
 whether it's doable on a monochrome pen plotter and how to interpret it, and **only build once
