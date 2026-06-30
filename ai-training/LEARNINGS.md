@@ -4,8 +4,6 @@
 > cross-round principles distilled from human rankings — apply them when authoring designs.
 > Each entry should cite the round(s) that established or revised it.
 
-_Nothing learned yet — this fills in after the first scored round._
-
 ## Standing constraints (not learned — given)
 - Every round is governed by a **Sol LeWitt instruction** as its rule (`lewitt_instructions.csv`).
 - Every execution takes a **Klee stance** (`klee_principles.md`) — the method behind the rule.
@@ -15,23 +13,39 @@ _Nothing learned yet — this fills in after the first scored round._
 > local imperative beat dead symmetry") so the method and the learnings reinforce each other.
 
 ## Composition & negative space
-<!-- e.g. "Leave the frame edge breathing room; designs that touch all four borders ranked low (R1)." -->
+- **Keep the structural division legible — leave it breathing room.** When a rule divides the
+  field into parts (quadrants, bands…), the *parts must stay readable as parts*; don't let the
+  line-fields merge into one uniform mass. The clear R1 winner left white between quadrants and
+  "did not completely connect each quarterly space into each other." Negative space wins (Klee #7).
 
 ## Density & line economy
-<!-- e.g. "Lace-fine spirographs (r/R < 0.1) read as intricate and scored high; medium density read as 'busy' (R1)." -->
+- **Coarse-to-medium beats fine for superimposed line-fields.** R1: ~12–16 mm spacing ranked at
+  the top; ≤ 8 mm read as **mud/"messy"** and sank. Density is tone (Klee #5), but past ~8 mm of
+  superimposition it stops being tone and becomes mush. Start coarse; only tighten with reason.
 
 ## Symmetry vs. chaos
-<!-- balance between ordered and stochastic generators -->
+- **Vary the individual within the structural rule.** A *different* scheme in each part reads
+  alive; identical-everywhere reads dead. R1: rotating/shifted per-quadrant omissions (and
+  orthogonal-vs-rest contrast) took the top spots; **uniform** omission across all parts was
+  called "boring as hell" (Klee #11, individual-vs-structural).
+- **Don't chase tidy balance.** "Boringly balanced" is a real failure mode — a symmetric density
+  split (e.g. 2 dense + 2 sparse quadrants) read as *dull*, and messy when the dense halves were
+  over-packed. Liveliness came from **directional variety, not density contrast** (refines Klee
+  #8: asymmetry must create *tension*, not just an even two-and-two split).
 
 ## Generator-specific notes
-<!-- per-module: which params reliably produce strong results, which produce mush -->
+- **`ruledLines`** (R1): keep `spacing` ≥ ~10–12 mm when superimposing 3 directions; per-region
+  variety of which directions are present matters more than spacing tricks.
 
 ## Modifiers (warp / mask / fill)
 <!-- when a modifier elevates a design vs. when it muddies it -->
 
 ## Anti-patterns (what ranks low)
-<!-- recurring reasons designs land in the bottom quartile -->
+- Uniform repetition of the same scheme across every part → "boring" (R1: #14).
+- Over-dense superimposition (spacing ≤ 8 mm) → "messy"/muddy (R1: #15, #16, #4).
+- Tidy symmetric balance presented as "interesting" → "boringly balanced" (R1: #16).
 
 ---
 ### Revision log
-<!-- Round N (YYYY-MM-DD): added/changed which rules -->
+- **Round 1 (2026-06-30)** — LeWitt #11. Established: legible-division + breathing room win;
+  per-part variety beats uniformity; spacing ≤ 8 mm = mud; "boringly balanced" is a failure mode.

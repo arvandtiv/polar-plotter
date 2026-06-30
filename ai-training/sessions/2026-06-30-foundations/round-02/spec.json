@@ -1,0 +1,16 @@
+{
+  "round": 2,
+  "title": "Bands of lines in three directions, intersecting",
+  "rule": {
+    "lewittId": 16,
+    "instruction": "Bands of lines 12 inches (30 cm) wide, in three directions (vertical, horizontal, diagonal right) intersecting.",
+    "year": 1969,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution, scaled to the 300x300mm work area. Three superimposed SETS of wide bands (stripes), one set per direction: vertical bands of vertical lines, horizontal bands of horizontal lines, and diagonal-right bands of diagonal-right lines (the diagonal set carried by a -45-degree layer group). Bands are separated by gaps so the three sets visibly INTERSECT (cross) rather than merging into solid tone. Monochrome black on white. The 16 executions vary band width, gap, in-band line spacing, and the phase offset of the three sets. Applying round-1 learnings: keep breathing room between bands, give the three sets distinct geometry (avoid uniformity), do not over-pack.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 24,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

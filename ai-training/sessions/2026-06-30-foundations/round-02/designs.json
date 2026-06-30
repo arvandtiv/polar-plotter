@@ -1,0 +1,3257 @@
+{
+  "round": 2,
+  "rule": {
+    "lewittId": 16,
+    "instruction": "Bands of lines 12 inches (30 cm) wide, in three directions (vertical, horizontal, diagonal right) intersecting.",
+    "year": 1969
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "even plaid, medium",
+      "intent": "three sets aligned; structural plaid with gaps breathing (Klee #11).",
+      "groups": [
+        {
+          "id": "diag1",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 55,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -65,
+            "cy": 0,
+            "w": 55,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 20,
+            "cy": 0,
+            "w": 55,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 105,
+            "cy": 0,
+            "w": 55,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -150,
+            "w": 300,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -65,
+            "w": 300,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 20,
+            "w": 300,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 105,
+            "w": 300,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag1",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -230,
+            "w": 460,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag1",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -145,
+            "w": 460,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag1",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -60,
+            "w": 460,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag1",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 25,
+            "w": 460,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag1",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 110,
+            "w": 460,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag1",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 195,
+            "w": 460,
+            "h": 55,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "offset sets",
+      "intent": "each set phase-shifted so the crossings never coincide — per-set variety (Klee #11).",
+      "groups": [
+        {
+          "id": "diag2",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -66,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 18,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 102,
+            "cy": 0,
+            "w": 50,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -122,
+            "w": 300,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -38,
+            "w": 300,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 46,
+            "w": 300,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 130,
+            "w": 300,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag2",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -216,
+            "w": 460,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag2",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -132,
+            "w": 460,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag2",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -48,
+            "w": 460,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag2",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 36,
+            "w": 460,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag2",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 120,
+            "w": 460,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag2",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 204,
+            "w": 460,
+            "h": 50,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "wide bands, airy",
+      "intent": "fewer, wider bands, big gaps — maximal breathing room (Klee #3, #7).",
+      "groups": [
+        {
+          "id": "diag3",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 70,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -32,
+            "cy": 0,
+            "w": 70,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 86,
+            "cy": 0,
+            "w": 70,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -114,
+            "w": 300,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 4,
+            "w": 300,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 122,
+            "w": 300,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag3",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -212,
+            "w": 460,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag3",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -94,
+            "w": 460,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag3",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 24,
+            "w": 460,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag3",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 142,
+            "w": 460,
+            "h": 70,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "narrow bands, busy",
+      "intent": "many narrow bands — denser weave, still gapped (Klee #5).",
+      "groups": [
+        {
+          "id": "diag4",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 38,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -90,
+            "cy": 0,
+            "w": 38,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -30,
+            "cy": 0,
+            "w": 38,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 30,
+            "cy": 0,
+            "w": 38,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 90,
+            "cy": 0,
+            "w": 38,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 150,
+            "cy": 0,
+            "w": 38,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -132,
+            "w": 300,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -72,
+            "w": 300,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -12,
+            "w": 300,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 48,
+            "w": 300,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 108,
+            "w": 300,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -221,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -161,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -101,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -41,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 19,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 79,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 139,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag4",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 199,
+            "w": 460,
+            "h": 38,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "vertical-led",
+      "intent": "tight vertical lines vs looser cross sets — directional emphasis (Klee #16).",
+      "groups": [
+        {
+          "id": "diag5",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -64,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 22,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 108,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -110,
+            "w": 300,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -24,
+            "w": 300,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 62,
+            "w": 300,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 148,
+            "w": 300,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag5",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -210,
+            "w": 460,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag5",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -124,
+            "w": 460,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag5",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -38,
+            "w": 460,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag5",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 48,
+            "w": 460,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag5",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 134,
+            "w": 460,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag5",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 220,
+            "w": 460,
+            "h": 60,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "loose diagonal",
+      "intent": "sparse diagonal crossing denser orthogonals — straight-vs-grid tension (Klee #14).",
+      "groups": [
+        {
+          "id": "diag6",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -140,
+            "cy": 0,
+            "w": 58,
+            "h": 300,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -42,
+            "cy": 0,
+            "w": 58,
+            "h": 300,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 56,
+            "cy": 0,
+            "w": 58,
+            "h": 300,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -150,
+            "w": 300,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -52,
+            "w": 300,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 46,
+            "w": 300,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 144,
+            "w": 300,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag6",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -200,
+            "w": 460,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag6",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -102,
+            "w": 460,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag6",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -4,
+            "w": 460,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag6",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 94,
+            "w": 460,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag6",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 192,
+            "w": 460,
+            "h": 58,
+            "spacing": 9,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "tight grid, sparse diag",
+      "intent": "orthogonal plaid with a wide-spaced diagonal accent (Klee #16).",
+      "groups": [
+        {
+          "id": "diag7",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 52,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -74,
+            "cy": 0,
+            "w": 52,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 2,
+            "cy": 0,
+            "w": 52,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 78,
+            "cy": 0,
+            "w": 52,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -124,
+            "w": 300,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -48,
+            "w": 300,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 28,
+            "w": 300,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 104,
+            "w": 300,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag7",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -170,
+            "w": 460,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag7",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -94,
+            "w": 460,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag7",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -18,
+            "w": 460,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag7",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 58,
+            "w": 460,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag7",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 134,
+            "w": 460,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag7",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 210,
+            "w": 460,
+            "h": 52,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "broad weave",
+      "intent": "broad bands, generous gaps — calm, legible crossings (Klee #7).",
+      "groups": [
+        {
+          "id": "diag8",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 66,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -44,
+            "cy": 0,
+            "w": 66,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 62,
+            "cy": 0,
+            "w": 66,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -117,
+            "w": 300,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -11,
+            "w": 300,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 95,
+            "w": 300,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag8",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -180,
+            "w": 460,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag8",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -74,
+            "w": 460,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag8",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 32,
+            "w": 460,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag8",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 138,
+            "w": 460,
+            "h": 66,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "shifted thirds",
+      "intent": "phase shifted by thirds of the period — rhythmic offset (Klee #13).",
+      "groups": [
+        {
+          "id": "diag9",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 48,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -72,
+            "cy": 0,
+            "w": 48,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 6,
+            "cy": 0,
+            "w": 48,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 84,
+            "cy": 0,
+            "w": 48,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -124,
+            "w": 300,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -46,
+            "w": 300,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 32,
+            "w": 300,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 110,
+            "w": 300,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag9",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -178,
+            "w": 460,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag9",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 460,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag9",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -22,
+            "w": 460,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag9",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 56,
+            "w": 460,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag9",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 134,
+            "w": 460,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag9",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 212,
+            "w": 460,
+            "h": 48,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "fine lines, wide gaps",
+      "intent": "finely-ruled bands far apart — bands read as solid ribbons crossing (Klee #5).",
+      "groups": [
+        {
+          "id": "diag10",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -40,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 70,
+            "cy": 0,
+            "w": 60,
+            "h": 300,
+            "spacing": 5,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -120,
+            "w": 300,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -10,
+            "w": 300,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 100,
+            "w": 300,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag10",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -215,
+            "w": 460,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag10",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -105,
+            "w": 460,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag10",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 5,
+            "w": 460,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag10",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 115,
+            "w": 460,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag10",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 225,
+            "w": 460,
+            "h": 60,
+            "spacing": 5,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "dense-ish even",
+      "intent": "smaller gaps; testing the edge of the no-mud rule (Klee #5).",
+      "groups": [
+        {
+          "id": "diag11",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 56,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -74,
+            "cy": 0,
+            "w": 56,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 2,
+            "cy": 0,
+            "w": 56,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 78,
+            "cy": 0,
+            "w": 56,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -150,
+            "w": 300,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -74,
+            "w": 300,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 2,
+            "w": 300,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 78,
+            "w": 300,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag11",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -202,
+            "w": 460,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag11",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -126,
+            "w": 460,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag11",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -50,
+            "w": 460,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag11",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 26,
+            "w": 460,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag11",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 102,
+            "w": 460,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag11",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 178,
+            "w": 460,
+            "h": 56,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "asymmetric widths",
+      "intent": "wide bands, mid gaps, strong phase offsets — lively not tidy (Klee #8).",
+      "groups": [
+        {
+          "id": "diag12",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 64,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -56,
+            "cy": 0,
+            "w": 64,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 38,
+            "cy": 0,
+            "w": 64,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 132,
+            "cy": 0,
+            "w": 64,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -106,
+            "w": 300,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -12,
+            "w": 300,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 82,
+            "w": 300,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag12",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -208,
+            "w": 460,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag12",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -114,
+            "w": 460,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag12",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -20,
+            "w": 460,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag12",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 74,
+            "w": 460,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag12",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 168,
+            "w": 460,
+            "h": 64,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "airy fine",
+      "intent": "fine lines, very airy bands — breathing emphasised (Klee #3).",
+      "groups": [
+        {
+          "id": "diag13",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 62,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -36,
+            "cy": 0,
+            "w": 62,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 78,
+            "cy": 0,
+            "w": 62,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -119,
+            "w": 300,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -5,
+            "w": 300,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 109,
+            "w": 300,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag13",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -214,
+            "w": 460,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag13",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -100,
+            "w": 460,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag13",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 14,
+            "w": 460,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag13",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 128,
+            "w": 460,
+            "h": 62,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "tight weave",
+      "intent": "narrower bands, moderate gaps — a busier but still-gapped weave (Klee #5).",
+      "groups": [
+        {
+          "id": "diag14",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 44,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -80,
+            "cy": 0,
+            "w": 44,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -10,
+            "cy": 0,
+            "w": 44,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 60,
+            "cy": 0,
+            "w": 44,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 130,
+            "cy": 0,
+            "w": 44,
+            "h": 300,
+            "spacing": 6,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -127,
+            "w": 300,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -57,
+            "w": 300,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 13,
+            "w": 300,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 83,
+            "w": 300,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag14",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -184,
+            "w": 460,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag14",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -114,
+            "w": 460,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag14",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -44,
+            "w": 460,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag14",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 26,
+            "w": 460,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag14",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 96,
+            "w": 460,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag14",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 166,
+            "w": 460,
+            "h": 44,
+            "spacing": 6,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "broad airy offset",
+      "intent": "wide bands, big phase offset between sets — distinct, uncrowded (Klee #7, #11).",
+      "groups": [
+        {
+          "id": "diag15",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 72,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -32,
+            "cy": 0,
+            "w": 72,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 86,
+            "cy": 0,
+            "w": 72,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -110,
+            "w": 300,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 8,
+            "w": 300,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 126,
+            "w": 300,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag15",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -150,
+            "w": 460,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag15",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -32,
+            "w": 460,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag15",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 86,
+            "w": 460,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag15",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 204,
+            "w": 460,
+            "h": 72,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "medium offset weave",
+      "intent": "balanced medium weave with offset sets — the all-rounder (Klee #11).",
+      "groups": [
+        {
+          "id": "diag16",
+          "name": "diagonal",
+          "tx": 0,
+          "ty": 0,
+          "rotateDeg": -45
+        }
+      ],
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -150,
+            "cy": 0,
+            "w": 54,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -64,
+            "cy": 0,
+            "w": 54,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 22,
+            "cy": 0,
+            "w": 54,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 108,
+            "cy": 0,
+            "w": 54,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -114,
+            "w": 300,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -28,
+            "w": 300,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 58,
+            "w": 300,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 144,
+            "w": 300,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag16",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -212,
+            "w": 460,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag16",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -126,
+            "w": 460,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag16",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": -40,
+            "w": 460,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag16",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 46,
+            "w": 460,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag16",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 132,
+            "w": 460,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        },
+        {
+          "groupId": "diag16",
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 218,
+            "w": 460,
+            "h": 54,
+            "spacing": 7,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false
+          }
+        }
+      ]
+    }
+  ]
+}

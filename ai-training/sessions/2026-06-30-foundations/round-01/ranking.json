@@ -1,6 +1,9 @@
 {
   "round": 1,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [1, 8,  5, 6, 7, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16],
+  "notes": {"1": "this was a very nice and good round, I loved the way you in #1 reated the breathing point and did not comepeletly connected each quarterly space into eachother.",
+   "8": "this was a very nice and good round, I loved the way you in #1 reated the breathing point and did not comepeletly connected each quarterly space into eachother.",
+   "14": "Boaring as hell, stay away",
+   "16": "Just appears very messy and boaringly balanced."},
+  "scoredAt": "2026-06-30" 
 }
