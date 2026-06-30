@@ -1,0 +1,384 @@
+{
+  "round": 6,
+  "rule": {
+    "lewittId": 46,
+    "instruction": "Vertical lines, not straight, not touching, covering the wall evenly.",
+    "year": 1970
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "fine, faint wave",
+      "intent": "dense verticals with the faintest tremor — barely not-straight (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.5,
+            "jitterSeed": 146
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "fine, gentle",
+      "intent": "fine and gently wavy — even, quiet field (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 10,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 246
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "dense, gentle",
+      "intent": "densest gentle-wave field; per R5, fine can read rich (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 346
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "medium, gentle",
+      "intent": "medium spacing, gentle hand (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3.5,
+            "jitterSeed": 446
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "medium, soft",
+      "intent": "the natural-hand sweet spot — a careful wandering line (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 14,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 546
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "medium, soft+",
+      "intent": "a touch more wave, still even (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 646
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "open, soft",
+      "intent": "more open spacing, soft wave (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 18,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5.5,
+            "jitterSeed": 746
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "open, wavy",
+      "intent": "open and clearly wavy — verticals start to flow (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 20,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6,
+            "jitterSeed": 846
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "wide, flowing",
+      "intent": "wide spacing lets the wave grow into flow (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 24,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 7,
+            "jitterSeed": 946
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "wide, flowing+",
+      "intent": "flowing verticals on white — like falling water (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 28,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 8,
+            "jitterSeed": 1046
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "broad, strong flow",
+      "intent": "broad spacing, strong flow — elegant because never touching (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 34,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 10,
+            "jitterSeed": 1146
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "broad, river",
+      "intent": "widest, most flowing — long sweeping verticals (Klee #3 line-for-a-walk).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 42,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 13,
+            "jitterSeed": 1246
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "very fine, faint",
+      "intent": "very fine, almost-straight verticals — quiet density (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2.3,
+            "jitterSeed": 1346
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "fine, soft",
+      "intent": "fine and softly wavy — textile-like (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3.5,
+            "jitterSeed": 1446
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "open, flowing",
+      "intent": "open flowing verticals, mid-strength (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 22,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 6.5,
+            "jitterSeed": 1546
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "wide, strong flow",
+      "intent": "wide and strongly flowing — the bold flowing end (Klee #3, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 9.5,
+            "jitterSeed": 1646
+          }
+        }
+      ]
+    }
+  ]
+}

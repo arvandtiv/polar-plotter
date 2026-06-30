@@ -1,0 +1,16 @@
+{
+  "round": 6,
+  "title": "Vertical lines, not straight, not touching",
+  "rule": {
+    "lewittId": 46,
+    "instruction": "Vertical lines, not straight, not touching, covering the wall evenly.",
+    "year": 1970,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution — the canonical LeWitt 'not straight' piece, exactly what the jitter tool was built for. A single field of VERTICAL, NOT-STRAIGHT lines (ruledLines vertical + jitter), evenly spaced across the whole 300x300mm wall, NOT TOUCHING (spacing kept >= ~3x the wave amplitude so adjacent lines never cross). Monochrome black on white. The 16 executions span a range: fine + faintly-wavy -> wide + strongly-flowing, varying spacing (density), jitter (waviness) and seed. Per learnings: includes the natural-hand zone (jitter ~3-6) and tests the wide-spaced flowing end, where high waviness should read as elegant flow rather than 'broken' because the lines stay separated.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}

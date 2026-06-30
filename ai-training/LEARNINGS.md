@@ -51,6 +51,12 @@ engaged, enthusiastic ranking ("love the feel"). So:
   reads as *interesting* ("the mis-alignment"), but **over-offsetting** one set leaves it lopsided
   and sinks to the bottom. Use small/medium offsets; a fully dislocated set looks accidental.
 
+## Tonal / mosaic fields (grids of random-toned cells)
+- **Finer grids win.** R5 (#38, random-filled grid): the 10×10 fine grids took the **whole top 4**
+  ("perfect harmony and balance"); the 6×6 big tiles took the **bottom 4** (blocky/crude). Cell
+  count is the **dominant lever** here — above line-character and tonal contrast. Go fine (≥10×10,
+  consider finer). Both crisp and soft hand work at fine grain (a flavour, not a quality axis).
+
 ## Generator-specific notes
 - **`ruledLines`** (R1): keep `spacing` ≥ ~10–12 mm when superimposing 3 directions in one region;
   per-region variety of which directions are present matters more than spacing tricks.
@@ -76,3 +82,5 @@ engaged, enthusiastic ranking ("love the feel"). So:
   predictable." Added the `jitter` (not-straight) tool; mandated spanning a range each round.
 - **Round 4 (2026-06-30)** — LeWitt #19. Confirmed range→engagement. Pinned the hand-drawn sweet
   spot: jitter ≈ 2–5 (cap ~6); straight still loved; wild (≥8) is "too broken."
+- **Round 5 (2026-06-30)** — LeWitt #38 (→ tonal mosaic). Finer grids win decisively (10×10 top,
+  6×6 bottom); cell count is the dominant lever for tonal fields. Genre break welcomed.
