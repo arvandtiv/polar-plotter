@@ -1,0 +1,16 @@
+{
+  "round": 1,
+  "title": "Whirls and twirls",
+  "rule": {
+    "lewittId": 1152,
+    "instruction": "Whirls and twirls. (Met)",
+    "year": 2005,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Every design must read as a whirl or a twirl — a coherent rotational / spiralling form. Monochrome black on white, centred in a 300×300mm frame. One generator per design (a modifier or a second generator allowed on a few). Leave some negative space rather than flooding the page. No Truchet.",
+  "allowedModules": ["spirograph", "wobbly", "orbitalWeave", "noiseOrbit", "warp", "fill", "circle"],
+  "maxLayers": 2,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-06-30"
+}
