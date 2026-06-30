@@ -4,6 +4,7 @@
 // See docs/v1.3/02-fields-and-registry.md.
 
 import type { Frame } from "./frame";
+import type { VectorFont } from "./textbox";
 
 export interface FieldBase {
   key: string;
@@ -31,6 +32,8 @@ export interface GenCtx {
   lowerFrame?: Frame;
   /** Source image (for image modules), loaded by the Studio. */
   image?: GrayImage;
+  /** Uploaded outline font (for the Text module's "custom" font), loaded by the Studio. */
+  font?: VectorFont;
 }
 
 export type ParamValues = Record<string, number | string | boolean>;

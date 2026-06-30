@@ -4,6 +4,7 @@
 // Strokes encoded compactly: strokes split by '|', points by ' ', coords by ','.
 
 import type { Pt } from "./frame";
+import type { FontDriver } from "./textbox";
 
 const GRID_H = 7;   // scaling height (cap height occupies 0..6)
 const ADVANCE = 5;  // grid units per glyph cell
@@ -90,4 +91,48 @@ export function textToStrokes(text: string, opts: TextLayoutOpts): { strokes: Pt
   }
   maxX = Math.max(maxX, cursorX - letterSpacing);
   return { strokes, width: maxX, height: lineY + opts.size };
+}
+
+// ---- built-in stroke fonts as FontDrivers (for the box-text layout) ----------------
+
+export type StrokeFontName = "sans" | "bold";
+
+export const STROKE_FONTS: { value: StrokeFontName; label: string }[] = [
+  { value: "sans", label: "Built-in Sans" },
+  { value: "bold", label: "Built-in Bold" },
+];
+
+// "Bold" re-draws each stroke at a small cluster of offsets to thicken it (a pen plotter
+// has no line weight, so weight = parallel passes). Opt-in: it multiplies the stroke count.
+const BOLD_OFFSETS: ReadonlyArray<readonly [number, number]> = [[0, 0], [1, 0], [0, 1], [1, 1]];
+
+/** Single-line driver over the built-in glyph set: cap top at y≈0, baseline at y≈size. */
+export function strokeFontDriver(name: StrokeFontName = "sans"): FontDriver {
+  const bold = name === "bold";
+  return {
+    measureRun(text, size, ls) {
+      if (!text) return 0;
+      const scale = size / GRID_H;
+      let w = 0;
+      for (let i = 0; i < text.length; i++) w += ADVANCE * scale + ls;
+      return Math.max(0, w - ls);
+    },
+    renderRun(text, size, ls) {
+      const scale = size / GRID_H;
+      const o = bold ? 0.05 * size : 0;
+      const out: Pt[][] = [];
+      let cursor = 0;
+      for (const raw of text) {
+        const ch = raw.toUpperCase();
+        const spec = ch in GLYPHS ? GLYPHS[ch] : GLYPHS[" "];
+        for (const stroke of parseGlyph(spec)) {
+          const base = stroke.map((p) => ({ x: cursor + p.x * scale, y: p.y * scale }));
+          if (!bold) out.push(base);
+          else for (const [dx, dy] of BOLD_OFFSETS) out.push(base.map((p) => ({ x: p.x + dx * o, y: p.y + dy * o })));
+        }
+        cursor += ADVANCE * scale + ls;
+      }
+      return out;
+    },
+  };
 }

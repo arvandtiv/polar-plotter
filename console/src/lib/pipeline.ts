@@ -56,13 +56,14 @@ export function evaluate(
   bounds: GenCtx["bounds"],
   groups: LayerGroup[] = [],
   image?: GenCtx["image"],
+  font?: GenCtx["font"],
 ): Frame {
   const groupMap = new Map(groups.map(g => [g.id, g]));
   let acc = emptyFrame(bounds);
   for (const layer of layers) {
     const mod = getModule(layer.moduleKey);
     if (!mod) continue;
-    let out = mod.generate(layer.params, { bounds, lowerFrame: acc, image });
+    let out = mod.generate(layer.params, { bounds, lowerFrame: acc, image, font });
     if (mod.kind === "make" && layer.groupId) {
       const g = groupMap.get(layer.groupId);
       if (g) out = applyGroupTransform(out, g);

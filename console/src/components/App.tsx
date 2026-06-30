@@ -33,6 +33,7 @@ import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer, type LayerGroup } from '../lib/pipeline';
 import { loadImageToGray } from '../lib/image';
 import type { GrayImage } from '../lib/registry';
+import type { VectorFont } from '../lib/textbox';
 import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc } from '../lib/studioDoc';
 import { exportGcode, DEFAULT_EXPORT } from '../lib/gcode-export';
 import '../lib/modules';   // side effect: registers all generators/modifiers
@@ -1340,6 +1341,12 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
   const imgRef = useRef<HTMLInputElement>(null);
   const needsImage = layers.some((l) => getModule(l.moduleKey)?.group === 'Image');
 
+  // Uploaded outline font for the Text module's "custom" font (fed to evaluate via ctx.font).
+  const [font, setFont] = useState<VectorFont | undefined>(undefined);
+  const [fontName, setFontName] = useState('');
+  const fontRef = useRef<HTMLInputElement>(null);
+  const needsFont = layers.some((l) => l.moduleKey === 'text' && l.params.font === 'custom');
+
   const sel = layers.find((l) => l.id === selId);
   const selGroup = groups.find((g) => g.id === selId);
   const selMod = sel ? getModule(sel.moduleKey) : undefined;
@@ -1347,8 +1354,8 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
   const [orderPct, setOrderPct] = useState(100);   // drawing-order scrubber (% revealed)
   const [useArcs, setUseArcs] = useState(false);   // collapse circular runs to arc jobs (needs firmware flash)
   const frame = useMemo(
-    () => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, groups, image),
-    [layers, groups, bounds.left, bounds.right, bounds.up, bounds.down, image],
+    () => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, groups, image, font),
+    [layers, groups, bounds.left, bounds.right, bounds.up, bounds.down, image, font],
   );
   const optFrame = useMemo(() => optimizeOrder(simplifyFrame(frame)), [frame]);
   const queries = useMemo(
@@ -1564,6 +1571,24 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
                 <Btn variant="primary" onClick={() => imgRef.current?.click()} disabled={busy}>🖼 Source image…</Btn>
                 {imageName ? <span className="font-mono text-[11px] text-ink-500 truncate max-w-[160px]">{imageName} {image && `(${image.width}×${image.height})`}</span>
                            : <span className="text-[11px] text-amber-400">load an image</span>}
+              </div>
+            )}
+
+            {/* Custom font — only when a Text layer is set to the uploaded "custom" font */}
+            {needsFont && (
+              <div className="flex items-center gap-2 border-t border-ink-800 pt-4">
+                <input ref={fontRef} type="file" accept=".ttf,.otf" className="hidden"
+                  onChange={async (e) => {
+                    const fl = e.target.files?.[0]; e.target.value = '';
+                    if (!fl) return;
+                    // Lazy import: opentype.js resolves as CJS under SSR prerender but ESM in the
+                    // browser bundle; loading it here (browser-only handler) avoids that mismatch.
+                    try { const { parse } = await import('opentype.js'); setFont(parse(await fl.arrayBuffer()) as unknown as VectorFont); setFontName(fl.name); pushLog('ok', `[studio] font ${fl.name}`); }
+                    catch (err) { pushLog('err', `[studio] font: ${(err as Error).message}`); }
+                  }} />
+                <Btn variant="primary" onClick={() => fontRef.current?.click()} disabled={busy}>🅰 Custom font…</Btn>
+                {fontName ? <span className="font-mono text-[11px] text-ink-500 truncate max-w-[160px]">{fontName}</span>
+                          : <span className="text-[11px] text-amber-400">load a .ttf / .otf (else uses Sans)</span>}
               </div>
             )}
 
