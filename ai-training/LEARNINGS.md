@@ -51,11 +51,15 @@ engaged, enthusiastic ranking ("love the feel"). So:
   reads as *interesting* ("the mis-alignment"), but **over-offsetting** one set leaves it lopsided
   and sinks to the bottom. Use small/medium offsets; a fully dislocated set looks accidental.
 
-## Tonal / mosaic fields (grids of random-toned cells)
-- **Finer grids win.** R5 (#38, random-filled grid): the 10×10 fine grids took the **whole top 4**
-  ("perfect harmony and balance"); the 6×6 big tiles took the **bottom 4** (blocky/crude). Cell
-  count is the **dominant lever** here — above line-character and tonal contrast. Go fine (≥10×10,
-  consider finer). Both crisp and soft hand work at fine grain (a flavour, not a quality axis).
+## ⭐ Fine + dense + even is a standing preference (R5 + R6)
+Across two different genres the user pulls the same way: **closer-spaced, denser, evenly-distributed
+wins; wide / sparse / dramatic loses.**
+- R5 (#38 tonal grids): 10×10 fine grids swept the top 4; 6×6 big tiles the bottom 4.
+- R6 (#46 vertical not-straight lines): the finest, most even gently-wavy fields won; the **widest,
+  most flowing ("river") ones were omitted entirely.** ("Elegant wide flow" was my idea, not the
+  user's taste.)
+**Bias toward fine, even density; avoid wide/sparse + dramatic gestures.** (Within a tonal field,
+cell count is the dominant lever; both crisp and soft hand work at fine grain.)
 
 ## Generator-specific notes
 - **`ruledLines`** (R1): keep `spacing` ≥ ~10–12 mm when superimposing 3 directions in one region;
@@ -84,3 +88,6 @@ engaged, enthusiastic ranking ("love the feel"). So:
   spot: jitter ≈ 2–5 (cap ~6); straight still loved; wild (≥8) is "too broken."
 - **Round 5 (2026-06-30)** — LeWitt #38 (→ tonal mosaic). Finer grids win decisively (10×10 top,
   6×6 bottom); cell count is the dominant lever for tonal fields. Genre break welcomed.
+- **Round 6 (2026-06-30)** — LeWitt #46. Fine+gentle vertical fields won; widest/most-flowing
+  omitted. Promoted "fine+dense+even" to a standing cross-round preference; span distinct
+  sub-ideas (not a smooth param sweep) so a one-genre round still differentiates.
