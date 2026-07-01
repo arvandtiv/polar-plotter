@@ -44,10 +44,19 @@ function joinLine(a: Pt, b: Pt, jitter: number, rng: () => number): Path {
   return { points: pts };
 }
 
-/** An irregular trapezoid: parallel top/bottom of differing widths, rotated, each vertex hand-skewed. */
-function trapezoid(fx: number, fy: number, w: number, hgt: number, topRatio: number, ang: number, skew: number, rng: () => number): Pt[] {
-  const hy = hgt / 2, bw = w / 2, tw = (w * topRatio) / 2;
-  const base: Pt[] = [{ x: -tw, y: -hy }, { x: tw, y: -hy }, { x: bw, y: hy }, { x: -bw, y: hy }];
+/** An irregular figure — a trapezoid (parallel top/bottom of differing widths) or a sheared
+ *  parallelogram (`shear` = horizontal shear factor k, x += k·y) — rotated and each vertex
+ *  hand-skewed for a hand-placed, organic look. */
+function figureVerts(kind: string, fx: number, fy: number, w: number, hgt: number, topRatio: number, ang: number, shear: number, skew: number, rng: () => number): Pt[] {
+  const hy = hgt / 2, bw = w / 2;
+  let base: Pt[];
+  if (kind === "parallelogram") {
+    const k = shear;
+    base = [{ x: -bw - k * hy, y: -hy }, { x: bw - k * hy, y: -hy }, { x: bw + k * hy, y: hy }, { x: -bw + k * hy, y: hy }];
+  } else {
+    const tw = (w * topRatio) / 2;
+    base = [{ x: -tw, y: -hy }, { x: tw, y: -hy }, { x: bw, y: hy }, { x: -bw, y: hy }];
+  }
   const ca = Math.cos(ang), sa = Math.sin(ang);
   return base.map((p) => ({
     x: fx + (p.x * ca - p.y * sa) + (rng() * 2 - 1) * skew,
@@ -63,9 +72,15 @@ export const locatedFiguresModule: Module = {
   description: "Irregular trapezoids placed asymmetrically, each fixed by a hand-drawn 'location web' of not-straight lines to the nearest architectural anchor points. Density-capped so no corner saturates.",
   sections: [
     { title: "Figures", fields: [
+      { key: "figure", label: "Figure", type: "select", default: "trapezoid", options: [
+        { value: "trapezoid", label: "Trapezoid" },
+        { value: "parallelogram", label: "Parallelogram" },
+      ]},
       { key: "count", label: "Figures", type: "range", min: 1, max: 12, step: 1, default: 4 },
       { key: "sizeMin", label: "Min size", type: "range", min: 20, max: 150, step: 1, unit: "mm", default: 45 },
       { key: "sizeMax", label: "Max size", type: "range", min: 30, max: 220, step: 1, unit: "mm", default: 95 },
+      { key: "shear", label: "Shear (parallelogram)", type: "range", min: 0, max: 1.5, step: 0.05, default: 0.6 },
+      { key: "rotMax", label: "Orientation spread", type: "range", min: 0, max: 1.2, step: 0.05, unit: "rad", default: 0.5 },
       { key: "skew", label: "Vertex skew", type: "range", min: 0, max: 30, step: 1, unit: "mm", default: 6 },
       { key: "figSeed", label: "Placement seed", type: "range", min: 0, max: 9999, step: 1, default: 5 },
     ]},
@@ -91,8 +106,10 @@ export const locatedFiguresModule: Module = {
   generate(params): Frame {
     const size = num(params, "size", 280), h = size / 2;
     const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const kind = String(params.figure ?? "trapezoid");
     const count = Math.max(1, Math.round(num(params, "count", 4)));
     const sizeMin = num(params, "sizeMin", 45), sizeMax = Math.max(sizeMin + 1, num(params, "sizeMax", 95));
+    const shear = num(params, "shear", 0.6), rotMax = num(params, "rotMax", 0.5);
     const skew = num(params, "skew", 6);
     const anchors = anchorsFor(String(params.anchors ?? "cornersMidCenter"), h, cx, cy);
     const anchorsPerFigure = Math.max(1, Math.round(num(params, "anchorsPerFigure", 3)));
@@ -108,10 +125,10 @@ export const locatedFiguresModule: Module = {
       const w = sizeMin + frng() * (sizeMax - sizeMin);
       const hgt = (sizeMin + frng() * (sizeMax - sizeMin)) * 0.75;
       const topRatio = 0.35 + frng() * 0.55;
-      const ang = (frng() * 2 - 1) * 0.5;   // ±~29°
+      const ang = (frng() * 2 - 1) * rotMax;
       const fx = cx - h + margin + frng() * (2 * (h - margin));
       const fy = cy - h + margin + frng() * (2 * (h - margin));
-      figs.push({ c: { x: fx, y: fy }, verts: trapezoid(fx, fy, w, hgt, topRatio, ang, skew, frng) });
+      figs.push({ c: { x: fx, y: fy }, verts: figureVerts(kind, fx, fy, w, hgt, topRatio, ang, shear, skew, frng) });
     }
 
     const paths: Path[] = [];

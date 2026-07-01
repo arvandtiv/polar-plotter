@@ -6,13 +6,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 16 (#237) is DONE** — new `locatedFigures` genre works; winner #13 "almost perfect."
-   Rule learned: **the location WEB is the subject — draw it richly; avoid anything light/minimal.**
-   Dense lines to corners read structural, NOT too-symmetric. Processed.
-2. **Next: #238 "The location of a parallelogram"** — same `locatedFigures` genre. **Do NOT build
-   yet** — bring verbatim to the user and review together. Build DENSE per R16 (more figures, richer
-   webs, energetic hand, drop the minimal end). Then #274 "location of six geometric figures".
-3. Round **15 (#142) DONE**; colour rows **#154/#159/#160/#164 skipped**. All logged.
+1. **Round 17 (#238) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
+   chosen angle = VARY ORIENTATION/SHEAR (sheared parallelograms, diagonal energy). Built DENSE per
+   R16. `locatedFigures` extended (parallelogram type + `shear` + `rotMax`). Ask them to open
+   `sessions/2026-06-30-foundations/round-17/contact.png` and fill `round-17/ranking.json`, then
+   **process it** (reflection.md, LEARNINGS, commit).
+2. Round **16 (#237) DONE** — genre works; the WEB is the subject, draw it richly, avoid light.
+3. Next after #238: **#274 "The location of six geometric figures"** — same genre, could mix figure
+   types (add more shapes to `locatedFigures`?). Review with user first. Colour rows #154/#159/#160/#164
+   already skipped.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and

@@ -1,0 +1,49 @@
+import { writeFileSync } from "node:fs";
+
+// Round 17 — LeWitt #238 "The location of a parallelogram": sheared parallelograms at varied
+// orientation (directional/diagonal energy) + DENSE location webs (R16: avoid anything light).
+const F = (p) => ({ module: "locatedFigures", params: { figure: "parallelogram", size: 280, cx: 0, cy: 0, ...p } });
+
+const designs = [
+  { id: 1, title: "strong shear, corner web", intent: "five slanted parallelograms, long crossing corner lines (R16 winner form, Klee #6).",
+    layers: [F({ count: 5, anchors: "corners", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.8, rotMax: 0.6, sizeMin: 45, sizeMax: 95, jitter: 4, skew: 7, figSeed: 501, jitterSeed: 511 })] },
+  { id: 2, title: "varied orientation", intent: "wide orientation spread — parallelograms at all angles (Klee #8, tension).",
+    layers: [F({ count: 5, anchors: "cornersMid", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.6, rotMax: 1.0, sizeMin: 45, sizeMax: 95, jitter: 4, skew: 7, figSeed: 502, jitterSeed: 512 })] },
+  { id: 3, title: "six, dense web", intent: "six figures, rich anchoring — a woven located field (Klee #6, #5).",
+    layers: [F({ count: 6, anchors: "cornersMidCenter", anchorsPerFigure: 4, vertsPerAnchor: 2, shear: 0.7, rotMax: 0.8, sizeMin: 40, sizeMax: 88, jitter: 4, skew: 7, figSeed: 503, jitterSeed: 513 })] },
+  { id: 4, title: "strong diagonal, corner", intent: "steep parallel shear + corner web — bold diagonal energy (Klee #3, #6).",
+    layers: [F({ count: 6, anchors: "corners", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 1.0, rotMax: 0.5, sizeMin: 42, sizeMax: 90, jitter: 5, skew: 7, figSeed: 504, jitterSeed: 514 })] },
+  { id: 5, title: "rich web, few figs", intent: "four figures, very rich webs (5 anchors x 3 verts), energetic (Klee #6).",
+    layers: [F({ count: 4, anchors: "cornersMidCenter", anchorsPerFigure: 5, vertsPerAnchor: 3, shear: 0.7, rotMax: 0.9, sizeMin: 48, sizeMax: 100, jitter: 5, skew: 8, figSeed: 505, jitterSeed: 515 })] },
+  { id: 6, title: "seven, medium web", intent: "seven slanted figures scattered — toward #274 density (Klee #8).",
+    layers: [F({ count: 7, anchors: "cornersMid", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.6, rotMax: 1.0, sizeMin: 34, sizeMax: 72, jitter: 4, skew: 6, figSeed: 506, jitterSeed: 516 })] },
+  { id: 7, title: "big sheared, corner", intent: "four large steeply-sheared parallelograms on open ground with corner lines (Klee #1, #3).",
+    layers: [F({ count: 4, anchors: "corners", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 1.1, rotMax: 0.4, sizeMin: 70, sizeMax: 135, jitter: 4, skew: 8, figSeed: 507, jitterSeed: 517 })] },
+  { id: 8, title: "energetic hand, dense", intent: "five figures, dense web, strong wobble — living construction (Klee #3).",
+    layers: [F({ count: 5, anchors: "cornersMidCenter", anchorsPerFigure: 4, vertsPerAnchor: 2, shear: 0.8, rotMax: 0.8, sizeMin: 44, sizeMax: 94, jitter: 5, skew: 8, figSeed: 508, jitterSeed: 518 })] },
+  { id: 9, title: "extreme shear, varied", intent: "near-collapsed steep parallelograms at all angles (Klee #3 extreme).",
+    layers: [F({ count: 5, anchors: "cornersMid", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 1.3, rotMax: 1.1, sizeMin: 44, sizeMax: 92, jitter: 4, skew: 7, figSeed: 509, jitterSeed: 519 })] },
+  { id: 10, title: "eight scattered", intent: "eight slanted parallelograms, each lightly webbed but many — dense scatter (Klee #8).",
+    layers: [F({ count: 8, anchors: "cornersMid", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.6, rotMax: 0.9, sizeMin: 30, sizeMax: 62, jitter: 4, skew: 6, figSeed: 510, jitterSeed: 520 })] },
+  { id: 11, title: "mixed sizes, strong shear", intent: "tiny->large sheared figures, rich web, lively hand (Klee #8 tension).",
+    layers: [F({ count: 5, anchors: "cornersMidCenter", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.9, rotMax: 0.8, sizeMin: 28, sizeMax: 130, jitter: 5, skew: 8, figSeed: 521, jitterSeed: 531 })] },
+  { id: 12, title: "corner web, strong diagonals", intent: "five figures, four-corner rich web + steep shear — crossing diagonals (Klee #6).",
+    layers: [F({ count: 5, anchors: "corners", anchorsPerFigure: 4, vertsPerAnchor: 2, shear: 1.0, rotMax: 0.6, sizeMin: 44, sizeMax: 92, jitter: 4, skew: 7, figSeed: 522, jitterSeed: 532 })] },
+  { id: 13, title: "rich center web, six", intent: "six figures anchored incl. centre — a dense hub-and-figure weave (Klee #6, #5).",
+    layers: [F({ count: 6, anchors: "cornersMidCenter", anchorsPerFigure: 4, vertsPerAnchor: 2, shear: 0.7, rotMax: 0.9, sizeMin: 38, sizeMax: 82, jitter: 4, skew: 7, figSeed: 523, jitterSeed: 533 })] },
+  { id: 14, title: "wild everything", intent: "steep shear, all angles, richest web, wild hand+skew — maximal (Klee #3, #5).",
+    layers: [F({ count: 6, anchors: "cornersMidCenter", anchorsPerFigure: 4, vertsPerAnchor: 3, shear: 1.2, rotMax: 1.1, sizeMin: 42, sizeMax: 92, jitter: 5, skew: 12, figSeed: 524, jitterSeed: 534 })] },
+  { id: 15, title: "unified diagonal flow", intent: "low orientation spread + strong shear — parallelograms all lean the same way -> one diagonal CURRENT (gold-standard directional flow).",
+    layers: [F({ count: 6, anchors: "cornersMid", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.9, rotMax: 0.22, sizeMin: 40, sizeMax: 86, jitter: 4, skew: 6, figSeed: 525, jitterSeed: 535 })] },
+  { id: 16, title: "balanced showcase", intent: "five figures, balanced shear/web/hand — the rounded take (Klee #8).",
+    layers: [F({ count: 5, anchors: "cornersMidCenter", anchorsPerFigure: 3, vertsPerAnchor: 2, shear: 0.8, rotMax: 0.7, sizeMin: 42, sizeMax: 92, jitter: 4, skew: 8, figSeed: 526, jitterSeed: 536 })] },
+];
+
+const out = {
+  round: 17,
+  rule: { lewittId: 238, instruction: "The location of a parallelogram.", year: 1974 },
+  bounds: { left: 150, right: 150, up: 150, down: 150 },
+  designs,
+};
+writeFileSync("/Users/babi/Documents/polar_plotter/ai-training/sessions/2026-06-30-foundations/round-17/designs.json", JSON.stringify(out, null, 2) + "\n");
+console.log("wrote", designs.length, "designs");

@@ -1,0 +1,16 @@
+{
+  "round": 17,
+  "title": "The location of a parallelogram (sheared figures + dense web)",
+  "rule": {
+    "lewittId": 238,
+    "instruction": "The location of a parallelogram.",
+    "year": 1974,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Same located-figures genre as #237 (round 16), reviewed with the user. Chosen angle: VARY FIGURE ORIENTATION / SHEAR — strongly slanted parallelograms at varied angles, so the round is about directional/diagonal energy across the wall (ties to the user's love of directional flow). `locatedFigures` extended with a parallelogram figure type + `shear` + `rotMax` (orientation spread). Applying R16 hard: the LOCATION WEB is the subject — build DENSE (more figures, richer anchor webs, energetic hand); the minimal/light end is dropped entirely ('avoid anything light'). Dense construction lines to the corners are kept (they read structural, not too-symmetric). Monochrome; every line not-straight; density still capped for the paper-rip limit. The 16 span shear strength, orientation spread (unified-diagonal -> scattered), figure count, web richness, and hand energy.",
+  "allowedModules": ["locatedFigures"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}
