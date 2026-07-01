@@ -40,6 +40,12 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
 - Every round is governed by a **Sol LeWitt instruction** as its rule (`lewitt_instructions.csv`).
 - Every execution takes a **Klee stance** (`klee_principles.md`) — the method behind the rule.
 - **No Truchet** / truchet-style tiling — excluded by user preference.
+- **⚠️🩸 PAPER-RIP LIMIT (physical, R15).** If the pen lays too many lines into ~the same tiny area,
+  the paper gets wet and **rips**. So never let a field become a near-solid black patch — ESPECIALLY
+  at edges/corners where density ramps or radial families concentrate. Cap density so adjacent lines
+  always keep a **visible gap** (coarser spacing / a min-gap clamp on any ramp). "Dense" is good as
+  *tone*, fatal as *ink-on-ink*. This is a MEDIA limit that overrides "denser is better": the
+  coherence ceiling (R14) is also a physical ceiling. When a design would saturate a spot, back it off.
 
 > As lessons accumulate below, phrase them in Klee's vocabulary (e.g. "asymmetric weight with a
 > local imperative beat dead symmetry") so the method and the learnings reinforce each other.
@@ -163,3 +169,9 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   symmetry (proves the R13 lesson). Push offset hard (offset ladder ranked monotonically); the
   concentric "echo" is praised; but a coherence ceiling exists — maxing every lever (+corners +
   dense + jitter 6) = mud/"avoid". jitter 6 again "not sure" → energetic hand tops out ~4–5.
+- **Round 15 (2026-07-01)** — LeWitt #142 (increasing not-straight lines → density ramp; new
+  `ruledLines` `gradient` lever). "A success." Winner #10 = **coarse spacing + strong ramp**
+  ("perfect balance of non-linear and exponential ratios") — the current reads without saturating.
+  Partial ranking = keep/reject; rejects were the fine+steep ramps that **saturate the border**.
+  Surfaced the **PAPER-RIP LIMIT** (see Standing constraints): over-inking a spot tears the paper —
+  cap density, coarser at the packed end, never a solid patch. Coarse+strong beats fine+steep.

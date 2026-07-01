@@ -6,15 +6,18 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 15 (#142) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
-   ORGANIC gradient + grid IMPLIED (lines only). Built with a new `ruledLines` `gradient` lever (a
-   density ramp thickening toward the top-right). Ask them to open
-   `sessions/2026-06-30-foundations/round-15/contact.png` and fill `round-15/ranking.json`, then
-   **process it** (reflection.md, LEARNINGS, commit).
-2. Round **14 (#138) is DONE** — big win (asymmetric take rescued the genre). Processed.
-3. Next non-colour row after #142: #154/#159/#160/#164 are all **colour (red) → skip** (note each
-   in the LEARNINGS log). First buildable after that is **#237 "The location of a trapezoid"** (and
-   #238 parallelogram, #274 six figures) — geometric-figure placement, DOABLE, review with user first.
+1. **Round 15 (#142) is DONE** — "a success." Winner #10 = coarse spacing + strong ramp. Surfaced
+   the **PAPER-RIP LIMIT** (over-inking tears the paper) — now a Standing constraint in LEARNINGS
+   + a memory. Partial ranking = keep/reject (rejects were border-saturating fine+steep ramps).
+   Processed.
+2. **Next: colour skips.** #154, #159, #160, #164 are all red-line "black outlined square" pieces →
+   **auto-skip (colour).** Note each in the revision log below; don't stop to re-ask.
+3. First buildable after the skips is **#237 "The location of a trapezoid"** (then #238 parallelogram,
+   #274 six figures) — geometric-figure PLACEMENT. Review verbatim with the user first; don't pre-build.
+
+> ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
+> the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
+> would tear paper. Consider a min-gap clamp on the ramp before any such design is physically drawn.
 
 ---
 
@@ -46,7 +49,7 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## 📍 State of the sequence
-Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138.**
+Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138, #142.**
 - Rounds **1–11** scored + reflection + learnings.
 - Round **12 (#88)** — UNRANKED, user said "not worthy" (grid-quantized flow). `reflection.md`
   records it as a dud.
@@ -54,6 +57,8 @@ Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88
   texture not structure; radial-from-corners still reads symmetric. Processed.
 - Round **14 (#138)** — asymmetric take (broke the arrangement). BIG WIN — "more than the original…
   very beautiful." Proves breaking arrangement-symmetry rescues a low-value genre. Processed.
+- Round **15 (#142)** — density ramp (new `ruledLines` gradient). "A success"; winner = coarse+strong
+  (#10). Surfaced the PAPER-RIP media limit (over-inking tears paper). Partial ranking = keep/reject.
 - **Skipped (colour):** **#87** (= #56 + colour), **#95** (vertical not-straight lines "using four
   colours in all combinations").
 

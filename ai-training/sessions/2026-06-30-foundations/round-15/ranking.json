@@ -1,6 +1,6 @@
 {
   "round": 15,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [10,5,14,2,7,3,16],
+  "notes": {"10":"perfect balance of non leanear and exponential ratios, overal this was also a success in genral I listed all the ines I did an the others that should be avoided I did not list specially dense next to the border. what happens is if the pen draws too many lines in the same area (0.01mm) the paper can get wet and rip. please note that."},
+  "scoredAt": "2026-07-01" 
 }
