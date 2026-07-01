@@ -60,7 +60,8 @@ Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88
 - Round **15 (#142)** — density ramp (new `ruledLines` gradient). "A success"; winner = coarse+strong
   (#10). Surfaced the PAPER-RIP media limit (over-inking tears paper). Partial ranking = keep/reject.
 - **Skipped (colour):** **#87** (= #56 + colour), **#95** (vertical not-straight lines "using four
-  colours in all combinations").
+  colours in all combinations"), **#154 / #159 / #160 / #164** (all "black outlined square with a
+  **red** line", 1973).
 
 **Next non-colour rows after #130:** #138 (circles/arcs from midpoints — DOABLE with `arcs`),
 #142 (grid + not-straight lines — DOABLE, on-taste), then #154/#159/#160/#164 are **colour (red)

@@ -175,3 +175,6 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   Partial ranking = keep/reject; rejects were the fine+steep ramps that **saturate the border**.
   Surfaced the **PAPER-RIP LIMIT** (see Standing constraints): over-inking a spot tears the paper —
   cap density, coarser at the packed end, never a solid patch. Coarse+strong beats fine+steep.
+- **Skipped #154, #159, #160, #164 (2026-07-01, colour)** — all "a black outlined square with a
+  **red** line" pieces (1973). Distinguishing element is colour → auto-skipped per the standing rule.
+  Next buildable row is #237.
