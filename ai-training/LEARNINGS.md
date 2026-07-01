@@ -29,6 +29,11 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
   **(b) GRADIENT** — tonal density ramps (round-15 #142, round-19 grays). Choose an organic/tonal
   *subject*; don't render a clean closed figure and hope jitter saves it. (This is why #138-as-scatter
   won in R14 but #138-as-circles lost in R20 — same instruction, shape legibility was the difference.)
+  - **The recurring miss = TEXTURE WITHOUT FORM (R20/R21/R22).** Three organic misses in a row were
+    all all-over even texture with no coherent subject: clean circles, fine-line fabric, scattered
+    scribble-marks. The user wants a **readable FORM / gesture with a tonal GRADIENT (volume)**, made
+    by a **CONTINUOUS** hand line, surrounded by negative space — an *object*, not wallpaper. A
+    scribble specifically = ONE continuous looping/coiling line shading a form, never scattered marks.
   - **"Wobbly" means OPEN + loose, not a dense weave (R21).** After R20, "wobbly" via a dense fine-line
     fabric (`sheets`) was *also* rejected. The organic hits were sparse/open with breathing room —
     round-11 stroke FLOW, round-14 arc SCATTER. So wobbly/organic = **loose individual wandering

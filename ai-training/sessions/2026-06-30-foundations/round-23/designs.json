@@ -1,0 +1,416 @@
+{
+  "round": 23,
+  "rule": {
+    "lewittId": 1185,
+    "instruction": "Scribbles: Inverted curve (horizontal).",
+    "year": 2005
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "bold arch",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 90,
+            "crownBoost": 0.6,
+            "coils": 80,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 301
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "thick volume",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 130,
+            "crownBoost": 1,
+            "coils": 90,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 302
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "tall high arch",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.65,
+            "thick": 80,
+            "crownBoost": 0.6,
+            "coils": 80,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 303
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "low wide arch",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.35,
+            "thick": 90,
+            "crownBoost": 0.5,
+            "coils": 80,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 304
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "loopier",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 90,
+            "crownBoost": 0.6,
+            "coils": 70,
+            "loopR": 8,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 305
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "dense shading",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 100,
+            "crownBoost": 0.8,
+            "coils": 130,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 306
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "light single pass",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 90,
+            "crownBoost": 0.6,
+            "coils": 60,
+            "loopR": 3,
+            "passes": 1,
+            "jitter": 2,
+            "seed": 307
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "energetic hand",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 95,
+            "crownBoost": 0.7,
+            "coils": 85,
+            "loopR": 4,
+            "passes": 2,
+            "jitter": 4,
+            "seed": 308
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "thin ribbon",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.55,
+            "thick": 55,
+            "crownBoost": 0.4,
+            "coils": 90,
+            "loopR": 2.5,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 309
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "big crown swell",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 80,
+            "crownBoost": 1.4,
+            "coils": 85,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 310
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "triple pass rich",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 110,
+            "crownBoost": 0.8,
+            "coils": 80,
+            "loopR": 3,
+            "passes": 3,
+            "jitter": 2,
+            "seed": 311
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "low loopy",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.4,
+            "thick": 100,
+            "crownBoost": 0.6,
+            "coils": 65,
+            "loopR": 6,
+            "passes": 2,
+            "jitter": 3,
+            "seed": 312
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "tall narrow dense",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.62,
+            "thick": 70,
+            "crownBoost": 0.7,
+            "coils": 120,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 313
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "showcase",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 100,
+            "crownBoost": 0.8,
+            "coils": 90,
+            "loopR": 4,
+            "passes": 2,
+            "jitter": 2.5,
+            "seed": 314
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "wide flat thick",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.3,
+            "thick": 120,
+            "crownBoost": 0.6,
+            "coils": 90,
+            "loopR": 3,
+            "passes": 2,
+            "jitter": 2,
+            "seed": 315
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "loose big loops",
+      "intent": "continuous scribble shading an inverted-curve arch (Klee #5 tone, #3 living line).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "mode": "shade",
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "archH": 0.5,
+            "thick": 95,
+            "crownBoost": 0.6,
+            "coils": 55,
+            "loopR": 9,
+            "passes": 2,
+            "jitter": 3,
+            "seed": 316
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "round": 23,
+  "title": "Scribbles: Inverted curve (horizontal) — retry, continuous shading",
+  "rule": {
+    "lewittId": 1185,
+    "instruction": "Scribbles: Inverted curve (horizontal).",
+    "year": 2005,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "RETRY of #1185 after round 22 was rejected ('not a scribble, nothing interesting, change technique'). New technique = `scribble` mode 'shade': ONE continuous coiling line that sweeps along an inverted-curve arch while zig-zagging across its thickness with a loop at each turn (real scribble motion), so a volumetric tonal FORM emerges (denser/darker at the crown) — a readable object, not scattered marks or an even texture. Open negative space around the arch. Monochrome; hand-made continuity + tonal gradient (the traits the user has liked). Density kept from going fully solid (paper-rip). The 16 span arch height/width, ribbon thickness, crown swell (volume), coil density (tone), loop size, passes, and hand energy.",
+  "allowedModules": ["scribble"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

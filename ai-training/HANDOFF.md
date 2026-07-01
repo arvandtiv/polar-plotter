@@ -8,14 +8,16 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 22 (#1185 "Scribbles: Inverted curve")** — built with the new `scribble` generator
-     (open, hand-made looping marks forming an inverted-curve tonal arch). Awaiting ranking →
-     `round-22/ranking.json`. This addresses the R20/R21 recalibration — watch if it finally lands.
+   - **Round 23 (#1185 retry)** — new `scribble` "shade" mode: ONE continuous coiling line shading a
+     volumetric inverted-curve ARCH form (readable object + tonal gradient + negative space).
+     Awaiting ranking → `round-23/ranking.json`. This is the 4th attempt at an organic form — watch closely.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
-2. **REJECTS to remember:** R20 (#138 full circles) — clean geometric shapes read cold even jittered.
-   R21 (#915 via `sheets`) — **`sheets` is BANNED**; "wobbly" must be OPEN / loose / hand-made with
-   negative space, NOT a dense mechanical weave. Both lessons at the top of LEARNINGS.
+2. **THREE organic misses (R20/R21/R22)** — the pattern was TEXTURE WITHOUT FORM. R20 clean circles
+   (geometric), R21 `sheets` fine-line fabric (**`sheets` BANNED**), R22 scattered scribble-marks
+   ("not a scribble, nothing interesting"). The fix (top of LEARNINGS): a **readable FORM/gesture +
+   tonal GRADIENT (volume), made by a CONTINUOUS hand line, with negative space** — an object, not
+   wallpaper. R23 applies this. If R23 also misses, ASK the user for a reference before a 5th try.
 3. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
