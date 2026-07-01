@@ -26,6 +26,15 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
   lens you must break the **arrangement's** symmetry (irregular/asymmetric centres, uneven
   families, off-axis placement), not merely add per-line wobble. Same failure family as #88
   (grid-quantized flow): the *arrangement* is what reads geometric.
+- **✅ Breaking the ARRANGEMENT rescues a low-value genre (R14, proven).** Same generator + same
+  radial-arc genre as #130, but with the centres wandered off-axis, uneven families, and irregular
+  spacing → flipped from "not valuable" to *"I like this way more than the original… very
+  beautiful."* Corollaries: **(a) push the OFFSET hard** — the offset ladder ranked monotonically
+  (gentle centreJitter=30 sank to 15th; wild=120 rose to 2nd); gentle asymmetry reads as
+  still-symmetric. **(b) The concentric "echo"/topographic reading is praised** — keep families
+  legible as echoes. **(c) Coherence ceiling** — dense+asymmetric wins, but maxing *every* lever
+  at once (8 families + jitter 6 + big reach + max count-spread) tips into mud and gets "avoid";
+  keep ~4 families, density high-not-maximal, hand energetic ~4–5 (jitter 6 was again "not sure").
 
 ## Standing constraints (not learned — given)
 - Every round is governed by a **Sol LeWitt instruction** as its rule (`lewitt_instructions.csv`).
@@ -148,3 +157,9 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   predicted order (dense+wild-sweep heuristic) was ~orthogonal to the user's — the density/flow
   axis doesn't predict order on a genre the user is rejecting. **Radial "from corners/midpoints"
   is a low-value genre** → flag #138 (same family) before building.
+- **Round 14 (2026-07-01)** — LeWitt #138 (circles/arcs from side midpoints), built ASYMMETRIC
+  (new `arcs` levers: centreJitter/countJitter/radiusJitter). **Big win** — "I like this way more
+  than the original… very beautiful," rescuing the #130 genre by breaking the *arrangement's*
+  symmetry (proves the R13 lesson). Push offset hard (offset ladder ranked monotonically); the
+  concentric "echo" is praised; but a coherence ceiling exists — maxing every lever (+corners +
+  dense + jitter 6) = mud/"avoid". jitter 6 again "not sure" → energetic hand tops out ~4–5.

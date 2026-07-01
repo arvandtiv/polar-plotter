@@ -6,15 +6,13 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 14 (#138) is built and awaiting the user's ranking** — NOT scored yet. User reviewed
-   #138, agreed to "build but break the symmetry" (the R13 fix). Ask them to open
-   `sessions/2026-06-30-foundations/round-14/contact.png` and fill `round-14/ranking.json`, then
-   **process it** (reflection.md, fold lessons into LEARNINGS.md, commit). Key thing to learn:
-   did breaking the ARRANGEMENT's symmetry rescue the radial-arc genre, or is it low-value regardless?
-2. Round **13 (#130) is DONE** — ranked but "not that valuable" (low-value, like #12); processed.
-   Lesson recorded: jitter roughens texture, not structure.
-3. Next non-colour row after #138 is **#142** (10-inch grid + increasing not-straight lines from
-   the sides — on-taste, DOABLE with `ruledLines`). Review with the user first; don't pre-build.
+1. **Round 14 (#138) is DONE** — big win: breaking the ARRANGEMENT's symmetry rescued the radial-arc
+   genre ("I like this way more than the original… very beautiful"). `reflection.md` + LEARNINGS
+   updated (push offset hard; echo praised; coherence ceiling — don't max every lever). Processed.
+2. Next instruction is **#142** — *"A 10-inch (25 cm) grid covering the wall. An increasing number
+   of vertical not straight lines from the left side and horizontal not straight lines from bottom
+   to top, adding one line per row of the grid…"* On-taste (grid + not-straight lines, DOABLE with
+   `ruledLines`). **Do NOT build yet** — bring the verbatim text to the user and review together first.
 
 ---
 
@@ -46,12 +44,14 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## 📍 State of the sequence
-Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130.**
+Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138.**
 - Rounds **1–11** scored + reflection + learnings.
 - Round **12 (#88)** — UNRANKED, user said "not worthy" (grid-quantized flow). `reflection.md`
   records it as a dud.
 - Round **13 (#130)** — ranked but "not that valuable" (low-value round). Lesson: jitter roughens
   texture not structure; radial-from-corners still reads symmetric. Processed.
+- Round **14 (#138)** — asymmetric take (broke the arrangement). BIG WIN — "more than the original…
+  very beautiful." Proves breaking arrangement-symmetry rescues a low-value genre. Processed.
 - **Skipped (colour):** **#87** (= #56 + colour), **#95** (vertical not-straight lines "using four
   colours in all combinations").
 
