@@ -23,6 +23,7 @@ export const curvyDivideModule: Module = {
       { key: "leftAngle", label: "Left angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 35 },
       { key: "rightAngle", label: "Right angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 125 },
       { key: "spacing", label: "Grain spacing", type: "range", min: 6, max: 40, step: 1, unit: "mm", default: 16 },
+      { key: "swirl", label: "Flow swirl", type: "range", min: 0, max: 1.4, step: 0.05, unit: "rad", default: 0.6 },
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 14, step: 0.5, unit: "mm", default: 4 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },
     ]},
@@ -37,6 +38,7 @@ export const curvyDivideModule: Module = {
     const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
     const curviness = num(params, "curviness", 40), freq = num(params, "freq", 1.6);
     const spacing = Math.max(1, num(params, "spacing", 16));
+    const swirl = num(params, "swirl", 0.6);
     const jitter = num(params, "jitter", 4);
     const rng = seededRandom(Math.round(num(params, "seed", 7)));
     const leftRad = (num(params, "leftAngle", 35) * Math.PI) / 180;
@@ -59,29 +61,37 @@ export const curvyDivideModule: Module = {
     };
     const inFrame = (x: number, y: number) => x >= cx - h && x <= cx + h && y >= cy - h && y <= cy + h;
 
-    // open hand-drawn grain at `theta`, kept only on the side matching `sign`, clipped to frame.
+    // flowing grain: streamlines integrated through a swirled flow field whose base direction is
+    // `theta` (so the two sides run contrasting flows). Curving, alive — not flat hatching. Seeds on
+    // a grid at `spacing`; each streamline is integrated forward+backward and kept where it is inside
+    // the frame and on the matching `sign` side of the curvy divide.
+    const sw1 = rng() * 6.28, sw2 = rng() * 6.28;
+    const flowAngle = (x: number, y: number, base: number) =>
+      base + swirl * (Math.sin(x * 0.011 + sw1) * Math.cos(y * 0.012 - sw2) + 0.5 * Math.sin((x + y) * 0.007 + sw1));
     const grain = (theta: number, sign: number): Path[] => {
-      const dx = Math.cos(theta), dy = Math.sin(theta);
-      const nx = -Math.sin(theta), ny = Math.cos(theta);
-      let omin = Infinity, omax = -Infinity;
-      for (const [x, y] of [[cx - h, cy - h], [cx + h, cy - h], [cx + h, cy + h], [cx - h, cy + h]]) {
-        const o = (x - cx) * nx + (y - cy) * ny; if (o < omin) omin = o; if (o > omax) omax = o;
-      }
-      const span = 2 * h + 20, steps = Math.max(24, Math.round(span / 3));
       const out: Path[] = [];
-      for (let o = Math.ceil(omin / spacing) * spacing; o <= omax + 1e-9; o += spacing) {
-        const bx = cx + o * nx, by = cy + o * ny;
-        const p1 = rng() * 6.28, amp = jitter * (0.6 + 0.6 * rng()), k = 0.02 + rng() * 0.03;
-        let run: Pt[] = [];
-        for (let i = 0; i <= steps; i++) {
-          const d = -span / 2 + (span * i) / steps;
-          const wob = amp * Math.sin(d * k + p1);
-          const x = bx + dx * d + nx * wob, y = by + dy * d + ny * wob;
-          if (inFrame(x, y) && Math.sign(sideOf(x, y)) === sign) run.push({ x, y });
-          else { if (run.length > 1) out.push({ points: run }); run = []; }
+      const ds = 4, half = Math.round((2.4 * h) / ds);
+      for (let gx = cx - h; gx <= cx + h; gx += spacing)
+        for (let gy = cy - h; gy <= cy + h; gy += spacing) {
+          // only seed streamlines that start on the correct side (keeps work + look on-side)
+          if (Math.sign(sideOf(gx, gy)) !== sign) continue;
+          if (rng() > 0.92) continue; // slight irregularity so rows don't line up mechanically
+          const seg: Pt[] = [];
+          for (const dir of [1, -1]) {
+            let x = gx, y = gy;
+            const pts: Pt[] = [];
+            for (let i = 0; i < half; i++) {
+              const a = flowAngle(x, y, theta);
+              x += dir * Math.cos(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
+              y += dir * Math.sin(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
+              if (!inFrame(x, y) || Math.sign(sideOf(x, y)) !== sign) break;
+              pts.push({ x, y });
+            }
+            if (dir === 1) seg.push(...pts.reverse(), { x: gx, y: gy });
+            else seg.push(...pts);
+          }
+          if (seg.length > 2) out.push({ points: seg });
         }
-        if (run.length > 1) out.push({ points: run });
-      }
       return out;
     };
 

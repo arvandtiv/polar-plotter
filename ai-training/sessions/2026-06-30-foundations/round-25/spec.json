@@ -1,0 +1,16 @@
+{
+  "round": 25,
+  "title": "Wall divided by a curvy line — retry, flowing streamlines",
+  "rule": {
+    "lewittId": 852,
+    "instruction": "A wall divided from the upper left to the lower right by a curvy line; left: glossy yellow; right: glossy purple.",
+    "year": 1998,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "RETRY of #852 after round 24 was rejected ('all look similar, not much worth'). Same monochrome adaptation (curvy corner-to-corner divide; two sides contrasted by direction, no colour), but the flat straight 'grain' is replaced by FLOWING STREAMLINES integrated through a swirled flow field (the round-11 directional-flow that scored highest) — each side a contrasting current, the curvy seam the hero. Variety pushed hard across the 16: curve shape (near-straight steep / gentle / big single hump / S-curve / deep multi-wave), flow swirl (calm -> very swirly), angle contrast, and openness. Monochrome; hand-made; dense areas are flow (dynamic), not mechanical fill. `curvyDivide` extended with a `swirl` flow-field.",
+  "allowedModules": ["curvyDivide"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

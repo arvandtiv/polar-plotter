@@ -8,8 +8,9 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 24 (#852)** — monochrome adaptation of a COLOUR piece (curvy corner-to-corner divide +
-     contrasting directional grain, new `curvyDivide` generator). Awaiting ranking → `round-24/ranking.json`.
+   - **Round 25 (#852 retry)** — flowing STREAMLINES version (curvyDivide + `swirl` flow field).
+     Awaiting ranking → `round-25/ranking.json`. (Round 24, flat straight grain, was rejected: "all
+     look similar, not much worth" — replaced flat hatching with directional flow + real variety.)
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
 2. **Round 23 (#1185) LANDED** — continuous "shade" scribble; keep it LIGHT/loopy (dense = "too much").
@@ -103,9 +104,10 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
 - **`scribble`** (added R22, extended R23) — mode `marks` (scattered — REJECTED look) and mode
   `shade` (VALIDATED R23): ONE continuous coiling line shading a form (`invertedCurveH` arch) with
   tonal volume. Keep `shade` LIGHT — low `passes`/`coils`, big `loopR`, thin `thick` (dense = "too much").
-- **`curvyDivide`** (added R24) — a wall split corner-to-corner by a bold hand-drawn curvy line, each
-  side filled with open hand-drawn grain at a contrasting angle. Monochrome take on divide-by-a-line
-  colour pieces (#852). Keep spacing generous (open).
+- **`curvyDivide`** (added R24, `swirl` added R25) — a wall split corner-to-corner by a bold curvy
+  line, each side filled with FLOWING STREAMLINES (swirled flow field) in a contrasting direction.
+  R24's straight-grain version was rejected as flat/samey; R25 uses flow + big variety. Monochrome
+  take on divide-by-a-line colour pieces (#852).
 (The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.
  ⛔ `sheets` is BANNED, R21.)
 
