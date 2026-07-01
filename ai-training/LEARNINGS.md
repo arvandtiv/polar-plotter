@@ -34,6 +34,12 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     scribble-marks. The user wants a **readable FORM / gesture with a tonal GRADIENT (volume)**, made
     by a **CONTINUOUS** hand line, surrounded by negative space — an *object*, not wallpaper. A
     scribble specifically = ONE continuous looping/coiling line shading a form, never scattered marks.
+  - **✅ Flowing STREAMLINES with SWIRL/energy win (R25).** Replacing flat straight "grain" (R24,
+    rejected as "not much worth / all similar") with flowing streamlines through a swirled flow field
+    made #852 "a successful round." The ranking: **swirly, dynamic currents + a bold curve gesture
+    win; calm/near-parallel low-swirl flow sinks.** Directional FLOW WITH ENERGY is the through-line
+    of every hit (R11 stroke flow, R17 diagonal shear, R25 currents) — bias swirl/movement UP; a
+    clear bold gesture/form as the hero; openness still a plus; dense is fine *when flowing*.
   - **✅ VALIDATED (R23): continuous "shade" scribble, kept LIGHT.** The `scribble` "shade" mode (one
     continuous coiling line shading an inverted-curve arch form) landed — "great work." But only the
     **light, open, loopy** ones (single/low passes, low coils, big loose loops, thin ribbon); the
