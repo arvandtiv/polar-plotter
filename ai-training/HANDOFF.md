@@ -6,14 +6,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 15 (#142) is DONE** — "a success." Winner #10 = coarse spacing + strong ramp. Surfaced
-   the **PAPER-RIP LIMIT** (over-inking tears the paper) — now a Standing constraint in LEARNINGS
-   + a memory. Partial ranking = keep/reject (rejects were border-saturating fine+steep ramps).
-   Processed.
-2. **Next: colour skips.** #154, #159, #160, #164 are all red-line "black outlined square" pieces →
-   **auto-skip (colour).** Note each in the revision log below; don't stop to re-ask.
-3. First buildable after the skips is **#237 "The location of a trapezoid"** (then #238 parallelogram,
-   #274 six figures) — geometric-figure PLACEMENT. Review verbatim with the user first; don't pre-build.
+1. **Round 16 (#237) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
+   FIGURE + hand-drawn LOCATION WEB, MULTIPLE figures (toward #274). New `locatedFigures` generator
+   (density-capped for the paper-rip limit). Ask them to open
+   `sessions/2026-06-30-foundations/round-16/contact.png` and fill `round-16/ranking.json`, then
+   **process it** (reflection.md, LEARNINGS, commit). Watch: do the corner-radiating webs read too
+   symmetric (star/asterisk) or organic? That steers #238/#274.
+2. Round **15 (#142) DONE**; colour rows **#154/#159/#160/#164 skipped**. All logged.
+3. Next after #237: **#238 "The location of a parallelogram"** then **#274 "The location of six
+   geometric figures"** — same `locatedFigures` genre. Review each with the user first.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
@@ -79,6 +80,12 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
 - **`strokeField`** — many short strokes on a jittered grid (even coverage), oriented random /
   **flow-field** / aligned. The stroke-field genre; flow fields are the taste's favourite.
 - **`arcs`** — concentric arcs swung from centres (corners/midpoints/centre), clipped to frame.
+  Symmetry-breaking levers added R14: `centreJitter` / `countJitter` / `radiusJitter`.
+- **`ruledLines` `gradient`** (added R15) — a density ramp: packs verticals right + horizontals top
+  (top-right accumulation). ⚠️ fine spacing + steep gradient saturates the edge → paper-rip; keep coarse.
+- **`locatedFigures`** (added R16) — irregular trapezoids placed asymmetrically + a hand-drawn
+  location web to the nearest architectural anchors. Density-capped (nearest-few anchors/verts) so
+  no corner saturates. For the #237/#238/#274 "location of a figure" genre.
 (The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.)
 
 ## ⚙️ How to run a round (mechanics)

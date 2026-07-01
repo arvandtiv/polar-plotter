@@ -8,6 +8,7 @@ import "./ruledLines";
 import "./connectDots";
 import "./strokeField";
 import "./arcs";
+import "./locatedFigures";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

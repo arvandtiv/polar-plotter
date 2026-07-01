@@ -1,0 +1,16 @@
+{
+  "round": 16,
+  "title": "The location of a trapezoid (located figures + hand-drawn web)",
+  "rule": {
+    "lewittId": 237,
+    "instruction": "The location of a trapezoid.",
+    "year": 1974,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Interpretation reviewed & chosen with the user: FIGURE + HAND-DRAWN LOCATION WEB, and MULTIPLE FIGURES (leaning toward #274). New `locatedFigures` generator: several irregular trapezoids placed asymmetrically, each fixed by a not-straight 'location web' of lines from the NEAREST architectural anchor points (corners / edge midpoints / centre) to its vertices. Executed through the governing organic lens — asymmetric placement, hand-skewed irregular figures, every line not-straight. Monochrome black on white. Density is CAPPED (each figure links only to its nearest few anchors, each anchor to its nearest few vertices) so no corner/anchor saturates — honoring the R15 paper-rip limit. The 16 span figure COUNT (3->8), figure SIZE, web RICHNESS (anchorsPerFigure / vertsPerAnchor / anchor set), and HAND energy (jitter 3-5).",
+  "allowedModules": ["locatedFigures"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}
