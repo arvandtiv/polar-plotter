@@ -9,6 +9,7 @@ import "./connectDots";
 import "./strokeField";
 import "./arcs";
 import "./locatedFigures";
+import "./scribble";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

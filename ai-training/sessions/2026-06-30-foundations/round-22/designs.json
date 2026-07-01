@@ -1,0 +1,384 @@
+{
+  "round": 22,
+  "rule": {
+    "lewittId": 1185,
+    "instruction": "Scribbles: Inverted curve (horizontal).",
+    "year": 2005
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "open arch",
+      "intent": "a clear inverted-curve of scribble with open space above and below (Klee #7, #3).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 150,
+            "markSize": 16,
+            "loops": 10,
+            "archH": 0.45,
+            "sigma": 45,
+            "jitter": 3,
+            "seed": 201
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "broad band",
+      "intent": "a wider, softer arch band — gentler tonal form (Klee #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 190,
+            "markSize": 16,
+            "loops": 10,
+            "archH": 0.45,
+            "sigma": 72,
+            "jitter": 3,
+            "seed": 202
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "tight high arch",
+      "intent": "a tall narrow arch — a crisp inverted curve gesture (Klee #7).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 165,
+            "markSize": 14,
+            "loops": 10,
+            "archH": 0.65,
+            "sigma": 34,
+            "jitter": 3,
+            "seed": 203
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "low flat arch",
+      "intent": "a shallow arch, near-horizontal band (Klee #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 165,
+            "markSize": 16,
+            "loops": 10,
+            "archH": 0.25,
+            "sigma": 50,
+            "jitter": 3,
+            "seed": 204
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "loopy marks",
+      "intent": "loopier scribble marks — more tangled hand (Klee #3).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 150,
+            "markSize": 18,
+            "loops": 16,
+            "archH": 0.45,
+            "sigma": 45,
+            "jitter": 3,
+            "seed": 205
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "small tight scribbles",
+      "intent": "many small marks -> finer scribbled tone (Klee #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 260,
+            "markSize": 10,
+            "loops": 8,
+            "archH": 0.45,
+            "sigma": 45,
+            "jitter": 2,
+            "seed": 206
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "big loose scribbles",
+      "intent": "few large loose squiggles — bold gestural marks, lots of air (Klee #7, #3).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 100,
+            "markSize": 26,
+            "loops": 12,
+            "archH": 0.45,
+            "sigma": 50,
+            "jitter": 4,
+            "seed": 207
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "denser arch",
+      "intent": "a denser, darker arch form (still open at edges) (Klee #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 330,
+            "markSize": 14,
+            "loops": 10,
+            "archH": 0.5,
+            "sigma": 50,
+            "jitter": 3,
+            "seed": 208
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "energetic hand",
+      "intent": "strong hand jitter — a lively, scratchy scribble (Klee #3).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 185,
+            "markSize": 16,
+            "loops": 12,
+            "archH": 0.45,
+            "sigma": 45,
+            "jitter": 5,
+            "seed": 209
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "wide gentle arch",
+      "intent": "a broad shallow arch across the whole width (Klee #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 200,
+            "markSize": 16,
+            "loops": 10,
+            "archH": 0.35,
+            "sigma": 85,
+            "jitter": 3,
+            "seed": 210
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "very open, sparse",
+      "intent": "sparse scribble — the arch barely suggested, maximal air (Klee #7).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 90,
+            "markSize": 18,
+            "loops": 10,
+            "archH": 0.5,
+            "sigma": 45,
+            "jitter": 3,
+            "seed": 211
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "high narrow, dense",
+      "intent": "a tall narrow arch drawn densely — a strong scribbled vault (Klee #5, #7).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 300,
+            "markSize": 12,
+            "loops": 9,
+            "archH": 0.7,
+            "sigma": 38,
+            "jitter": 3,
+            "seed": 212
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "big loops, low arch",
+      "intent": "large tangled loops on a low arch — loose and calligraphic (Klee #3).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 120,
+            "markSize": 22,
+            "loops": 14,
+            "archH": 0.3,
+            "sigma": 55,
+            "jitter": 4,
+            "seed": 213
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "showcase arch",
+      "intent": "the rounded inverted curve — balanced density, open, hand-made (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 220,
+            "markSize": 15,
+            "loops": 11,
+            "archH": 0.5,
+            "sigma": 50,
+            "jitter": 3,
+            "seed": 214
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "fine dense arch",
+      "intent": "fine small marks, denser -> a smooth graphite-like tone (watch density) (Klee #5).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 400,
+            "markSize": 11,
+            "loops": 8,
+            "archH": 0.5,
+            "sigma": 45,
+            "jitter": 2,
+            "seed": 215
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "big airy arch",
+      "intent": "large loops, wide arch, lots of negative space (Klee #7, #3).",
+      "layers": [
+        {
+          "module": "scribble",
+          "params": {
+            "form": "invertedCurveH",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "marks": 130,
+            "markSize": 20,
+            "loops": 12,
+            "archH": 0.55,
+            "sigma": 60,
+            "jitter": 4,
+            "seed": 216
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "round": 22,
+  "title": "Scribbles: Inverted curve (horizontal)",
+  "rule": {
+    "lewittId": 1185,
+    "instruction": "Scribbles: Inverted curve (horizontal).",
+    "year": 2005,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "USER-PICKED. LeWitt's late Scribbles series — continuous hand scribbling that builds tone into a form. Built with the new `scribble` generator: irregular random-walk looping marks placed by rejection sampling against a tonal field so a soft tone emerges where scribbling is dense. Form = an INVERTED CURVE (horizontal arch, ∩) — the scribble concentrates along an arch that peaks up in the middle, with open negative space above and below. Applies the R20/R21 recalibration: OPEN, loose, hand-made wandering marks with directional/gestural character and negative space — NOT dense mechanical fill, NOT legible geometry, NOT `sheets`. Monochrome; density capped (paper-rip). The 16 span arch height, band width, mark count (sparse->dense), mark size & loopiness, and hand energy.",
+  "allowedModules": ["scribble"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

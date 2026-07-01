@@ -8,13 +8,14 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 21 (#915 "Arcs, circle, and irregular bands")** — built at the user's request, WOBBLY
-     take per their R20 note. Awaiting ranking → `round-21/ranking.json`.
+   - **Round 22 (#1185 "Scribbles: Inverted curve")** — built with the new `scribble` generator
+     (open, hand-made looping marks forming an inverted-curve tonal arch). Awaiting ranking →
+     `round-22/ranking.json`. This addresses the R20/R21 recalibration — watch if it finally lands.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
-2. **Round 20 (#138 full circles) REJECTED** ("geometric shapes not good; go wobbly/gradient"). Big
-   lesson at top of LEARNINGS: clean geometric SHAPES read cold even jittered — dissolve into wobbly
-   organic wandering OR tonal gradient. Applied directly to #915.
+2. **REJECTS to remember:** R20 (#138 full circles) — clean geometric shapes read cold even jittered.
+   R21 (#915 via `sheets`) — **`sheets` is BANNED**; "wobbly" must be OPEN / loose / hand-made with
+   negative space, NOT a dense mechanical weave. Both lessons at the top of LEARNINGS.
 3. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
@@ -99,7 +100,11 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   to the nearest architectural anchors; density-capped so no corner saturates. Figure types:
   `trapezoid` (R16), `parallelogram` + `shear`/`rotMax` (R17), `irregular` angular polygon (R18);
   `cluster` param (R18) groups figures into an asymmetric knot with open space. #237/#238/#274 genre.
-(The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.)
+- **`scribble`** (added R22) — hand-made looping random-walk marks placed by rejection sampling
+  against a tonal field (`invertedCurveH` / band / vertical gradient), so a soft tone/form emerges
+  from denser scribbling with open negative space. Organic, never mechanical. For the Scribbles genre.
+(The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.
+ ⛔ `sheets` is BANNED, R21.)
 
 ## ⚙️ How to run a round (mechanics)
 1. Author the 16 designs as a `designs.json` (Studio layer-stacks). For repetitive designs, write a
