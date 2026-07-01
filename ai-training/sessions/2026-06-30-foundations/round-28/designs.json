@@ -1,0 +1,432 @@
+{
+  "round": 28,
+  "rule": {
+    "kleePrinciple": 15,
+    "concept": "Growth and decrease (Wachsen und Abnehmen) — a breathing progression that swells then shrinks",
+    "source": "klee_principles.md #15"
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "vertical breath, crest mid",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 6,
+            "sizeMax": 36,
+            "curve": 0.28,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 801
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "horizontal breath",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 0,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 6,
+            "sizeMax": 36,
+            "curve": 0.28,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 802
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "diagonal breath",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 45,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 6,
+            "sizeMax": 36,
+            "curve": 0.28,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 803
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "radial bloom",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0,
+            "width": 0.4,
+            "radial": true,
+            "spacing": 17,
+            "sizeMin": 5,
+            "sizeMax": 38,
+            "curve": 0.28,
+            "flowVary": 0.5,
+            "jitter": 1.2,
+            "seed": 804
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "crest low (rising)",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.75,
+            "width": 0.28,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 5,
+            "sizeMax": 38,
+            "curve": 0.28,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 805
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "narrow crest band",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.16,
+            "radial": false,
+            "spacing": 16,
+            "sizeMin": 4,
+            "sizeMax": 40,
+            "curve": 0.28,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 806
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "broad gentle breath",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.55,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 10,
+            "sizeMax": 32,
+            "curve": 0.24,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 807
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "dense fine strokes",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.32,
+            "radial": false,
+            "spacing": 12,
+            "sizeMin": 4,
+            "sizeMax": 26,
+            "curve": 0.28,
+            "flowVary": 0.4,
+            "jitter": 1,
+            "seed": 808
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "open large strokes",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.32,
+            "radial": false,
+            "spacing": 26,
+            "sizeMin": 8,
+            "sizeMax": 52,
+            "curve": 0.3,
+            "flowVary": 0.5,
+            "jitter": 1.5,
+            "seed": 809
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "strong curve (commas)",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 6,
+            "sizeMax": 36,
+            "curve": 0.5,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 810
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "aligned, low vary",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 6,
+            "sizeMax": 36,
+            "curve": 0.28,
+            "flowVary": 0.12,
+            "jitter": 1,
+            "seed": 811
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "swirly orientation",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 18,
+            "sizeMin": 6,
+            "sizeMax": 36,
+            "curve": 0.34,
+            "flowVary": 1,
+            "jitter": 1.5,
+            "seed": 812
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "diagonal rising crest",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 135,
+            "peak": 0.62,
+            "width": 0.26,
+            "radial": false,
+            "spacing": 17,
+            "sizeMin": 5,
+            "sizeMax": 38,
+            "curve": 0.3,
+            "flowVary": 0.5,
+            "jitter": 1.2,
+            "seed": 813
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "showcase",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0.5,
+            "width": 0.3,
+            "radial": false,
+            "spacing": 17,
+            "sizeMin": 6,
+            "sizeMax": 38,
+            "curve": 0.32,
+            "flowVary": 0.5,
+            "jitter": 1.3,
+            "seed": 814
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "radial decrease (big centre)",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 90,
+            "peak": 0,
+            "width": 0.55,
+            "radial": true,
+            "spacing": 18,
+            "sizeMin": 5,
+            "sizeMax": 44,
+            "curve": 0.3,
+            "flowVary": 0.6,
+            "jitter": 1.4,
+            "seed": 815
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "twin crests wave",
+      "intent": "Klee growth&decrease (#15): organic curved strokes whose size swells to a crest then shrinks — a breathing tonal wave (Klee #15, #3 living line).",
+      "layers": [
+        {
+          "module": "growthField",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "axisAngle": 0,
+            "peak": 0.3,
+            "width": 0.18,
+            "radial": false,
+            "spacing": 16,
+            "sizeMin": 5,
+            "sizeMax": 36,
+            "curve": 0.3,
+            "flowVary": 0.4,
+            "jitter": 1.2,
+            "seed": 816
+          }
+        }
+      ]
+    }
+  ]
+}

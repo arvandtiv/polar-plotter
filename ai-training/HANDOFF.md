@@ -8,14 +8,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 27 (#1152 retry)** — full-field vortex FLOW (new `flowWhirls`), rebuilt on the R25
-     winning engine after R26 (sparse spirals) was rejected as "no worth." Awaiting ranking →
-     `round-27/ranking.json`.
+   - **Round 28 (Klee #15 "Growth and decrease")** — FIRST Klee-sourced round (concept from Klee, not
+     a LeWitt row — user asked to "move to something new from Paul Klee"). New `growthField`: organic
+     curved strokes whose SIZE breathes (swell→shrink) into a tonal wave. Awaiting ranking →
+     `round-28/ranking.json`.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
-   NOTE: R25 (#852 flowing streamlines) was a SUCCESS. R26 (#1152 sparse spirals) REJECTED
-   ("no worth") — the reconciled lesson (top of LEARNINGS): FILL the wall with a coherent flowing
-   FIELD; sparse floating objects = worthless, but dense solid = mud. Sweet spot = R25/R11 open flow.
+   NOTE: R27 (#1152 vortex flow) was a SUCCESS — maximise organic swirl. The reconciled organic
+   lesson (top of LEARNINGS): FILL the wall with a coherent flowing FIELD; sparse = worthless, dense
+   solid = mud; sweet spot = R25/R11/R27 open flow.
 2. **Round 23 (#1185) LANDED** — continuous "shade" scribble; keep it LIGHT/loopy (dense = "too much").
    The recurring lesson across the session: **readable FORM/gesture + tonal volume via a CONTINUOUS
    hand line, kept OPEN/light with negative space** — never dense texture/wallpaper. (`sheets` BANNED,
@@ -113,6 +114,8 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   take on divide-by-a-line colour pieces (#852).
 - **`whirls`** (added R26) — bold organic log-spiral whirls + twirls, asymmetric with open space.
   ⚠️ REJECTED look (sparse floating spirals = "no worth"); prefer `flowWhirls`.
+- **`growthField`** (added R28) — organic curved strokes covering the wall, each stroke's SIZE
+  breathing (swell→shrink) along an axis/radially → a living tonal wave. Klee #15 growth-and-decrease.
 - **`flowWhirls`** (added R27) — the wall FILLED with flowing streamlines through a vortex field
   (whirl centres); swirling currents, full-field. `reach` = streamline length (keep short-ish),
   `spacing` open, so it reads as flow not solid. The R25/R11 winning engine for swirl/flow pieces.

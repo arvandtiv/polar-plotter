@@ -1,0 +1,16 @@
+{
+  "round": 28,
+  "title": "Growth and decrease (Klee #15) — breathing stroke field",
+  "rule": {
+    "source": "Paul Klee — klee_principles.md #15",
+    "kleePrinciple": 15,
+    "concept": "Wachsen und Abnehmen (growth and decrease): a breathing progression that swells then shrinks, turning repetition into life.",
+    "note": "First KLEE-SOURCED round (concept from Klee himself, not a LeWitt instruction) — the user asked to move to 'something new from Paul Klee'."
+  },
+  "restrictions": "New `growthField` generator: a field of organic hand-drawn CURVED strokes (comma-like marks) covering the wall evenly, with each stroke's SIZE breathing along an axis (or radially) — small -> swelling to a crest -> shrinking away, so repetition becomes a living tonal wave. Built on the proven winners: kin to the round-11 stroke field, kept FILLED (not sparse — R26 lesson), organic/curved (not hatched — R27), open enough to read (not mud). Monochrome; hand-made. The 16 span growth AXIS (vertical/horizontal/diagonal/radial), crest position & breadth, stroke density & size, stroke curl, and orientation variety.",
+  "allowedModules": ["growthField"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-02"
+}
