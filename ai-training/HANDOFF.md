@@ -56,7 +56,8 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## 📍 State of the sequence
-Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138, #142, #237, #238.**
+Done (build order no longer strictly CSV — the user picks): **#11, #16, #17, #19, #38, #46, #47,
+#51, #56, #85, #86, #88, #130, #138, #142, #237, #238, #274, #365, #138(again, circles), #915.**
 - Rounds **1–11** scored + reflection + learnings.
 - Round **12 (#88)** — UNRANKED, user said "not worthy" (grid-quantized flow). `reflection.md`
   records it as a dud.

@@ -1,0 +1,16 @@
+{
+  "round": 21,
+  "title": "Arcs, circle, and irregular bands (wobbly flowing bands)",
+  "rule": {
+    "lewittId": 915,
+    "instruction": "Arcs, circle, and irregular bands.",
+    "year": 1999,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "USER-PICKED, and built under the user's R20 note: the geometric shapes (clean circles/arcs) are rejected — 'replace with a wobbly or gradient-like feel.' So #915 is rendered WOBBLY: flowing IRREGULAR BANDS (the organic heart of the instruction) as curtain-like wavy lines, with the 'arcs' and 'circle' DISSOLVED into the wandering flow rather than drawn as figures. Generator = `sheets` (displaced grid columns interpolated into flowing wavy lines) — organic, no legible geometry. Monochrome black on white; hand-made wobble throughout; density kept open (paper-rip limit). The 16 span wobble amount (gentle -> wild), band count (sparse bold -> fine dense), wave smoothness (rows), and airiness (interpolation).",
+  "allowedModules": ["sheets"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

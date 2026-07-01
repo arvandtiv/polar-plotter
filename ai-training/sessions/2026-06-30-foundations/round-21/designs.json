@@ -1,0 +1,336 @@
+{
+  "round": 21,
+  "rule": {
+    "lewittId": 915,
+    "instruction": "Arcs, circle, and irregular bands.",
+    "year": 1999
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "gentle flowing bands",
+      "intent": "soft curtain-like wandering bands — the calm end (Klee #3 living line).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 22,
+            "rows": 20,
+            "xJitter": 8,
+            "yJitter": 5,
+            "interpSteps": 9,
+            "seed": 101
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "wilder wobble",
+      "intent": "stronger sideways wander — more agitated bands (Klee #3).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 22,
+            "rows": 20,
+            "xJitter": 16,
+            "yJitter": 8,
+            "interpSteps": 9,
+            "seed": 102
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "fine dense bands",
+      "intent": "many closely-flowing bands — a dense woven curtain (Klee #5, #6).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 40,
+            "rows": 24,
+            "xJitter": 8,
+            "yJitter": 5,
+            "interpSteps": 10,
+            "seed": 103
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "sparse bold bands",
+      "intent": "few wide wandering bands, open space between (Klee #7).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 12,
+            "rows": 16,
+            "xJitter": 12,
+            "yJitter": 6,
+            "interpSteps": 12,
+            "seed": 104
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "very wild",
+      "intent": "maximal wobble — turbulent flowing bands (Klee #3 extreme).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 20,
+            "rows": 20,
+            "xJitter": 22,
+            "yJitter": 12,
+            "interpSteps": 9,
+            "seed": 105
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "tall smooth waves",
+      "intent": "high row count -> long smooth vertical waves (Klee #3, flowing).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 20,
+            "rows": 30,
+            "xJitter": 10,
+            "yJitter": 4,
+            "interpSteps": 12,
+            "seed": 106
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "choppy waves",
+      "intent": "few rows -> angular, choppy band motion (Klee #3).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 26,
+            "rows": 12,
+            "xJitter": 10,
+            "yJitter": 10,
+            "interpSteps": 8,
+            "seed": 107
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "dense + wild",
+      "intent": "dense bands with strong wobble — energetic woven field (Klee #5, #3).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 34,
+            "rows": 22,
+            "xJitter": 16,
+            "yJitter": 8,
+            "interpSteps": 8,
+            "seed": 108
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "medium flow",
+      "intent": "balanced flowing curtain, medium everything (Klee #3).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 26,
+            "rows": 22,
+            "xJitter": 11,
+            "yJitter": 6,
+            "interpSteps": 10,
+            "seed": 109
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "wide airy bands",
+      "intent": "few source bands, heavy interpolation -> airy flowing ribbons (Klee #7).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 14,
+            "rows": 20,
+            "xJitter": 14,
+            "yJitter": 7,
+            "interpSteps": 14,
+            "seed": 110
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "fine gentle",
+      "intent": "fine dense bands, gentle hand -> a quiet silky curtain (Klee #5).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 36,
+            "rows": 24,
+            "xJitter": 6,
+            "yJitter": 4,
+            "interpSteps": 8,
+            "seed": 111
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "strong sway",
+      "intent": "big horizontal wander, little vertical -> bands sway side to side (Klee #8, directional).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 24,
+            "rows": 20,
+            "xJitter": 20,
+            "yJitter": 5,
+            "interpSteps": 10,
+            "seed": 112
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "vertical stretch waves",
+      "intent": "tall stretched waves, subtle vertical drift (Klee #3).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 22,
+            "rows": 28,
+            "xJitter": 9,
+            "yJitter": 3,
+            "interpSteps": 11,
+            "seed": 113
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "turbulent",
+      "intent": "dense, high-wobble, choppy -> the most turbulent flow (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 28,
+            "rows": 18,
+            "xJitter": 18,
+            "yJitter": 11,
+            "interpSteps": 8,
+            "seed": 114
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "sparse wild bold",
+      "intent": "few bold bands, wild wander, wide open ground (Klee #7, #3).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 10,
+            "rows": 14,
+            "xJitter": 16,
+            "yJitter": 8,
+            "interpSteps": 12,
+            "seed": 115
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "showcase flow",
+      "intent": "the rounded flowing curtain — dense, lively, coherent (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "sheets",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "cols": 26,
+            "rows": 22,
+            "xJitter": 12,
+            "yJitter": 6,
+            "interpSteps": 10,
+            "seed": 116
+          }
+        }
+      ]
+    }
+  ]
+}
