@@ -1,0 +1,358 @@
+{
+  "round": 20,
+  "rule": {
+    "lewittId": 138,
+    "instruction": "Circles and arcs from the midpoints of four sides. (ACG 59)",
+    "year": 1972
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "gentle moire",
+      "intent": "four full-ring families, light overlap — first bloom (Klee #6, interference).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 70,
+            "count": 10,
+            "maxR": 170,
+            "jitter": 3,
+            "jitterSeed": 901
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "denser rings",
+      "intent": "more rings per centre -> richer moire where families cross (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 70,
+            "count": 14,
+            "maxR": 180,
+            "jitter": 3,
+            "jitterSeed": 902
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "big overlap",
+      "intent": "large rings reaching across — heavy central interference (Klee #6).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 85,
+            "count": 12,
+            "maxR": 220,
+            "jitter": 3,
+            "jitterSeed": 903
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "tight blooms",
+      "intent": "compact full circles hugging each midpoint, little overlap (Klee #7, negative space).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 60,
+            "count": 12,
+            "maxR": 130,
+            "jitter": 3,
+            "jitterSeed": 904
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "organic spacing",
+      "intent": "irregular ring spacing — a hand-made, uneven moire (Klee #5, #3).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 70,
+            "count": 12,
+            "maxR": 180,
+            "jitter": 4,
+            "radiusJitter": 0.3,
+            "jitterSeed": 905
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "asymmetric centres",
+      "intent": "centres nudged off the tidy cross — moire loses its mirror (Klee #8).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 75,
+            "count": 12,
+            "maxR": 190,
+            "jitter": 4,
+            "centreJitter": 35,
+            "jitterSeed": 906
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "+corners, 8 families",
+      "intent": "rings from corners AND midpoints — eight overlapping families, dense moire (Klee #6).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "cornersMid",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 80,
+            "count": 8,
+            "maxR": 170,
+            "jitter": 3,
+            "jitterSeed": 907
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "energetic hand",
+      "intent": "full rings drawn with a strong wobble — living circles (Klee #3).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 70,
+            "count": 12,
+            "maxR": 180,
+            "jitter": 5,
+            "jitterSeed": 908
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "deep inset, central",
+      "intent": "centres pulled near the middle -> one big overlapping core (Klee #6, #1).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 100,
+            "count": 12,
+            "maxR": 200,
+            "jitter": 3,
+            "jitterSeed": 909
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "fine dense moire",
+      "intent": "many closely-nested rings -> a shimmering fine moire (Klee #5).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 70,
+            "count": 16,
+            "maxR": 175,
+            "jitter": 3,
+            "jitterSeed": 910
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "big rings, few",
+      "intent": "a few large concentric rings — bold sweeping loops (Klee #1, #7).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 80,
+            "count": 8,
+            "maxR": 210,
+            "jitter": 4,
+            "jitterSeed": 911
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "organic + asymmetric",
+      "intent": "irregular spacing AND off-cross centres — most hand-made moire (Klee #8, #3).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 72,
+            "count": 13,
+            "maxR": 185,
+            "jitter": 4,
+            "radiusJitter": 0.25,
+            "centreJitter": 25,
+            "jitterSeed": 912
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "+corners, dense",
+      "intent": "eight ring-families, dense — a woven vault of circles (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "cornersMid",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 85,
+            "count": 10,
+            "maxR": 180,
+            "jitter": 4,
+            "jitterSeed": 913
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "wild hand, irregular",
+      "intent": "strong wobble + irregular spacing — the most energetic moire (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 70,
+            "count": 12,
+            "maxR": 180,
+            "jitter": 5,
+            "radiusJitter": 0.4,
+            "jitterSeed": 914
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "shallow inset (circles + arcs)",
+      "intent": "centres near the edges -> a MIX of full circles and clipped arcs (faithful to 'circles AND arcs').",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 45,
+            "count": 12,
+            "maxR": 180,
+            "jitter": 3,
+            "jitterSeed": 915
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "showcase moire",
+      "intent": "dense overlapping rings, mild irregularity — the rounded moire (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "midpoints",
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "inset": 78,
+            "count": 14,
+            "maxR": 195,
+            "jitter": 4,
+            "radiusJitter": 0.2,
+            "jitterSeed": 916
+          }
+        }
+      ]
+    }
+  ]
+}

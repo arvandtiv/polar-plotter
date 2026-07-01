@@ -63,6 +63,7 @@ export const arcsModule: Module = {
       { key: "centreJitter", label: "Centre offset", type: "range", min: 0, max: 200, step: 1, unit: "mm", default: 0 },
       { key: "countJitter", label: "Count spread", type: "range", min: 0, max: 20, step: 1, default: 0 },
       { key: "radiusJitter", label: "Spacing irregularity", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "inset", label: "Centre inset", type: "range", min: 0, max: 150, step: 1, unit: "mm", default: 0 },
     ]},
     { title: "Frame", fields: [
       { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
@@ -75,6 +76,15 @@ export const arcsModule: Module = {
     const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
     const rect: Rect = { x0: cx - h, y0: cy - h, x1: cx + h, y1: cy + h };
     let centres = centresFor(String(params.centres ?? "corners"), h, cx, cy);
+    // Pull each centre `inset` mm toward the frame centre, so edge-midpoint circles close INSIDE
+    // the frame (full rings) instead of clipping to half-arcs — for the "full overlapping circles"
+    // reading of #138. Default 0 = unchanged (edge centres → arcs).
+    const inset = num(params, "inset", 0);
+    if (inset > 0)
+      centres = centres.map((c) => {
+        const dx = cx - c.x, dy = cy - c.y, d = Math.hypot(dx, dy);
+        return d < 1e-6 ? c : { x: c.x + (dx / d) * Math.min(inset, d), y: c.y + (dy / d) * Math.min(inset, d) };
+      });
     const count = Math.max(1, Math.round(num(params, "count", 12)));
     const maxR = num(params, "maxR", 300);
     const jitter = num(params, "jitter", 0);

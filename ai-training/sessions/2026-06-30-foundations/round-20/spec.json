@@ -1,0 +1,16 @@
+{
+  "round": 20,
+  "title": "Circles and arcs from the midpoints of four sides (full overlapping circles)",
+  "rule": {
+    "lewittId": 138,
+    "instruction": "Circles and arcs from the midpoints of four sides. (ACG 59)",
+    "year": 1972,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "USER-PICKED, revisiting #138 (first done as round 14 with the asymmetric-scatter take). Chosen NEW angle: FULL OVERLAPPING CIRCLES — whole rings (not just clipped arcs) blooming from the four side midpoints, overlapping into a moire/interference field. Uses `arcs` with a new `inset` lever pulling the midpoint centres inward so circles close inside the frame. Executed organic: hand-drawn (jitter) always, most designs add mild irregularity (radiusJitter / small centreJitter) so the moire reads hand-made not CAD. Monochrome; density capped so overlapping rings stay open, never a solid ink patch (paper-rip limit). The 16 span inset depth (how central/complete the rings), ring count & size (overlap amount), 4 vs 8 ring-families (+corners), and hand energy / irregularity.",
+  "allowedModules": ["arcs"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

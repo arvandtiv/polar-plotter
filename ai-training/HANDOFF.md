@@ -7,13 +7,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
-   choose it, do not walk the CSV in order. Two rounds are built & awaiting the user's ranking:
-   - **Round 19 (#365)** — four-part progressively-darker-gray square via different line methods
-     (user's pick; a genre change). `contact.png` ready → user fills `round-19/ranking.json`.
-   - **Round 18 (#274)** — irregular clustered located-figures knot. `round-18/ranking.json` still open.
-   When either is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
+   choose it, do not walk the CSV in order. Rounds built & awaiting the user's ranking:
+   - **Round 20 (#138 revisited)** — FULL OVERLAPPING CIRCLES / moire from the four midpoints (new
+     `arcs` `inset` lever). User's pick (a fresh angle vs round 14's arc-scatter). `round-20/ranking.json`.
+   - **Round 19 (#365)** — four-part darker-gray square via different line methods. `round-19/ranking.json`.
+   - **Round 18 (#274)** — irregular clustered located-figures knot. `round-18/ranking.json`.
+   When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
 2. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
-   (#274 ended the located-figures streak the user called a rut — keep genres varied now.)
+   Genre variety matters now (user called out the located-figures rut). Note: #138 was already round
+   14; round 20 is a deliberately different take (full circles, not arcs) at the user's request.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
@@ -88,7 +90,8 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
 - **`strokeField`** — many short strokes on a jittered grid (even coverage), oriented random /
   **flow-field** / aligned. The stroke-field genre; flow fields are the taste's favourite.
 - **`arcs`** — concentric arcs swung from centres (corners/midpoints/centre), clipped to frame.
-  Symmetry-breaking levers added R14: `centreJitter` / `countJitter` / `radiusJitter`.
+  Symmetry-breaking levers added R14: `centreJitter` / `countJitter` / `radiusJitter`. `inset` (R20)
+  pulls centres inward so edge-midpoint circles close into FULL rings (moire) instead of half-arcs.
 - **`ruledLines` `gradient`** (added R15) — a density ramp: packs verticals right + horizontals top
   (top-right accumulation). ⚠️ fine spacing + steep gradient saturates the edge → paper-rip; keep coarse.
 - **`locatedFigures`** (added R16, extended R17/R18) — figures placed + a hand-drawn location web
