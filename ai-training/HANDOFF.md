@@ -6,15 +6,13 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 16 (#237) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
-   FIGURE + hand-drawn LOCATION WEB, MULTIPLE figures (toward #274). New `locatedFigures` generator
-   (density-capped for the paper-rip limit). Ask them to open
-   `sessions/2026-06-30-foundations/round-16/contact.png` and fill `round-16/ranking.json`, then
-   **process it** (reflection.md, LEARNINGS, commit). Watch: do the corner-radiating webs read too
-   symmetric (star/asterisk) or organic? That steers #238/#274.
-2. Round **15 (#142) DONE**; colour rows **#154/#159/#160/#164 skipped**. All logged.
-3. Next after #237: **#238 "The location of a parallelogram"** then **#274 "The location of six
-   geometric figures"** — same `locatedFigures` genre. Review each with the user first.
+1. **Round 16 (#237) is DONE** — new `locatedFigures` genre works; winner #13 "almost perfect."
+   Rule learned: **the location WEB is the subject — draw it richly; avoid anything light/minimal.**
+   Dense lines to corners read structural, NOT too-symmetric. Processed.
+2. **Next: #238 "The location of a parallelogram"** — same `locatedFigures` genre. **Do NOT build
+   yet** — bring verbatim to the user and review together. Build DENSE per R16 (more figures, richer
+   webs, energetic hand, drop the minimal end). Then #274 "location of six geometric figures".
+3. Round **15 (#142) DONE**; colour rows **#154/#159/#160/#164 skipped**. All logged.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
@@ -50,7 +48,7 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## 📍 State of the sequence
-Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138, #142.**
+Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138, #142, #237.**
 - Rounds **1–11** scored + reflection + learnings.
 - Round **12 (#88)** — UNRANKED, user said "not worthy" (grid-quantized flow). `reflection.md`
   records it as a dud.
@@ -60,6 +58,8 @@ Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88
   very beautiful." Proves breaking arrangement-symmetry rescues a low-value genre. Processed.
 - Round **15 (#142)** — density ramp (new `ruledLines` gradient). "A success"; winner = coarse+strong
   (#10). Surfaced the PAPER-RIP media limit (over-inking tears paper). Partial ranking = keep/reject.
+- Round **16 (#237)** — located figures + web (new `locatedFigures`). Winner #13 "almost perfect."
+  The WEB is the subject — draw it richly; avoid light/minimal. Dense corner-webs read structural.
 - **Skipped (colour):** **#87** (= #56 + colour), **#95** (vertical not-straight lines "using four
   colours in all combinations"), **#154 / #159 / #160 / #164** (all "black outlined square with a
   **red** line", 1973).

@@ -175,6 +175,13 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   Partial ranking = keep/reject; rejects were the fine+steep ramps that **saturate the border**.
   Surfaced the **PAPER-RIP LIMIT** (see Standing constraints): over-inking a spot tears the paper —
   cap density, coarser at the packed end, never a solid patch. Coarse+strong beats fine+steep.
+- **Round 16 (2026-07-01)** — LeWitt #237 ("location of a trapezoid"; new `locatedFigures`
+  generator: figures + hand-drawn location web). New genre works — winner #13 "almost perfect."
+  Decisive axis = **web density: the LOCATION WEB is the subject, draw it richly.** Explicit reject
+  of "anything light" (#1/#11/#15/#4) — minimal figure-dominant layouts "look poor, don't represent
+  anything." Also: **dense construction lines to the CORNERS read as rich/structural, NOT too
+  symmetric** (I'd worried; wrong). For #238/#274: build dense, more figures, richer webs, energetic
+  hand; drop the minimal end. (Reinforces dense>sparse — here via web richness, not spacing.)
 - **Skipped #154, #159, #160, #164 (2026-07-01, colour)** — all "a black outlined square with a
   **red** line" pieces (1973). Distinguishing element is colour → auto-skipped per the standing rule.
   Next buildable row is #237.
