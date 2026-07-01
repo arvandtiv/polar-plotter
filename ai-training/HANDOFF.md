@@ -6,13 +6,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 17 (#238) is DONE** — a HIT. Best = #4 (bold diagonal), #15 (unified diagonal FLOW), #14
-   (dense woven). Rule learned: **directional COHERENCE beats scattered orientation** (flow>scatter
-   applied to figure angle); the "balanced" middle loses. Processed.
-2. **Next: #274 "The location of six geometric figures"** — last of the location genre. Could mix
-   several DIFFERENT shapes (add more figure types to `locatedFigures`?). **Do NOT build yet** —
-   review verbatim with the user. Build dense + a coherent/directional composition (no scattered-tame).
-3. Round **16 (#237) DONE**; colour rows **#154/#159/#160/#164 skipped**. All logged.
+1. **Round 18 (#274) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
+   IRREGULAR angular polygons, CLUSTERED with open space. `locatedFigures` extended (figure=irregular
+   + `cluster`). Ask them to open `sessions/2026-06-30-foundations/round-18/contact.png` and fill
+   `round-18/ranking.json`, then **process it** (reflection.md, LEARNINGS, commit).
+2. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
+3. Next after #274 (ends the location genre): scan the CSV from #289. Likely buildable soon: **#295**
+   "six white geometric figures (outlines) on a black wall" (needs white-on-black — check if doable),
+   **#305** "location of 100 random points" (DOABLE, on-taste scatter), **#365** "four grays" (tonal).
+   #289/#335/#340 involve colour/white-on-black — assess each. Review with the user first; don't pre-build.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
@@ -85,9 +87,10 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   Symmetry-breaking levers added R14: `centreJitter` / `countJitter` / `radiusJitter`.
 - **`ruledLines` `gradient`** (added R15) — a density ramp: packs verticals right + horizontals top
   (top-right accumulation). ⚠️ fine spacing + steep gradient saturates the edge → paper-rip; keep coarse.
-- **`locatedFigures`** (added R16) — irregular trapezoids placed asymmetrically + a hand-drawn
-  location web to the nearest architectural anchors. Density-capped (nearest-few anchors/verts) so
-  no corner saturates. For the #237/#238/#274 "location of a figure" genre.
+- **`locatedFigures`** (added R16, extended R17/R18) — figures placed + a hand-drawn location web
+  to the nearest architectural anchors; density-capped so no corner saturates. Figure types:
+  `trapezoid` (R16), `parallelogram` + `shear`/`rotMax` (R17), `irregular` angular polygon (R18);
+  `cluster` param (R18) groups figures into an asymmetric knot with open space. #237/#238/#274 genre.
 (The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.)
 
 ## ⚙️ How to run a round (mechanics)

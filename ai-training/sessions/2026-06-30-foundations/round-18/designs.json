@@ -1,0 +1,464 @@
+{
+  "round": 18,
+  "rule": {
+    "lewittId": 274,
+    "instruction": "The location of six geometric figures. (The specific locations are determined by the drafter.)",
+    "year": 1975
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "tight knot, rich web",
+      "intent": "six irregular figures in a tight knot, rich web to corners+mids (Klee #7, #6).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.7,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 2,
+            "sizeMin": 30,
+            "sizeMax": 70,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 601,
+            "jitterSeed": 611
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "looser cluster",
+      "intent": "a looser group — more breathing room inside the cluster (Klee #7).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.45,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 32,
+            "sizeMax": 76,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 602,
+            "jitterSeed": 612
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "tight knot, corner reach",
+      "intent": "knot with long lines crossing the open wall to the four corners (Klee #6, #7).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.75,
+            "anchors": "corners",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 28,
+            "sizeMax": 66,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 603,
+            "jitterSeed": 613
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "knot + centre web",
+      "intent": "figures anchored incl. centre — a hub inside the knot (Klee #6).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.65,
+            "anchors": "cornersMidCenter",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 2,
+            "sizeMin": 30,
+            "sizeMax": 72,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 604,
+            "jitterSeed": 614
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "energetic hand",
+      "intent": "clustered knot with strong wobble — living hand-built figures (Klee #3).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.6,
+            "anchors": "cornersMidCenter",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 2,
+            "sizeMin": 32,
+            "sizeMax": 76,
+            "jitter": 5,
+            "skew": 9,
+            "figSeed": 605,
+            "jitterSeed": 615
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "very tight knot",
+      "intent": "a dense compact knot, maximal open wall around it (Klee #7 extreme).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.85,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 2,
+            "sizeMin": 26,
+            "sizeMax": 58,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 606,
+            "jitterSeed": 616
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "bigger figures, medium cluster",
+      "intent": "larger irregular figures, medium grouping — bolder shapes (Klee #1, #7).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.5,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 45,
+            "sizeMax": 100,
+            "jitter": 4,
+            "skew": 8,
+            "figSeed": 607,
+            "jitterSeed": 617
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "seven, tight",
+      "intent": "seven figures in a knot — extra density (Klee #5).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 7,
+            "rotMax": 0.5,
+            "cluster": 0.7,
+            "anchors": "cornersMidCenter",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 28,
+            "sizeMax": 64,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 608,
+            "jitterSeed": 618
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "five bold, corner web",
+      "intent": "five larger figures, corner web across open ground (Klee #1, #6).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 5,
+            "rotMax": 0.5,
+            "cluster": 0.55,
+            "anchors": "corners",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 42,
+            "sizeMax": 96,
+            "jitter": 4,
+            "skew": 8,
+            "figSeed": 609,
+            "jitterSeed": 619
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "tight knot, dense reach",
+      "intent": "tight knot, very rich web (5 anchors) fanning out — dense radial reach (Klee #6).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.75,
+            "anchors": "cornersMidCenter",
+            "anchorsPerFigure": 5,
+            "vertsPerAnchor": 2,
+            "sizeMin": 28,
+            "sizeMax": 66,
+            "jitter": 5,
+            "skew": 7,
+            "figSeed": 610,
+            "jitterSeed": 620
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "wild hand + skew",
+      "intent": "knot with wild skew+hand, rich web — most hand-built (Klee #3).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.65,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 3,
+            "sizeMin": 30,
+            "sizeMax": 70,
+            "jitter": 5,
+            "skew": 13,
+            "figSeed": 621,
+            "jitterSeed": 631
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "medium knot, corners",
+      "intent": "medium knot, four-corner rich web — crossing diagonals over open wall (Klee #6).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.6,
+            "anchors": "corners",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 2,
+            "sizeMin": 30,
+            "sizeMax": 72,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 622,
+            "jitterSeed": 632
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "offset knot",
+      "intent": "knot shoved to one side, long asymmetric webs (Klee #8, #7).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.72,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 30,
+            "sizeMax": 70,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 623,
+            "jitterSeed": 633
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "dense woven knot",
+      "intent": "richest web (5 anchors x 3 verts), energetic — a dense woven knot (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.7,
+            "anchors": "cornersMidCenter",
+            "anchorsPerFigure": 5,
+            "vertsPerAnchor": 3,
+            "sizeMin": 30,
+            "sizeMax": 70,
+            "jitter": 5,
+            "skew": 8,
+            "figSeed": 624,
+            "jitterSeed": 634
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "loose, more open",
+      "intent": "a looser field, most negative space — figures whisper-spaced but still webbed (Klee #7).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.35,
+            "anchors": "cornersMid",
+            "anchorsPerFigure": 3,
+            "vertsPerAnchor": 2,
+            "sizeMin": 32,
+            "sizeMax": 78,
+            "jitter": 4,
+            "skew": 7,
+            "figSeed": 625,
+            "jitterSeed": 635
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "knot, big/small contrast",
+      "intent": "tight knot with strong size contrast (tiny + large) — scale tension (Klee #8 tension).",
+      "layers": [
+        {
+          "module": "locatedFigures",
+          "params": {
+            "figure": "irregular",
+            "size": 280,
+            "cx": 0,
+            "cy": 0,
+            "count": 6,
+            "rotMax": 0.5,
+            "cluster": 0.72,
+            "anchors": "cornersMidCenter",
+            "anchorsPerFigure": 4,
+            "vertsPerAnchor": 2,
+            "sizeMin": 24,
+            "sizeMax": 110,
+            "jitter": 5,
+            "skew": 8,
+            "figSeed": 626,
+            "jitterSeed": 636
+          }
+        }
+      ]
+    }
+  ]
+}

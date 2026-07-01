@@ -1,0 +1,16 @@
+{
+  "round": 18,
+  "title": "The location of six geometric figures (clustered irregular knot)",
+  "rule": {
+    "lewittId": 274,
+    "instruction": "The location of six geometric figures. (The specific locations are determined by the drafter.)",
+    "year": 1975,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Last of the located-figures genre (#237/#238), reviewed with the user. Chosen: figures = IRREGULAR ANGULAR POLYGONS (hand-built, asymmetric, not tidy regular polygons; 5-8 jittered vertices, strongly varied radii) via the new `locatedFigures` figure=irregular; composition = CLUSTERED WITH OPEN SPACE (the new `cluster` param groups the six figures into an asymmetric dense knot, leaving open wall around, Klee #7) with dense location webs reaching out across the negative space to the frame corners. Applying R16/R17: dense webs (the web is the subject), no light/minimal, no 'balanced' hedge — every design commits to a strong idea. Monochrome; every line not-straight; density capped for the paper-rip limit. The 16 span cluster tightness, knot position, figure size (incl. big/small contrast), web richness, anchor reach, and hand energy.",
+  "allowedModules": ["locatedFigures"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

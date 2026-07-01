@@ -53,6 +53,17 @@ function figureVerts(kind: string, fx: number, fy: number, w: number, hgt: numbe
   if (kind === "parallelogram") {
     const k = shear;
     base = [{ x: -bw - k * hy, y: -hy }, { x: bw - k * hy, y: -hy }, { x: bw + k * hy, y: hy }, { x: -bw + k * hy, y: hy }];
+  } else if (kind === "irregular") {
+    // a hand-built irregular angular polygon: 5–8 vertices at jittered angles and strongly varied
+    // radii, so no two edges match — asymmetric, not a tidy regular polygon.
+    const n = 5 + Math.floor(rng() * 4);
+    const angles: number[] = [];
+    for (let i = 0; i < n; i++) angles.push((2 * Math.PI * i) / n + (rng() * 2 - 1) * (Math.PI / n) * 0.85);
+    angles.sort((a, b) => a - b);
+    base = angles.map((a) => {
+      const r = bw * (0.45 + rng() * 0.8);
+      return { x: r * Math.cos(a), y: r * Math.sin(a) };
+    });
   } else {
     const tw = (w * topRatio) / 2;
     base = [{ x: -tw, y: -hy }, { x: tw, y: -hy }, { x: bw, y: hy }, { x: -bw, y: hy }];
@@ -75,6 +86,7 @@ export const locatedFiguresModule: Module = {
       { key: "figure", label: "Figure", type: "select", default: "trapezoid", options: [
         { value: "trapezoid", label: "Trapezoid" },
         { value: "parallelogram", label: "Parallelogram" },
+        { value: "irregular", label: "Irregular polygon" },
       ]},
       { key: "count", label: "Figures", type: "range", min: 1, max: 12, step: 1, default: 4 },
       { key: "sizeMin", label: "Min size", type: "range", min: 20, max: 150, step: 1, unit: "mm", default: 45 },
@@ -82,6 +94,7 @@ export const locatedFiguresModule: Module = {
       { key: "shear", label: "Shear (parallelogram)", type: "range", min: 0, max: 1.5, step: 0.05, default: 0.6 },
       { key: "rotMax", label: "Orientation spread", type: "range", min: 0, max: 1.2, step: 0.05, unit: "rad", default: 0.5 },
       { key: "skew", label: "Vertex skew", type: "range", min: 0, max: 30, step: 1, unit: "mm", default: 6 },
+      { key: "cluster", label: "Cluster", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
       { key: "figSeed", label: "Placement seed", type: "range", min: 0, max: 9999, step: 1, default: 5 },
     ]},
     { title: "Location web", fields: [
@@ -119,22 +132,33 @@ export const locatedFiguresModule: Module = {
     const rng = seededRandom(Math.round(num(params, "jitterSeed", 7))); // line wobble
     const margin = Math.min(h * 0.7, sizeMax * 0.6);
 
-    // place the figures asymmetrically within the frame
+    // placement region: full frame by default; `cluster` shrinks it and shoves it to an asymmetric
+    // off-centre spot, so the figures group into a dense knot with open wall around them.
+    const cluster = num(params, "cluster", 0);
+    let ccx = cx, ccy = cy, pr = h - margin;
+    if (cluster > 0) {
+      const oang = frng() * 2 * Math.PI, offR = (h - margin) * 0.55 * cluster;
+      ccx = cx + Math.cos(oang) * offR;
+      ccy = cy + Math.sin(oang) * offR;
+      pr = (h - margin) * (1 - 0.55 * cluster);
+    }
+
+    // place the figures asymmetrically within the placement region
     const figs: { c: Pt; verts: Pt[] }[] = [];
     for (let i = 0; i < count; i++) {
       const w = sizeMin + frng() * (sizeMax - sizeMin);
       const hgt = (sizeMin + frng() * (sizeMax - sizeMin)) * 0.75;
       const topRatio = 0.35 + frng() * 0.55;
       const ang = (frng() * 2 - 1) * rotMax;
-      const fx = cx - h + margin + frng() * (2 * (h - margin));
-      const fy = cy - h + margin + frng() * (2 * (h - margin));
+      const fx = ccx - pr + frng() * (2 * pr);
+      const fy = ccy - pr + frng() * (2 * pr);
       figs.push({ c: { x: fx, y: fy }, verts: figureVerts(kind, fx, fy, w, hgt, topRatio, ang, shear, skew, frng) });
     }
 
     const paths: Path[] = [];
     // figure outlines (each edge hand-drawn)
     for (const f of figs)
-      for (let k = 0; k < 4; k++) paths.push(joinLine(f.verts[k], f.verts[(k + 1) % 4], jitter, rng));
+      for (let k = 0; k < f.verts.length; k++) paths.push(joinLine(f.verts[k], f.verts[(k + 1) % f.verts.length], jitter, rng));
     // location web: nearest anchors → nearest vertices, capped so no anchor saturates
     const d2 = (a: Pt, b: Pt) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
     for (const f of figs) {
