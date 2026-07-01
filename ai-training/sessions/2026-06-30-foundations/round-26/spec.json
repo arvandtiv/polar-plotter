@@ -1,0 +1,16 @@
+{
+  "round": 26,
+  "title": "Whirls and twirls",
+  "rule": {
+    "lewittId": 1152,
+    "instruction": "Whirls and twirls. (Met)",
+    "year": 2005,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Claude-proposed pick, confirmed with the user. Bold organic spiralling gestures via the new `whirls` generator: hand-drawn log-spiral WHIRLS of varied size and spin direction + small TWIRL flourishes, composed asymmetrically with open negative space. Leans into the energetic directional-SWIRL that has been winning (R25 currents, R17 diagonal energy, R11 flow) — dynamic and hand-made, NOT a mechanical spirograph and NOT a dense texture. Monochrome black on white. The 16 span whirl count (one giant -> busy field), size (bold -> small twirls), spin mix, squash, and hand energy — kept open/light.",
+  "allowedModules": ["whirls"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-02"
+}

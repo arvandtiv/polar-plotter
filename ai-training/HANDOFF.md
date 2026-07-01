@@ -8,11 +8,11 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 25 (#852 retry)** — flowing STREAMLINES version (curvyDivide + `swirl` flow field).
-     Awaiting ranking → `round-25/ranking.json`. (Round 24, flat straight grain, was rejected: "all
-     look similar, not much worth" — replaced flat hatching with directional flow + real variety.)
+   - **Round 26 (#1152 "Whirls and twirls")** — Claude-proposed pick, user-confirmed. New `whirls`
+     generator (bold organic log-spiral whirls + twirls, open). Awaiting ranking → `round-26/ranking.json`.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
+   NOTE: R25 (#852 retry, flowing streamlines) was a SUCCESS ("well done") — processed.
 2. **Round 23 (#1185) LANDED** — continuous "shade" scribble; keep it LIGHT/loopy (dense = "too much").
    The recurring lesson across the session: **readable FORM/gesture + tonal volume via a CONTINUOUS
    hand line, kept OPEN/light with negative space** — never dense texture/wallpaper. (`sheets` BANNED,
@@ -108,6 +108,9 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   line, each side filled with FLOWING STREAMLINES (swirled flow field) in a contrasting direction.
   R24's straight-grain version was rejected as flat/samey; R25 uses flow + big variety. Monochrome
   take on divide-by-a-line colour pieces (#852).
+- **`whirls`** (added R26) — bold organic log-spiral whirls of varied size/spin + small twirl
+  flourishes, asymmetric with open space. Hand-drawn, energetic swirl (not a mechanical spirograph).
+  For #1152 "Whirls and twirls" / swirl-flow pieces.
 (The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.
  ⛔ `sheets` is BANNED, R21.)
 

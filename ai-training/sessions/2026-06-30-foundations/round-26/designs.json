@@ -1,0 +1,368 @@
+{
+  "round": 26,
+  "rule": {
+    "lewittId": 1152,
+    "instruction": "Whirls and twirls. (Met)",
+    "year": 2005
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "two bold whirls, open",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 2,
+            "maxR": 115,
+            "turns": 3.5,
+            "squash": 0.9,
+            "twirls": 2,
+            "jitter": 2,
+            "seed": 601
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "three medium whirls",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 3,
+            "maxR": 95,
+            "turns": 3,
+            "squash": 0.85,
+            "twirls": 3,
+            "jitter": 2,
+            "seed": 602
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "whirls + twirls field",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 5,
+            "maxR": 72,
+            "turns": 2.6,
+            "squash": 0.85,
+            "twirls": 5,
+            "jitter": 2,
+            "seed": 603
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "one giant whirl",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 1,
+            "maxR": 150,
+            "turns": 4.5,
+            "squash": 0.9,
+            "twirls": 4,
+            "jitter": 2,
+            "seed": 604
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "energetic hand",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 3,
+            "maxR": 95,
+            "turns": 3,
+            "squash": 0.85,
+            "twirls": 3,
+            "jitter": 4,
+            "seed": 605
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "many small twirls",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 2,
+            "maxR": 85,
+            "turns": 3,
+            "squash": 0.85,
+            "twirls": 11,
+            "jitter": 2,
+            "seed": 606
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "tight coils",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 4,
+            "maxR": 78,
+            "turns": 4,
+            "squash": 0.9,
+            "twirls": 2,
+            "jitter": 2,
+            "seed": 607
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "loose open whirls",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 3,
+            "maxR": 105,
+            "turns": 2.2,
+            "squash": 0.85,
+            "twirls": 2,
+            "jitter": 3,
+            "seed": 608
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "big + small mix",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 4,
+            "maxR": 125,
+            "turns": 3.4,
+            "squash": 0.85,
+            "twirls": 4,
+            "jitter": 2,
+            "seed": 609
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "sparse two big",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 2,
+            "maxR": 130,
+            "turns": 4,
+            "squash": 0.9,
+            "twirls": 1,
+            "jitter": 2,
+            "seed": 610
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "busy whirl field",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 7,
+            "maxR": 66,
+            "turns": 2.6,
+            "squash": 0.85,
+            "twirls": 5,
+            "jitter": 2,
+            "seed": 611
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "squashed ovals",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 3,
+            "maxR": 98,
+            "turns": 3,
+            "squash": 0.6,
+            "twirls": 3,
+            "jitter": 2,
+            "seed": 612
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "calligraphic twirls",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 2,
+            "maxR": 92,
+            "turns": 3.5,
+            "squash": 0.85,
+            "twirls": 8,
+            "jitter": 3,
+            "seed": 613
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "showcase",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 3,
+            "maxR": 102,
+            "turns": 3.2,
+            "squash": 0.85,
+            "twirls": 4,
+            "jitter": 2.5,
+            "seed": 614
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "wild energetic",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 4,
+            "maxR": 100,
+            "turns": 3.5,
+            "squash": 0.85,
+            "twirls": 5,
+            "jitter": 5,
+            "seed": 615
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "one bold + open twirls",
+      "intent": "bold organic whirls + twirl flourishes, asymmetric with open space (Klee #3 living line, energetic swirl).",
+      "layers": [
+        {
+          "module": "whirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "count": 1,
+            "maxR": 150,
+            "turns": 5,
+            "squash": 0.9,
+            "twirls": 3,
+            "jitter": 2,
+            "seed": 616
+          }
+        }
+      ]
+    }
+  ]
+}
