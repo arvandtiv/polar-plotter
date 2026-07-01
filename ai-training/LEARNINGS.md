@@ -29,6 +29,11 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
   **(b) GRADIENT** — tonal density ramps (round-15 #142, round-19 grays). Choose an organic/tonal
   *subject*; don't render a clean closed figure and hope jitter saves it. (This is why #138-as-scatter
   won in R14 but #138-as-circles lost in R20 — same instruction, shape legibility was the difference.)
+  - **"Wobbly" means OPEN + loose, not a dense weave (R21).** After R20, "wobbly" via a dense fine-line
+    fabric (`sheets`) was *also* rejected. The organic hits were sparse/open with breathing room —
+    round-11 stroke FLOW, round-14 arc SCATTER. So wobbly/organic = **loose individual wandering
+    lines/strokes with directional flow and NEGATIVE SPACE**, never a wall-to-wall mechanical texture.
+    Keep organic work sparse and expressive; dense fine-line fill = mud + paper-rip + reads mechanical.
 - **⚠️ Jitter roughens TEXTURE, not STRUCTURE (R13).** A globally symmetric *construction* (arcs
   from four corners/midpoints, radial families, mirror-across-axes layouts) still reads
   "symmetric / geometric" no matter how hand-drawn the individual strokes are — the user rejected
@@ -50,6 +55,8 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
 - Every round is governed by a **Sol LeWitt instruction** as its rule (`lewitt_instructions.csv`).
 - Every execution takes a **Klee stance** (`klee_principles.md`) — the method behind the rule.
 - **No Truchet** / truchet-style tiling — excluded by user preference.
+- **⛔ BANNED tool: `sheets`** (R21) — displaced-column flowing curtains. Rejected outright ("avoid
+  using this tool"). Don't use it.
 - **⚠️🩸 PAPER-RIP LIMIT (physical, R15).** If the pen lays too many lines into ~the same tiny area,
   the paper gets wet and **rips**. So never let a field become a near-solid black patch — ESPECIALLY
   at edges/corners where density ramps or radial families concentrate. Cap density so adjacent lines
