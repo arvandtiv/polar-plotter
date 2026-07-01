@@ -19,6 +19,16 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
 - This **subsumes** earlier findings (fine/dense = complexity; hand-drawn = living line; genre
   fatigue = wanted richer). When a LeWitt instruction is inherently geometric/symmetric, execute it
   **through the organic lens** (hand-drawn, irregular, asymmetric) — a clean rendering is a known dud.
+- **⛔ Clean geometric SHAPES are rejected — go WOBBLY or GRADIENT (R20, explicit).** The user
+  rejected the full-circle/moire take on #138 outright: *"the geometric shapes are not good at all,
+  exclude such relations and replace with wobbly or gradient-like feel."* It is not only symmetry
+  (R13) — the **legibility of the geometric form itself** (a circle, a tidy arc, a moire lattice)
+  reads cold/CAD, and per-line jitter does NOT rescue it. On ANY arc/circle/figure instruction,
+  **dissolve the shape** into either: **(a) WOBBLY** — organic wandering lines that never resolve
+  into a nameable shape (round-11 stroke-field flow, round-14 arc *scatter* — both hits); or
+  **(b) GRADIENT** — tonal density ramps (round-15 #142, round-19 grays). Choose an organic/tonal
+  *subject*; don't render a clean closed figure and hope jitter saves it. (This is why #138-as-scatter
+  won in R14 but #138-as-circles lost in R20 — same instruction, shape legibility was the difference.)
 - **⚠️ Jitter roughens TEXTURE, not STRUCTURE (R13).** A globally symmetric *construction* (arcs
   from four corners/midpoints, radial families, mirror-across-axes layouts) still reads
   "symmetric / geometric" no matter how hand-drawn the individual strokes are — the user rejected
@@ -182,6 +192,11 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   anything." Also: **dense construction lines to the CORNERS read as rich/structural, NOT too
   symmetric** (I'd worried; wrong). For #238/#274: build dense, more figures, richer webs, energetic
   hand; drop the minimal end. (Reinforces dense>sparse — here via web richness, not spacing.)
+- **Round 20 (2026-07-01)** — LeWitt #138 revisited as FULL OVERLAPPING CIRCLES / moire (new `arcs`
+  `inset` lever). **REJECTED outright** ("very poor, avoid completely; geometric shapes are not good;
+  replace with wobbly or gradient feel"). Big lesson (promoted up top): clean geometric SHAPES read
+  cold even hand-jittered — dissolve into wobbly organic wandering OR tonal gradient. Explains R14
+  (arc scatter) win vs R20 (circles) loss on the same instruction. (Chronology note: built after R19.)
 - **Round 17 (2026-07-01)** — LeWitt #238 ("location of a parallelogram"; `locatedFigures` +
   parallelogram/shear/rotMax). **A HIT.** Best = #4 (bold diagonal shear + corner web), #15
   (UNIFIED diagonal flow — figures all lean one way → a current), #14 (dense woven). **Excluded the

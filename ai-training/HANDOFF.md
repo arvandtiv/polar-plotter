@@ -7,15 +7,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
-   choose it, do not walk the CSV in order. Rounds built & awaiting the user's ranking:
-   - **Round 20 (#138 revisited)** — FULL OVERLAPPING CIRCLES / moire from the four midpoints (new
-     `arcs` `inset` lever). User's pick (a fresh angle vs round 14's arc-scatter). `round-20/ranking.json`.
-   - **Round 19 (#365)** — four-part darker-gray square via different line methods. `round-19/ranking.json`.
-   - **Round 18 (#274)** — irregular clustered located-figures knot. `round-18/ranking.json`.
+   choose it, do not walk the CSV in order.
+   - **Round 21 (#915 "Arcs, circle, and irregular bands")** — built at the user's request, WOBBLY
+     take per their R20 note. Awaiting ranking → `round-21/ranking.json`.
+   - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
-2. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
-   Genre variety matters now (user called out the located-figures rut). Note: #138 was already round
-   14; round 20 is a deliberately different take (full circles, not arcs) at the user's request.
+2. **Round 20 (#138 full circles) REJECTED** ("geometric shapes not good; go wobbly/gradient"). Big
+   lesson at top of LEARNINGS: clean geometric SHAPES read cold even jittered — dissolve into wobbly
+   organic wandering OR tonal gradient. Applied directly to #915.
+3. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
