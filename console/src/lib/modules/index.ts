@@ -10,6 +10,7 @@ import "./strokeField";
 import "./arcs";
 import "./locatedFigures";
 import "./scribble";
+import "./curvyDivide";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

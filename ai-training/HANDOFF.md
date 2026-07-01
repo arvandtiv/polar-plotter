@@ -8,16 +8,14 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 23 (#1185 retry)** — new `scribble` "shade" mode: ONE continuous coiling line shading a
-     volumetric inverted-curve ARCH form (readable object + tonal gradient + negative space).
-     Awaiting ranking → `round-23/ranking.json`. This is the 4th attempt at an organic form — watch closely.
+   - **Round 24 (#852)** — monochrome adaptation of a COLOUR piece (curvy corner-to-corner divide +
+     contrasting directional grain, new `curvyDivide` generator). Awaiting ranking → `round-24/ranking.json`.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
-2. **THREE organic misses (R20/R21/R22)** — the pattern was TEXTURE WITHOUT FORM. R20 clean circles
-   (geometric), R21 `sheets` fine-line fabric (**`sheets` BANNED**), R22 scattered scribble-marks
-   ("not a scribble, nothing interesting"). The fix (top of LEARNINGS): a **readable FORM/gesture +
-   tonal GRADIENT (volume), made by a CONTINUOUS hand line, with negative space** — an object, not
-   wallpaper. R23 applies this. If R23 also misses, ASK the user for a reference before a 5th try.
+2. **Round 23 (#1185) LANDED** — continuous "shade" scribble; keep it LIGHT/loopy (dense = "too much").
+   The recurring lesson across the session: **readable FORM/gesture + tonal volume via a CONTINUOUS
+   hand line, kept OPEN/light with negative space** — never dense texture/wallpaper. (`sheets` BANNED,
+   clean geometric shapes rejected.)
 3. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
@@ -102,9 +100,12 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   to the nearest architectural anchors; density-capped so no corner saturates. Figure types:
   `trapezoid` (R16), `parallelogram` + `shear`/`rotMax` (R17), `irregular` angular polygon (R18);
   `cluster` param (R18) groups figures into an asymmetric knot with open space. #237/#238/#274 genre.
-- **`scribble`** (added R22) — hand-made looping random-walk marks placed by rejection sampling
-  against a tonal field (`invertedCurveH` / band / vertical gradient), so a soft tone/form emerges
-  from denser scribbling with open negative space. Organic, never mechanical. For the Scribbles genre.
+- **`scribble`** (added R22, extended R23) — mode `marks` (scattered — REJECTED look) and mode
+  `shade` (VALIDATED R23): ONE continuous coiling line shading a form (`invertedCurveH` arch) with
+  tonal volume. Keep `shade` LIGHT — low `passes`/`coils`, big `loopR`, thin `thick` (dense = "too much").
+- **`curvyDivide`** (added R24) — a wall split corner-to-corner by a bold hand-drawn curvy line, each
+  side filled with open hand-drawn grain at a contrasting angle. Monochrome take on divide-by-a-line
+  colour pieces (#852). Keep spacing generous (open).
 (The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.
  ⛔ `sheets` is BANNED, R21.)
 

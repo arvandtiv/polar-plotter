@@ -1,0 +1,16 @@
+{
+  "round": 24,
+  "title": "Wall divided by a curvy line (monochrome, directional grain)",
+  "rule": {
+    "lewittId": 852,
+    "instruction": "A wall divided from the upper left to the lower right by a curvy line; left: glossy yellow; right: glossy purple.",
+    "year": 1998,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "USER-PICKED. Original is a COLOUR piece (glossy yellow / glossy purple) — flagged with the user, who agreed to a MONOCHROME adaptation: keep the structure (a curvy line dividing the wall upper-left to lower-right into two regions), drop the colour, and distinguish the two sides by DIRECTIONAL GRAIN (contrasting line angles) instead. New `curvyDivide` generator: a bold hand-drawn curvy divide + each side filled with open, hand-drawn grain at a contrasting angle; the curvy seam is the hero. Kept LIGHT/OPEN per the session's density lesson (generous spacing, hand wobble, negative feel) — not a dense weave, not mechanical. Monochrome black on white. The 16 span curve wildness (curviness/waves), grain-angle contrast (perpendicular / horizontal-vs-vertical / subtle), and openness (spacing).",
+  "allowedModules": ["curvyDivide"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}
