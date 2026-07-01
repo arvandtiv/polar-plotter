@@ -59,6 +59,11 @@ export const arcsModule: Module = {
       { key: "jitter", label: "Jitter", type: "range", min: 0, max: 16, step: 0.5, unit: "mm", default: 0 },
       { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },
     ]},
+    { title: "Break symmetry", fields: [
+      { key: "centreJitter", label: "Centre offset", type: "range", min: 0, max: 200, step: 1, unit: "mm", default: 0 },
+      { key: "countJitter", label: "Count spread", type: "range", min: 0, max: 20, step: 1, default: 0 },
+      { key: "radiusJitter", label: "Spacing irregularity", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+    ]},
     { title: "Frame", fields: [
       { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
       { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
@@ -69,15 +74,37 @@ export const arcsModule: Module = {
     const size = num(params, "size", 300), h = size / 2;
     const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
     const rect: Rect = { x0: cx - h, y0: cy - h, x1: cx + h, y1: cy + h };
-    const centres = centresFor(String(params.centres ?? "corners"), h, cx, cy);
+    let centres = centresFor(String(params.centres ?? "corners"), h, cx, cy);
     const count = Math.max(1, Math.round(num(params, "count", 12)));
     const maxR = num(params, "maxR", 300);
     const jitter = num(params, "jitter", 0);
-    const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
+    const seed = Math.round(num(params, "jitterSeed", 7));
+    const rng = seededRandom(seed);
+    // Symmetry-breaking (arrangement, not texture): own RNG stream, only touched when a lever is
+    // >0 so defaults stay byte-identical. Offsets the tidy centres off-axis (asymmetric placement —
+    // some pull inward -> true circles, edge ones stay arcs), gives each centre an uneven number of
+    // arcs, and makes the concentric spacing irregular.
+    const centreJitter = num(params, "centreJitter", 0);
+    const countJitter = num(params, "countJitter", 0);
+    const radiusJitter = num(params, "radiusJitter", 0);
+    const arng = seededRandom(seed + 1000);
+    if (centreJitter > 0)
+      centres = centres.map((c) => ({
+        x: c.x + (arng() * 2 - 1) * centreJitter,
+        y: c.y + (arng() * 2 - 1) * centreJitter,
+      }));
     const paths: Path[] = [];
-    for (const c of centres)
-      for (let k = 1; k <= count; k++)
-        paths.push(...arcRuns(c, (k * maxR) / count, rect, jitter, rng));
+    for (const c of centres) {
+      const n = countJitter > 0
+        ? Math.max(1, Math.round(count + (arng() * 2 - 1) * countJitter))
+        : count;
+      for (let k = 1; k <= n; k++) {
+        const frac = radiusJitter > 0
+          ? Math.min(1, Math.max(0.02, k / n + ((arng() * 2 - 1) * radiusJitter) / n))
+          : k / n;
+        paths.push(...arcRuns(c, frac * maxR, rect, jitter, rng));
+      }
+    }
     return { widthMm: size, heightMm: size, paths, meta: { title: "Arcs" } };
   },
 };

@@ -1,0 +1,16 @@
+{
+  "round": 14,
+  "title": "Circles and arcs from the midpoints of four sides",
+  "rule": {
+    "lewittId": 138,
+    "instruction": "Circles and arcs from the midpoints of four sides. (ACG 59)",
+    "year": 1972,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful base (circles + arcs swung from the four SIDE MIDPOINTS, per the instruction) executed through the organic lens — but this round deliberately attacks the ROUND-13 lesson: jitter roughens texture, not structure, so hand-drawn wobble alone left #130's arcs 'still showing symmetric'. Here the arrangement's symmetry is broken via the new arcs levers: centreJitter (midpoints wander off the tidy cross; some pull inward -> true CIRCLES, edge ones stay ARCS), countJitter (each family gets an uneven number), radiusJitter (irregular, non-even concentric spacing). Monochrome black on white. Never crisp (always some hand). The 16 span offset strength, family count (4 midpoints vs +corners), reach (near vs full sweep), spacing irregularity, and hand energy.",
+  "allowedModules": ["arcs"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}
