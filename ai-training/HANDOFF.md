@@ -8,10 +8,10 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 28 (Klee #15 "Growth and decrease")** — FIRST Klee-sourced round (concept from Klee, not
-     a LeWitt row — user asked to "move to something new from Paul Klee"). New `growthField`: organic
-     curved strokes whose SIZE breathes (swell→shrink) into a tonal wave. Awaiting ranking →
-     `round-28/ranking.json`.
+   - **Round 29 (Klee #15 "Growth and decrease", REDO)** — R28 (a `growthField` comma/mark field) was
+     rejected "not worthy". Redone as a BREATHING FLOW field on the winning `flowWhirls` engine
+     (currents swell to a crest, thin at edges; strong swirl). Awaiting ranking → `round-29/ranking.json`.
+     ⚠️ Lesson (top of LEARNINGS): mark/stroke fields are OUT; use the flowing CURRENT field for everything.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
    NOTE: R27 (#1152 vortex flow) was a SUCCESS — maximise organic swirl. The reconciled organic

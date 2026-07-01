@@ -1,0 +1,432 @@
+{
+  "round": 29,
+  "rule": {
+    "kleePrinciple": 15,
+    "concept": "Growth and decrease (Wachsen und Abnehmen) rendered as a breathing flow-current field",
+    "source": "klee_principles.md #15"
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "vertical breath",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.85,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "horizontal breath",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.85,
+            "growthAxis": 0,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "diagonal breath",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.85,
+            "growthAxis": 45,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "crest low (rising swell)",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.85,
+            "growthAxis": 90,
+            "growthPeak": 0.72,
+            "growthWidth": 0.26
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "narrow crest",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 150,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 5,
+            "growth": 0.9,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.16
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "broad gentle breath",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.6,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.55
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "strong swirl, breathing",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 165,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 5,
+            "growth": 0.85,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "few big whirls, breathe",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 140,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 170,
+            "jitter": 1.5,
+            "vortices": 2,
+            "growth": 0.85,
+            "growthAxis": 0,
+            "growthPeak": 0.5,
+            "growthWidth": 0.32
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "many twirls, breathe",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 90,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 8,
+            "growth": 0.85,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "diagonal rising crest",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 150,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 5,
+            "growth": 0.9,
+            "growthAxis": 135,
+            "growthPeak": 0.62,
+            "growthWidth": 0.24
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "open, long sweeping",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 16,
+            "reach": 230,
+            "jitter": 1.5,
+            "vortices": 3,
+            "growth": 0.8,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.34
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "crest high (top swell)",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 150,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.9,
+            "growthAxis": 90,
+            "growthPeak": 0.28,
+            "growthWidth": 0.22
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "strong swirl narrow crest",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 160,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 6,
+            "growth": 0.9,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.18
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "showcase",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 150,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 5,
+            "growth": 0.85,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "radial-ish (horizontal wide)",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 150,
+            "jitter": 1.5,
+            "vortices": 4,
+            "growth": 0.7,
+            "growthAxis": 0,
+            "growthPeak": 0.5,
+            "growthWidth": 0.4
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "one dominant, breathe",
+      "intent": "Klee growth&decrease as a BREATHING flow-current field: flowing swirling streamlines swell to a crest then thin/shorten at the edges (Klee #15 + #3 flowing line).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "strength": 175,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 180,
+            "jitter": 1.5,
+            "vortices": 1,
+            "growth": 0.85,
+            "growthAxis": 90,
+            "growthPeak": 0.5,
+            "growthWidth": 0.3
+          }
+        }
+      ]
+    }
+  ]
+}

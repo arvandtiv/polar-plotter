@@ -1,0 +1,15 @@
+{
+  "round": 29,
+  "title": "Growth and decrease (Klee #15) — redo as a breathing flow field",
+  "rule": {
+    "source": "Paul Klee — klee_principles.md #15",
+    "kleePrinciple": 15,
+    "concept": "Wachsen und Abnehmen (growth and decrease): a breathing progression that swells then shrinks."
+  },
+  "restrictions": "REDO of round 28 (a comma/mark field), rejected 'not worthy'. Lesson: mark/stroke fields are out; the reliable winner is the flowing STREAMLINE CURRENT field (R25/R27). So growth-and-decrease is rendered as a BREATHING flow field on the winning `flowWhirls` engine: full-field swirling streamline currents whose length & density swell to a crest band then thin/shorten toward the edges — the concept modulates the winning look. Strong organic swirl retained (R27 winner). Monochrome; open enough to read (not mud), substantial at the crest (not sparse). The 16 span the breathe axis (vertical/horizontal/diagonal), crest position (mid/low/high) & breadth (narrow/broad), swirl strength & vortex count, and line length.",
+  "allowedModules": ["flowWhirls"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-02"
+}

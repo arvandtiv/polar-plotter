@@ -40,6 +40,11 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     composition must have SUBSTANCE and FILL the wall with movement. The reliable winner is a **full
     field of flowing swirling currents (R25/R11)** — reuse that engine for swirl/flow instructions;
     do not scatter sparse gestures on empty white.
+  - **⛔ Mark/stroke FIELDS are now "not worthy" — use the flowing CURRENT field instead (R28).**
+    A field of separate small marks (R28 commas; R22 scattered) is rejected; the early strokeField
+    hit (R11) no longer represents the taste. The reliable winner is a **full-field of continuous
+    flowing STREAMLINE currents** (R25/R27) with organic swirl. Render any new concept (even "growth
+    and decrease") as a MODULATION of that flow field — do not build separate-mark generators.
   - **✅ Full-field vortex FLOW works; MAXIMISE swirl (R27).** #1152 rebuilt as a full-field flowing
     vortex field (`flowWhirls`) = "a successful round." Discriminator: strong organic SWIRL/deflection
     wins; low-swirl near-parallel flow "looks like hatched lines" and bores. Bias swirl strength up,

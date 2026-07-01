@@ -29,6 +29,12 @@ export const flowWhirlsModule: Module = {
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 8, step: 0.5, unit: "mm", default: 1.5 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },
     ]},
+    { title: "Growth & decrease (breathing)", fields: [
+      { key: "growth", label: "Breathe amount", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "growthAxis", label: "Breathe axis", type: "range", min: 0, max: 180, step: 5, unit: "deg", default: 90 },
+      { key: "growthPeak", label: "Crest position", type: "range", min: 0, max: 1, step: 0.05, default: 0.5 },
+      { key: "growthWidth", label: "Crest breadth", type: "range", min: 0.1, max: 0.8, step: 0.05, default: 0.32 },
+    ]},
     { title: "Frame", fields: [
       { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
       { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
@@ -67,15 +73,28 @@ export const flowWhirlsModule: Module = {
     const inFrame = (x: number, y: number) => x >= cx - h && x <= cx + h && y >= cy - h && y <= cy + h;
 
     const ds = 4, half = Math.max(6, Math.round(reach / 2 / ds));  // each streamline ≈ `reach` mm total
+    // growth & decrease (Klee #15): a breathing envelope along an axis — streamlines are full & dense
+    // at the crest and shorter & sparser toward the edges, so the whole flow swells then decreases.
+    const growth = num(params, "growth", 0);
+    const gAxis = (num(params, "growthAxis", 90) * Math.PI) / 180, gax = Math.cos(gAxis), gay = Math.sin(gAxis);
+    const gPeak = num(params, "growthPeak", 0.5), gWidth = num(params, "growthWidth", 0.32);
+    const envAt = (x: number, y: number) => {
+      if (growth <= 0) return 1;
+      const u = ((x - (cx - h)) * gax + (y - (cy - h)) * gay) / (2 * h);
+      const e = Math.exp(-0.5 * ((u - gPeak) / gWidth) ** 2);
+      return 1 - growth + growth * e;                 // 1 (no breathe) → down to (1-growth) at edges
+    };
     const paths: Path[] = [];
     for (let gx = cx - h; gx <= cx + h; gx += spacing)
       for (let gy = cy - h; gy <= cy + h; gy += spacing) {
-        if (rng() > 0.9) continue;                    // small irregularity so seeds don't grid up
+        const e = envAt(gx, gy);
+        if (rng() > 0.9 * e) continue;   // (growth=0 → 0.9, unchanged); sparser where the flow decreases
+        const hi = Math.max(4, Math.round(half * e));             // shorter streamlines toward edges
         const seg: Pt[] = [];
         for (const dir of [1, -1]) {
           let x = gx, y = gy;
           const pts: Pt[] = [];
-          for (let i = 0; i < half; i++) {
+          for (let i = 0; i < hi; i++) {
             const a = vecAngle(x, y);
             x += dir * Math.cos(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
             y += dir * Math.sin(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
