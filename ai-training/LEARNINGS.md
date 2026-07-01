@@ -19,6 +19,13 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
 - This **subsumes** earlier findings (fine/dense = complexity; hand-drawn = living line; genre
   fatigue = wanted richer). When a LeWitt instruction is inherently geometric/symmetric, execute it
   **through the organic lens** (hand-drawn, irregular, asymmetric) — a clean rendering is a known dud.
+- **⚠️ Jitter roughens TEXTURE, not STRUCTURE (R13).** A globally symmetric *construction* (arcs
+  from four corners/midpoints, radial families, mirror-across-axes layouts) still reads
+  "symmetric / geometric" no matter how hand-drawn the individual strokes are — the user rejected
+  grid+arcs (#130) as "lines still showing symmetric… not that valuable." To satisfy the organic
+  lens you must break the **arrangement's** symmetry (irregular/asymmetric centres, uneven
+  families, off-axis placement), not merely add per-line wobble. Same failure family as #88
+  (grid-quantized flow): the *arrangement* is what reads geometric.
 
 ## Standing constraints (not learned — given)
 - Every round is governed by a **Sol LeWitt instruction** as its rule (`lewitt_instructions.csv`).
@@ -134,3 +141,10 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
 - **Round 12 (2026-06-30)** — LeWitt #88. UNRANKED — "not worthy." Grid + 4-direction quantization
   of a flow = a stiff, inferior #86; don't quantize organic flow onto a grid. Also the moment the
   user asked to **review each instruction together before building** (I'd built #88 autonomously).
+- **Round 13 (2026-07-01)** — LeWitt #130 (grid + arcs from four corners). Ranked but flagged
+  "not that valuable" (a low-value round like #12). Key lesson: **jitter roughens texture, not
+  structure** — arcs-from-corners still "showing symmetric" despite the hand-drawn wobble, because
+  the *arrangement* is symmetric. Break the arrangement's symmetry, not just the line. Also: my
+  predicted order (dense+wild-sweep heuristic) was ~orthogonal to the user's — the density/flow
+  axis doesn't predict order on a genre the user is rejecting. **Radial "from corners/midpoints"
+  is a low-value genre** → flag #138 (same family) before building.

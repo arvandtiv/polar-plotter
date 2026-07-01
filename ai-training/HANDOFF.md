@@ -6,13 +6,13 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 13 (#130) is built and awaiting the user's ranking** — it is NOT scored yet.
-   Ask the user to open `sessions/2026-06-30-foundations/round-13/contact.png` and fill
-   `round-13/ranking.json`. When they have, **process it** (write `round-13/reflection.md`,
-   fold lessons into `LEARNINGS.md`, commit).
-2. Then the next instruction is **#138 "Circles and arcs from the midpoints of four sides"**
-   (the `arcs` generator already covers it). **Do NOT build it yet** — bring the verbatim text
-   to the user and review together first (see the process rules below).
+1. **Round 13 (#130) is DONE** — user ranked it but flagged "not that valuable" (low-value round,
+   like #12); `reflection.md` + LEARNINGS updated (jitter roughens texture not structure). Processed.
+2. Next instruction is **#138 "Circles and arcs from the midpoints of four sides"** — but ⚠️ it's
+   the SAME radial-from-midpoints family the user just called low-value in #130. **Do NOT build it
+   yet.** Bring the verbatim text to the user, flag the #130 risk, and decide together whether to
+   build it (with the arrangement's symmetry broken this time) or note-and-skip toward a genre with
+   more promise. See the process rules below.
 
 ---
 
@@ -48,7 +48,8 @@ Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88
 - Rounds **1–11** scored + reflection + learnings.
 - Round **12 (#88)** — UNRANKED, user said "not worthy" (grid-quantized flow). `reflection.md`
   records it as a dud.
-- Round **13 (#130)** — built, **awaiting score**.
+- Round **13 (#130)** — ranked but "not that valuable" (low-value round). Lesson: jitter roughens
+  texture not structure; radial-from-corners still reads symmetric. Processed.
 - **Skipped (colour):** **#87** (= #56 + colour), **#95** (vertical not-straight lines "using four
   colours in all combinations").
 
