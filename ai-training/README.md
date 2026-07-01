@@ -1,5 +1,8 @@
 # ai-training — teaching Claude an eye for plotter art
 
+> **Continuing this work? Read [`HANDOFF.md`](HANDOFF.md) first** — it has the live state, the
+> immediate next action, and the hard-won process rules.
+
 A human-feedback loop to tune Claude's aesthetic judgement when generating designs for
 this polar plotter. No model weights are touched — "training" here means **accumulating a
 persistent, versioned body of learned preferences** (`LEARNINGS.md`) that Claude reads at
