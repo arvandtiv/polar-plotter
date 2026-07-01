@@ -1,0 +1,16 @@
+{
+  "round": 13,
+  "title": "Grid and arcs from four corners",
+  "rule": {
+    "lewittId": 130,
+    "instruction": "Grid and arcs from four corners. (ACG 103)",
+    "year": 1972,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Faithful execution (reviewed and chosen with the user). Two elements per design: a GRID covering the wall (ruledLines vertical + horizontal) plus concentric ARCS swung from the four CORNERS (new arcs generator, clipped to the wall), so the four families of arcs cross each other and the grid. Monochrome black on white. Organic lens per the governing taste: everything HAND-DRAWN (arcs wobble radially, grid not-straight — never crisp), leaning dense. The 16 span arc density (count), arc reach (near-corner vs full-sweep radius), grid fineness, and hand strength; a few also swing arcs from the edge midpoints.",
+  "allowedModules": ["ruledLines", "arcs"],
+  "maxLayers": 2,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

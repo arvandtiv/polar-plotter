@@ -7,6 +7,7 @@ import "./wobbly";
 import "./ruledLines";
 import "./connectDots";
 import "./strokeField";
+import "./arcs";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

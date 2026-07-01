@@ -1,0 +1,592 @@
+{
+  "round": 13,
+  "rule": {
+    "lewittId": 130,
+    "instruction": "Grid and arcs from four corners. (ACG 103)",
+    "year": 1972
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "arcs + grid, medium",
+      "intent": "four corner arc-families cross a hand-drawn grid (Klee #6 convergence).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 631
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 12,
+            "maxR": 340,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 4,
+            "jitterSeed": 131
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "denser arcs",
+      "intent": "more arcs -> richer interference where families cross (Klee #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 632
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 16,
+            "maxR": 340,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 4,
+            "jitterSeed": 132
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "full sweep, dense",
+      "intent": "arcs reach the far corners; dense moire (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 25,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 633
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 20,
+            "maxR": 420,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 4,
+            "jitterSeed": 133
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "near-corner arcs",
+      "intent": "arcs hug the corners, leaving an open centre (Klee #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 634
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 10,
+            "maxR": 220,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 4,
+            "jitterSeed": 134
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "wilder hand",
+      "intent": "stronger wobble on arcs + grid (R10 energetic, Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 40,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 635
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 14,
+            "maxR": 340,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 5,
+            "jitterSeed": 135
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "fine grid",
+      "intent": "finer grid under the arcs (R5 fine, Klee #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 20,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 636
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 16,
+            "maxR": 300,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 5,
+            "jitterSeed": 136
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "dense wild sweep",
+      "intent": "dense full-sweep arcs, energetic hand (R10, Klee #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 637
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 18,
+            "maxR": 420,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 5,
+            "jitterSeed": 137
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "+ midpoint arcs",
+      "intent": "arcs from corners AND edge midpoints — eight families (Klee #6, complex).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 638
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "cornersMid",
+            "count": 12,
+            "maxR": 300,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 4,
+            "jitterSeed": 138
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "+ midpoint, dense",
+      "intent": "eight arc-families, dense — a woven vault (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 639
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "cornersMid",
+            "count": 16,
+            "maxR": 340,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 5,
+            "jitterSeed": 139
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "densest wild",
+      "intent": "densest, wildest arcs — maximal organic interference (Klee #3, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 22,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 640
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 22,
+            "maxR": 400,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 6,
+            "jitterSeed": 140
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "sparse, calm",
+      "intent": "fewer arcs, open grid — a calmer, lighter option (Klee #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 45,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 641
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 10,
+            "maxR": 340,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 3,
+            "jitterSeed": 141
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "mid, wild arcs",
+      "intent": "medium arcs with a strongly wandering line (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 35,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 642
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 14,
+            "maxR": 300,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 6,
+            "jitterSeed": 142
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "full sweep, wavy grid",
+      "intent": "full-sweep arcs over a markedly not-straight grid (Klee #3, #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 643
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 16,
+            "maxR": 420,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 4,
+            "jitterSeed": 143
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "+ midpoint, busy",
+      "intent": "eight busy arc-families over a fine grid (Klee #6, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 25,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 644
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "cornersMid",
+            "count": 18,
+            "maxR": 340,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 5,
+            "jitterSeed": 144
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "tight arcs, wild",
+      "intent": "tighter arc reach, wild hand — corner blooms (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 645
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 12,
+            "maxR": 260,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 6,
+            "jitterSeed": 145
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "very dense",
+      "intent": "very dense arc interference over a fine grid (Klee #5, #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 0,
+            "cy": 0,
+            "w": 300,
+            "h": 300,
+            "spacing": 22,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 646
+          }
+        },
+        {
+          "module": "arcs",
+          "params": {
+            "centres": "corners",
+            "count": 24,
+            "maxR": 400,
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "jitter": 5,
+            "jitterSeed": 146
+          }
+        }
+      ]
+    }
+  ]
+}
