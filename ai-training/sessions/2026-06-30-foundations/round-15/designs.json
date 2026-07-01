@@ -1,0 +1,400 @@
+{
+  "round": 15,
+  "rule": {
+    "lewittId": 142,
+    "instruction": "A 10-inch (25 cm) grid covering the wall. An increasing number of vertical not straight lines from the left side and horizontal not straight lines from bottom to top, adding one line per row of the grid.",
+    "year": 1972
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "near-even ramp",
+      "intent": "the gentlest gradient — barely denser toward the corner (Klee #5, tone as slow interval).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 16,
+            "jitter": 3,
+            "gradient": 0.3,
+            "jitterSeed": 301
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "gentle ramp, fine",
+      "intent": "soft ramp on a fine field (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 12,
+            "jitter": 4,
+            "gradient": 0.35,
+            "jitterSeed": 302
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "medium ramp",
+      "intent": "a clear density current toward top-right (Klee #8, directed weight).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 15,
+            "jitter": 4,
+            "gradient": 0.5,
+            "jitterSeed": 303
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "medium ramp, fine",
+      "intent": "the current on a finer, denser field (Klee #8, #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 11,
+            "jitter": 4,
+            "gradient": 0.5,
+            "jitterSeed": 304
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "strong ramp",
+      "intent": "steeper accumulation — open bottom-left, packed top-right (Klee #7, #8).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 15,
+            "jitter": 4,
+            "gradient": 0.7,
+            "jitterSeed": 305
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "strong ramp, fine",
+      "intent": "steep ramp, fine lines — a dense corner weave (Klee #8, #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 11,
+            "jitter": 4,
+            "gradient": 0.7,
+            "jitterSeed": 306
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "steep ramp, fine",
+      "intent": "sharp corner concentration, wide open field elsewhere (Klee #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 11,
+            "jitter": 4,
+            "gradient": 0.9,
+            "jitterSeed": 307
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "steep ramp, dense",
+      "intent": "steep + dense — the top-right becomes near-solid tone (Klee #5, #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 9,
+            "jitter": 5,
+            "gradient": 0.9,
+            "jitterSeed": 308
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "medium ramp, dense energetic",
+      "intent": "dense field, energetic hand, medium current (R10 dense+lively).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 9,
+            "jitter": 5,
+            "gradient": 0.6,
+            "jitterSeed": 309
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "strong ramp, coarse",
+      "intent": "coarse lines, steep ramp — big airy negative space bottom-left (Klee #7).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 22,
+            "jitter": 4,
+            "gradient": 0.8,
+            "jitterSeed": 310
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "full ramp, fine",
+      "intent": "maximum gradient exponent — extreme corner pile-up (Klee #8 extreme).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 11,
+            "jitter": 4,
+            "gradient": 1,
+            "jitterSeed": 311
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "medium ramp, very fine",
+      "intent": "very fine lines, moderate ramp — silky graded tone (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 8,
+            "jitter": 5,
+            "gradient": 0.5,
+            "jitterSeed": 312
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "strong ramp, gentle hand",
+      "intent": "steep ramp but a calm, careful line (Klee #3 quiet).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 13,
+            "jitter": 3,
+            "gradient": 0.75,
+            "jitterSeed": 313
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "strong ramp, wavy hand",
+      "intent": "steep ramp with a markedly wandering line (Klee #3 living line).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 13,
+            "jitter": 5,
+            "gradient": 0.75,
+            "jitterSeed": 314
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "steep ramp, dense energetic",
+      "intent": "steep + dense + energetic — the most charged corner (R10, Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 9,
+            "jitter": 5,
+            "gradient": 0.95,
+            "jitterSeed": 315
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "medium ramp, medium calm",
+      "intent": "an even, quieter middle option — balanced field with a soft current (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "w": 300,
+            "h": 300,
+            "cx": 0,
+            "cy": 0,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "spacing": 15,
+            "jitter": 3,
+            "gradient": 0.45,
+            "jitterSeed": 316
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -13,7 +13,7 @@ type Rect = { x0: number; y0: number; x1: number; y1: number };
 /** Parallel lines through `rect` at angle `theta` (screen coords, y-down), spaced `spacing`.
  *  `jitter` > 0 makes them NOT straight: each line is resampled and pushed sideways by smooth
  *  seeded noise (a hand-drawn / Klee "living line" quality). `rng` is shared for determinism. */
-function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rng: () => number): Path[] {
+function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rng: () => number, gradient = 0): Path[] {
   const s = Math.max(0.5, spacing);
   const cx = (rect.x0 + rect.x1) / 2, cy = (rect.y0 + rect.y1) / 2;
   const dx = Math.cos(theta), dy = Math.sin(theta);     // line direction
@@ -25,9 +25,20 @@ function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rn
     if (o < omin) omin = o;
     if (o > omax) omax = o;
   }
+  // Line offsets across the band. gradient=0 → uniform (unchanged). gradient>0 → a DENSITY RAMP:
+  // ~span/s lines redistributed by o = omin + span·t^(1+2g), which packs them toward omin (the
+  // rect's + normal end). For │ that end is the RIGHT edge and for ─ it's the TOP edge, so one
+  // positive gradient thickens both toward the top-right corner (LeWitt #142's accumulation).
+  const offsets: number[] = [];
+  if (gradient > 0) {
+    const span = omax - omin, N = Math.max(1, Math.round(span / s)), p = 1 + 2 * gradient;
+    for (let k = 0; k <= N; k++) offsets.push(omin + span * Math.pow(k / N, p));
+  } else {
+    for (let o = Math.ceil(omin / s) * s; o <= omax + 1e-9; o += s) offsets.push(o);
+  }
   const L = (rect.x1 - rect.x0) + (rect.y1 - rect.y0) + 10;   // long enough to span, then clip
   const out: Path[] = [];
-  for (let o = Math.ceil(omin / s) * s; o <= omax + 1e-9; o += s) {
+  for (const o of offsets) {
     const bx = cx + o * nx, by = cy + o * ny;
     const seg = clipSegmentToRect({ x: bx - L * dx, y: by - L * dy }, { x: bx + L * dx, y: by + L * dy }, rect);
     if (!seg) continue;
@@ -74,6 +85,9 @@ export const ruledLinesModule: Module = {
       { key: "jitter", label: "Jitter", type: "range", min: 0, max: 20, step: 0.5, unit: "mm", default: 0 },
       { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },
     ]},
+    { title: "Density ramp", fields: [
+      { key: "gradient", label: "Gradient", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+    ]},
     { title: "Position", fields: [
       { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
       { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
@@ -84,13 +98,14 @@ export const ruledLinesModule: Module = {
     const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
     const spacing = num(params, "spacing", 12);
     const jitter = num(params, "jitter", 0);
+    const gradient = num(params, "gradient", 0);
     const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
     const rect: Rect = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
     const paths: Path[] = [];
-    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng));            // ─
-    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng));     // │
-    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng));             // ╱
-    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng));               // ╲
+    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient));            // ─
+    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient));     // │
+    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient));             // ╱
+    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient));               // ╲
     return { widthMm: w, heightMm: h, paths, meta: { title: "Ruled lines" } };
   },
 };

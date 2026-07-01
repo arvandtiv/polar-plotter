@@ -1,0 +1,16 @@
+{
+  "round": 15,
+  "title": "Increasing not-straight lines from the sides (density ramp)",
+  "rule": {
+    "lewittId": 142,
+    "instruction": "A 10-inch (25 cm) grid covering the wall. An increasing number of vertical not straight lines from the left side and horizontal not straight lines from bottom to top, adding one line per row of the grid. All lines are spaced evenly based on the number of lines, filling the last row of each direction.",
+    "year": 1972,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "Interpretation reviewed & chosen with the user: ORGANIC gradient (drop the hard grid; the grid is only the spacing logic) and GRID IMPLIED (lines only, not drawn). The core idea is a DENSITY RAMP of not-straight lines — vertical lines accumulate left->right and horizontal lines accumulate bottom->top, so the field thickens toward the top-right corner. Built with the new ruledLines `gradient` lever (a single positive gradient packs verticals right + horizontals top). Monochrome black on white; always hand-drawn (never crisp). The 16 span ramp STEEPNESS (near-even -> sharply corner-concentrated), line DENSITY (coarse -> fine), and HAND energy (gentle -> energetic, capped ~5 per R14). This is on-taste: a built-in directional density current + living line.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

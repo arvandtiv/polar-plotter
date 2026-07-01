@@ -6,13 +6,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 14 (#138) is DONE** — big win: breaking the ARRANGEMENT's symmetry rescued the radial-arc
-   genre ("I like this way more than the original… very beautiful"). `reflection.md` + LEARNINGS
-   updated (push offset hard; echo praised; coherence ceiling — don't max every lever). Processed.
-2. Next instruction is **#142** — *"A 10-inch (25 cm) grid covering the wall. An increasing number
-   of vertical not straight lines from the left side and horizontal not straight lines from bottom
-   to top, adding one line per row of the grid…"* On-taste (grid + not-straight lines, DOABLE with
-   `ruledLines`). **Do NOT build yet** — bring the verbatim text to the user and review together first.
+1. **Round 15 (#142) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
+   ORGANIC gradient + grid IMPLIED (lines only). Built with a new `ruledLines` `gradient` lever (a
+   density ramp thickening toward the top-right). Ask them to open
+   `sessions/2026-06-30-foundations/round-15/contact.png` and fill `round-15/ranking.json`, then
+   **process it** (reflection.md, LEARNINGS, commit).
+2. Round **14 (#138) is DONE** — big win (asymmetric take rescued the genre). Processed.
+3. Next non-colour row after #142: #154/#159/#160/#164 are all **colour (red) → skip** (note each
+   in the LEARNINGS log). First buildable after that is **#237 "The location of a trapezoid"** (and
+   #238 parallelogram, #274 six figures) — geometric-figure placement, DOABLE, review with user first.
 
 ---
 
