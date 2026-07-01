@@ -6,13 +6,15 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 13 (#130) is DONE** — user ranked it but flagged "not that valuable" (low-value round,
-   like #12); `reflection.md` + LEARNINGS updated (jitter roughens texture not structure). Processed.
-2. Next instruction is **#138 "Circles and arcs from the midpoints of four sides"** — but ⚠️ it's
-   the SAME radial-from-midpoints family the user just called low-value in #130. **Do NOT build it
-   yet.** Bring the verbatim text to the user, flag the #130 risk, and decide together whether to
-   build it (with the arrangement's symmetry broken this time) or note-and-skip toward a genre with
-   more promise. See the process rules below.
+1. **Round 14 (#138) is built and awaiting the user's ranking** — NOT scored yet. User reviewed
+   #138, agreed to "build but break the symmetry" (the R13 fix). Ask them to open
+   `sessions/2026-06-30-foundations/round-14/contact.png` and fill `round-14/ranking.json`, then
+   **process it** (reflection.md, fold lessons into LEARNINGS.md, commit). Key thing to learn:
+   did breaking the ARRANGEMENT's symmetry rescue the radial-arc genre, or is it low-value regardless?
+2. Round **13 (#130) is DONE** — ranked but "not that valuable" (low-value, like #12); processed.
+   Lesson recorded: jitter roughens texture, not structure.
+3. Next non-colour row after #138 is **#142** (10-inch grid + increasing not-straight lines from
+   the sides — on-taste, DOABLE with `ruledLines`). Review with the user first; don't pre-build.
 
 ---
 
