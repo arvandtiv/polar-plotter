@@ -182,6 +182,13 @@ cell count is the dominant lever; both crisp and soft hand work at fine grain.)
   anything." Also: **dense construction lines to the CORNERS read as rich/structural, NOT too
   symmetric** (I'd worried; wrong). For #238/#274: build dense, more figures, richer webs, energetic
   hand; drop the minimal end. (Reinforces dense>sparse — here via web richness, not spacing.)
+- **Round 17 (2026-07-01)** — LeWitt #238 ("location of a parallelogram"; `locatedFigures` +
+  parallelogram/shear/rotMax). **A HIT.** Best = #4 (bold diagonal shear + corner web), #15
+  (UNIFIED diagonal flow — figures all lean one way → a current), #14 (dense woven). **Excluded the
+  SCATTERED-orientation ones (#2 widest spread, #10 eight scattered)** → directional COHERENCE beats
+  angle scatter = flow>scatter (R11) applied to figure orientation; keep orientation spread LOW when
+  shearing. Also **#16 "balanced showcase" excluded** — the safe middle loses; commit to one strong
+  idea (push extremes, R9/R10).
 - **Skipped #154, #159, #160, #164 (2026-07-01, colour)** — all "a black outlined square with a
   **red** line" pieces (1973). Distinguishing element is colour → auto-skipped per the standing rule.
   Next buildable row is #237.

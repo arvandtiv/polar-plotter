@@ -6,15 +6,13 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 17 (#238) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
-   chosen angle = VARY ORIENTATION/SHEAR (sheared parallelograms, diagonal energy). Built DENSE per
-   R16. `locatedFigures` extended (parallelogram type + `shear` + `rotMax`). Ask them to open
-   `sessions/2026-06-30-foundations/round-17/contact.png` and fill `round-17/ranking.json`, then
-   **process it** (reflection.md, LEARNINGS, commit).
-2. Round **16 (#237) DONE** — genre works; the WEB is the subject, draw it richly, avoid light.
-3. Next after #238: **#274 "The location of six geometric figures"** — same genre, could mix figure
-   types (add more shapes to `locatedFigures`?). Review with user first. Colour rows #154/#159/#160/#164
-   already skipped.
+1. **Round 17 (#238) is DONE** — a HIT. Best = #4 (bold diagonal), #15 (unified diagonal FLOW), #14
+   (dense woven). Rule learned: **directional COHERENCE beats scattered orientation** (flow>scatter
+   applied to figure angle); the "balanced" middle loses. Processed.
+2. **Next: #274 "The location of six geometric figures"** — last of the location genre. Could mix
+   several DIFFERENT shapes (add more figure types to `locatedFigures`?). **Do NOT build yet** —
+   review verbatim with the user. Build dense + a coherent/directional composition (no scattered-tame).
+3. Round **16 (#237) DONE**; colour rows **#154/#159/#160/#164 skipped**. All logged.
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
@@ -50,7 +48,7 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## 📍 State of the sequence
-Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138, #142, #237.**
+Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88, #130, #138, #142, #237, #238.**
 - Rounds **1–11** scored + reflection + learnings.
 - Round **12 (#88)** — UNRANKED, user said "not worthy" (grid-quantized flow). `reflection.md`
   records it as a dud.
@@ -62,6 +60,8 @@ Done, in CSV order: **#11, #16, #17, #19, #38, #46, #47, #51, #56, #85, #86, #88
   (#10). Surfaced the PAPER-RIP media limit (over-inking tears paper). Partial ranking = keep/reject.
 - Round **16 (#237)** — located figures + web (new `locatedFigures`). Winner #13 "almost perfect."
   The WEB is the subject — draw it richly; avoid light/minimal. Dense corner-webs read structural.
+- Round **17 (#238)** — sheared parallelograms + dense web. A HIT (#4/#15/#14). Directional
+  COHERENCE beats scattered orientation (flow>scatter); the "balanced" middle loses.
 - **Skipped (colour):** **#87** (= #56 + colour), **#95** (vertical not-straight lines "using four
   colours in all combinations"), **#154 / #159 / #160 / #164** (all "black outlined square with a
   **red** line", 1973).
