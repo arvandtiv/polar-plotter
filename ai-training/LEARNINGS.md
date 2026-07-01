@@ -40,6 +40,10 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     composition must have SUBSTANCE and FILL the wall with movement. The reliable winner is a **full
     field of flowing swirling currents (R25/R11)** — reuse that engine for swirl/flow instructions;
     do not scatter sparse gestures on empty white.
+  - **✅ Full-field vortex FLOW works; MAXIMISE swirl (R27).** #1152 rebuilt as a full-field flowing
+    vortex field (`flowWhirls`) = "a successful round." Discriminator: strong organic SWIRL/deflection
+    wins; low-swirl near-parallel flow "looks like hatched lines" and bores. Bias swirl strength up,
+    keep currents visibly curving, and keep it open/readable (not solid). `flowWhirls` validated.
   - **✅ Flowing STREAMLINES with SWIRL/energy win (R25).** Replacing flat straight "grain" (R24,
     rejected as "not much worth / all similar") with flowing streamlines through a swirled flow field
     made #852 "a successful round." The ranking: **swirly, dynamic currents + a bold curve gesture
