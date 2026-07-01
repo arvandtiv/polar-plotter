@@ -34,6 +34,11 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     scribble-marks. The user wants a **readable FORM / gesture with a tonal GRADIENT (volume)**, made
     by a **CONTINUOUS** hand line, surrounded by negative space — an *object*, not wallpaper. A
     scribble specifically = ONE continuous looping/coiling line shading a form, never scattered marks.
+  - **✅ VALIDATED (R23): continuous "shade" scribble, kept LIGHT.** The `scribble` "shade" mode (one
+    continuous coiling line shading an inverted-curve arch form) landed — "great work." But only the
+    **light, open, loopy** ones (single/low passes, low coils, big loose loops, thin ribbon); the
+    dense/dark/multi-pass ones were **"too much, avoid."** So: readable form + tonal volume, but keep
+    it AIRY. Density is the enemy across this whole session — open and light wins every time.
   - **"Wobbly" means OPEN + loose, not a dense weave (R21).** After R20, "wobbly" via a dense fine-line
     fabric (`sheets`) was *also* rejected. The organic hits were sparse/open with breathing room —
     round-11 stroke FLOW, round-14 arc SCATTER. So wobbly/organic = **loose individual wandering
