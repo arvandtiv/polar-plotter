@@ -34,6 +34,12 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     scribble-marks. The user wants a **readable FORM / gesture with a tonal GRADIENT (volume)**, made
     by a **CONTINUOUS** hand line, surrounded by negative space — an *object*, not wallpaper. A
     scribble specifically = ONE continuous looping/coiling line shading a form, never scattered marks.
+  - **⛔ FILL the wall with a coherent flowing FIELD — sparse floating objects = "no worth" (R26).**
+    Round 26 (a few spirals floating on white) was rejected as worthless. This reconciles "keep it
+    open/light": OPEN means avoid dense MUD / mechanical weave — it does NOT mean emptiness. The
+    composition must have SUBSTANCE and FILL the wall with movement. The reliable winner is a **full
+    field of flowing swirling currents (R25/R11)** — reuse that engine for swirl/flow instructions;
+    do not scatter sparse gestures on empty white.
   - **✅ Flowing STREAMLINES with SWIRL/energy win (R25).** Replacing flat straight "grain" (R24,
     rejected as "not much worth / all similar") with flowing streamlines through a swirled flow field
     made #852 "a successful round." The ranking: **swirly, dynamic currents + a bold curve gesture

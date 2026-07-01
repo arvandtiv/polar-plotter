@@ -1,0 +1,384 @@
+{
+  "round": 27,
+  "rule": {
+    "lewittId": 1152,
+    "instruction": "Whirls and twirls. (Met)",
+    "year": 2005
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "few big whirls",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 3,
+            "strength": 110,
+            "spiralIn": 0.2,
+            "drift": 16,
+            "spacing": 15,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 701
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "many twirls",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 8,
+            "strength": 70,
+            "spiralIn": 0.25,
+            "drift": 14,
+            "spacing": 15,
+            "reach": 130,
+            "jitter": 1.5,
+            "seed": 702
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "tight spiral-in",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 4,
+            "strength": 95,
+            "spiralIn": 0.55,
+            "drift": 12,
+            "spacing": 15,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 703
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "loose orbits",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 4,
+            "strength": 95,
+            "spiralIn": 0,
+            "drift": 20,
+            "spacing": 15,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 704
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "outward spiral",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 4,
+            "strength": 95,
+            "spiralIn": -0.4,
+            "drift": 16,
+            "spacing": 15,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 705
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "two big vortices",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 2,
+            "strength": 130,
+            "spiralIn": 0.25,
+            "drift": 14,
+            "spacing": 15,
+            "reach": 170,
+            "jitter": 1.5,
+            "seed": 706
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "strong drift current",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 3,
+            "strength": 80,
+            "spiralIn": 0.2,
+            "drift": 45,
+            "spacing": 15,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 707
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "denser flow",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 4,
+            "strength": 95,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 11,
+            "reach": 130,
+            "jitter": 1.5,
+            "seed": 708
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "open airy flow",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 4,
+            "strength": 95,
+            "spiralIn": 0.25,
+            "drift": 16,
+            "spacing": 20,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 709
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "turbulent many",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 7,
+            "strength": 100,
+            "spiralIn": 0.3,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 140,
+            "jitter": 2,
+            "seed": 710
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "long sweeping",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 3,
+            "strength": 95,
+            "spiralIn": 0.15,
+            "drift": 20,
+            "spacing": 16,
+            "reach": 240,
+            "jitter": 1.5,
+            "seed": 711
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "short strokes",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 5,
+            "strength": 95,
+            "spiralIn": 0.3,
+            "drift": 14,
+            "spacing": 13,
+            "reach": 80,
+            "jitter": 1.5,
+            "seed": 712
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "strong swirl",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 5,
+            "strength": 150,
+            "spiralIn": 0.25,
+            "drift": 12,
+            "spacing": 15,
+            "reach": 150,
+            "jitter": 1.5,
+            "seed": 713
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "showcase",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 4,
+            "strength": 105,
+            "spiralIn": 0.3,
+            "drift": 18,
+            "spacing": 15,
+            "reach": 160,
+            "jitter": 1.5,
+            "seed": 714
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "one dominant whirl",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 1,
+            "strength": 170,
+            "spiralIn": 0.3,
+            "drift": 20,
+            "spacing": 15,
+            "reach": 180,
+            "jitter": 1.5,
+            "seed": 715
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "six mixed spin",
+      "intent": "full-field swirling flow through a vortex field; whirls and twirls as flowing currents, open enough to read (Klee #3).",
+      "layers": [
+        {
+          "module": "flowWhirls",
+          "params": {
+            "size": 300,
+            "cx": 0,
+            "cy": 0,
+            "vortices": 6,
+            "strength": 95,
+            "spiralIn": 0.15,
+            "drift": 16,
+            "spacing": 14,
+            "reach": 140,
+            "jitter": 2,
+            "seed": 716
+          }
+        }
+      ]
+    }
+  ]
+}

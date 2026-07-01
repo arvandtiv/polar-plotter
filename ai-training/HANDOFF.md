@@ -8,11 +8,14 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ## ⏭️ Immediate next action
 1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
    choose it, do not walk the CSV in order.
-   - **Round 26 (#1152 "Whirls and twirls")** — Claude-proposed pick, user-confirmed. New `whirls`
-     generator (bold organic log-spiral whirls + twirls, open). Awaiting ranking → `round-26/ranking.json`.
+   - **Round 27 (#1152 retry)** — full-field vortex FLOW (new `flowWhirls`), rebuilt on the R25
+     winning engine after R26 (sparse spirals) was rejected as "no worth." Awaiting ranking →
+     `round-27/ranking.json`.
    - Still open to score if the user wants: **Round 19 (#365 grays)**, **Round 18 (#274 knot)**.
    When any is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
-   NOTE: R25 (#852 retry, flowing streamlines) was a SUCCESS ("well done") — processed.
+   NOTE: R25 (#852 flowing streamlines) was a SUCCESS. R26 (#1152 sparse spirals) REJECTED
+   ("no worth") — the reconciled lesson (top of LEARNINGS): FILL the wall with a coherent flowing
+   FIELD; sparse floating objects = worthless, but dense solid = mud. Sweet spot = R25/R11 open flow.
 2. **Round 23 (#1185) LANDED** — continuous "shade" scribble; keep it LIGHT/loopy (dense = "too much").
    The recurring lesson across the session: **readable FORM/gesture + tonal volume via a CONTINUOUS
    hand line, kept OPEN/light with negative space** — never dense texture/wallpaper. (`sheets` BANNED,
@@ -108,9 +111,11 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   line, each side filled with FLOWING STREAMLINES (swirled flow field) in a contrasting direction.
   R24's straight-grain version was rejected as flat/samey; R25 uses flow + big variety. Monochrome
   take on divide-by-a-line colour pieces (#852).
-- **`whirls`** (added R26) — bold organic log-spiral whirls of varied size/spin + small twirl
-  flourishes, asymmetric with open space. Hand-drawn, energetic swirl (not a mechanical spirograph).
-  For #1152 "Whirls and twirls" / swirl-flow pieces.
+- **`whirls`** (added R26) — bold organic log-spiral whirls + twirls, asymmetric with open space.
+  ⚠️ REJECTED look (sparse floating spirals = "no worth"); prefer `flowWhirls`.
+- **`flowWhirls`** (added R27) — the wall FILLED with flowing streamlines through a vortex field
+  (whirl centres); swirling currents, full-field. `reach` = streamline length (keep short-ish),
+  `spacing` open, so it reads as flow not solid. The R25/R11 winning engine for swirl/flow pieces.
 (The stock Studio generators — spirograph, wobbly, etc. — still exist but training uses these.
  ⛔ `sheets` is BANNED, R21.)
 

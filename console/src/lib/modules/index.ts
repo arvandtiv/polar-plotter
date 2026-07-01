@@ -12,6 +12,7 @@ import "./locatedFigures";
 import "./scribble";
 import "./curvyDivide";
 import "./whirls";
+import "./flowWhirls";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

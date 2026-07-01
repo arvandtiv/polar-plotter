@@ -1,0 +1,16 @@
+{
+  "round": 27,
+  "title": "Whirls and twirls — retry, full-field flow",
+  "rule": {
+    "lewittId": 1152,
+    "instruction": "Whirls and twirls. (Met)",
+    "year": 2005,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "RETRY of #1152 after round 26 (sparse floating spirals) was rejected as 'unacceptable / no worth'. Rebuilt on the round-25 WINNING engine: the whole wall FILLED with flowing streamlines through a VORTEX flow field (new `flowWhirls` generator) — streamlines swirl around whirl centres and twirl between them, a rich dynamic swirling flow. Tuned to sit between the two failure modes: not sparse/empty (R26) and not dense/solid mud (first R27 pass) — streamlines kept SHORT enough and spacing OPEN enough that individual currents read, with white between. Monochrome; hand-made. The 16 span vortex count (1 dominant -> 8 twirls), swirl strength, spiral in/out, drift, line length (short strokes -> long sweeping), and openness.",
+  "allowedModules": ["flowWhirls"],
+  "maxLayers": 1,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-02"
+}
