@@ -14,9 +14,15 @@ Follow this exactly so every round is reproducible and the learning signal stays
 executions," which is exactly this loop: the instruction is the rule, the 16 designs are
 the executions, the human's ranking says which execution best honours it.
 
-**Selection is sequential, in CSV order, one instruction per round.** Round 1 = the first
-row of `lewitt_instructions.csv` (id 11), round 2 = the second row (id 16), … straight down
-the list (74 rows). Do **not** cherry-pick — go top to bottom.
+**⛔ THE USER PICKS THE INSTRUCTION — Claude does NOT.** (Corrected 2026-07-01, after the user
+got frustrated that Claude kept auto-advancing.) The earlier "go sequentially in CSV order, bring
+the *next* row" rule is **retired.** Do not choose the next instruction, do not walk the CSV in
+order, and do not end a round by proposing / queuing the next one. The user selects each
+instruction from `lewitt_instructions.csv` (any order they like), Claude builds exactly that one,
+then **STOPS and waits** for the user's next pick. Also: **actively vary the genre/style** each
+round — don't get stuck iterating one visual family across many rounds (the located-figures
+#237/#238/#274 streak was the kind of rut the user called out). When the user names an instruction,
+confirm which row it is, agree the interpretation if there's any ambiguity, then build.
 
 **Skip colour instructions.** Any instruction whose distinguishing element is colour (red/blue/
 yellow lines, colour ink washes, "four colours in combinations", "bars/planes of colour", etc.)
@@ -24,13 +30,12 @@ is **skipped** — a monochrome pen plotter can't render it. This is a standing 
 note each colour skip in the revision log, but don't stop to re-ask. Black/white/gray and "India
 ink wash" tonal instructions are NOT colour — those are doable as tone.
 
-**⚠️ REVIEW EACH NON-COLOUR INSTRUCTION WITH THE USER FIRST.** Do NOT autonomously decide doability,
-interpretation, or skip an instruction, and do NOT pre-plan a roadmap of upcoming rounds. For
-each round: bring the next row's **verbatim instruction text** to the user, discuss together
-whether it's doable on a monochrome pen plotter and how to interpret it, and **only build once
-you agree**. If it needs a new generator, propose that and confirm. If an instruction seems
-undoable or redundant (e.g. it only adds colour), raise it — the user decides whether to skip
-or adapt, never Claude alone.
+**⚠️ THE USER DRIVES SELECTION; Claude executes.** Do NOT autonomously decide which instruction
+comes next, and do NOT pre-plan a roadmap of upcoming rounds. When the user picks an instruction:
+confirm the exact row (verbatim text), agree the interpretation / doability on a monochrome pen
+plotter if there's ambiguity, build once you agree — then STOP. Colour instructions are still
+auto-skippable if the user picks one by mistake (raise it), but never march ahead choosing the
+next row yourself. If a pick needs a new generator, propose that and confirm.
 
 Record the round's instruction (`id` + verbatim `instruction` + `year`) as its `rule`, and
 add any extra hard limits in `restrictions`.

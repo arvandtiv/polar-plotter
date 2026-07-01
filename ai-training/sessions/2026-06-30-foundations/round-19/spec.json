@@ -1,0 +1,16 @@
+{
+  "round": 19,
+  "title": "Four parts, progressively darker gray (via different line methods)",
+  "rule": {
+    "lewittId": 365,
+    "instruction": "A square divided horizontally and vertically into four equal parts, each with a progressively darker gradation of gray.",
+    "year": 1984,
+    "source": "github.com/maximalmargin/lewitt_instructions"
+  },
+  "restrictions": "USER-PICKED instruction (new process: user selects, Claude builds one round then stops). A fresh GENRE after the located-figures streak. Four equal quadrants, each a progressively darker gray. The user's twist: get the difference in gray scale by using DIFFERENT ways to draw lines inside the boxes — not one trick. So tone is built from line METHOD: direction count (single -> hatch -> cross-hatch -> four-way superimposed), line spacing/density, and hand technique, varied across the 16. Monochrome black on white; lines hand-drawn (not-straight) per the governing taste. Density capped so even the darkest box is tone, never a solid ink patch (paper-rip limit). The 16 span the tone MECHANISM (spacing ramp / direction-count ramp / hybrid / mixed-per-box), gutter vs seamless, progression orientation, and hand energy.",
+  "allowedModules": ["ruledLines"],
+  "maxLayers": 4,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-01"
+}

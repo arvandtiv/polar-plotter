@@ -6,15 +6,14 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## ⏭️ Immediate next action
-1. **Round 18 (#274) is built and awaiting the user's ranking** — NOT scored yet. Reviewed with user:
-   IRREGULAR angular polygons, CLUSTERED with open space. `locatedFigures` extended (figure=irregular
-   + `cluster`). Ask them to open `sessions/2026-06-30-foundations/round-18/contact.png` and fill
-   `round-18/ranking.json`, then **process it** (reflection.md, LEARNINGS, commit).
+1. **⛔ WAIT FOR THE USER TO PICK THE NEXT INSTRUCTION.** (New process — see rule 1 below.) Do not
+   choose it, do not walk the CSV in order. Two rounds are built & awaiting the user's ranking:
+   - **Round 19 (#365)** — four-part progressively-darker-gray square via different line methods
+     (user's pick; a genre change). `contact.png` ready → user fills `round-19/ranking.json`.
+   - **Round 18 (#274)** — irregular clustered located-figures knot. `round-18/ranking.json` still open.
+   When either is scored, **process it** (reflection.md, LEARNINGS, commit) — then STOP and wait.
 2. Round **17 (#238) DONE** — a HIT; directional coherence beats scatter; balanced middle loses.
-3. Next after #274 (ends the location genre): scan the CSV from #289. Likely buildable soon: **#295**
-   "six white geometric figures (outlines) on a black wall" (needs white-on-black — check if doable),
-   **#305** "location of 100 random points" (DOABLE, on-taste scatter), **#365** "four grays" (tonal).
-   #289/#335/#340 involve colour/white-on-black — assess each. Review with the user first; don't pre-build.
+   (#274 ended the located-figures streak the user called a rut — keep genres varied now.)
 
 > ⚠️ **When plotting (not just rendering) any density-ramp / dense design, apply the paper-rip limit:**
 > the `ruledLines` `gradient` packs lines at the exact edge — with fine spacing that saturates and
@@ -23,17 +22,22 @@ state + the hard-won process rules. Everything lives on the **`ai-training` git 
 ---
 
 ## 🚦 The PROCESS RULES (the user corrected me on these — do not violate)
-1. **Review EVERY instruction WITH the user before building.** Bring the next CSV row's verbatim
-   text, discuss doability on a monochrome pen plotter + how to interpret it, and **only build
-   once they agree.** Never decide interpretation/doability alone.
-2. **Do NOT pre-plan a roadmap / "sessions todo."** One instruction at a time. Don't end messages
-   with "next I'll do X, Y, Z."
-3. **Skip colour instructions automatically** (user's standing rule) — anything whose distinguishing
+1. **⛔ THE USER PICKS THE INSTRUCTION — Claude does NOT.** (Corrected 2026-07-01.) The user names
+   the next LeWitt instruction (from `lewitt_instructions.csv`, any order they like). Build exactly
+   that one, then **STOP and wait** for their next pick. Do **not** auto-advance in CSV order, do
+   **not** choose the next instruction, and do **not** end a round by proposing/queuing the next one.
+   (This retired the old "sequential, in CSV order, bring the next row" rule — that behavior is what
+   frustrated the user.)
+2. **Actively VARY the genre/style each round.** Don't get stuck iterating one visual family across
+   rounds (the located-figures #237/#238/#274 streak was the rut the user called out). Each new pick
+   should feel like a fresh visual language.
+3. **Confirm + agree before building.** When the user names a pick, confirm the exact row (verbatim
+   text) and agree the interpretation / doability if there's any ambiguity — then build. Never decide
+   interpretation alone. Don't pre-plan a roadmap.
+4. **Skip colour instructions automatically** (user's standing rule) — anything whose distinguishing
    element is colour (coloured lines, colour ink washes, "four colours in combinations", "bars/
-   planes of colour"). Note each skip in the LEARNINGS revision log; don't stop to re-ask.
-   **Black / white / gray / "India ink wash" are NOT colour** — those are doable as tone.
-4. **Sequential, in CSV order** (`lewitt_instructions.csv`, top → bottom). Round N = Nth row.
-   Never cherry-pick for taste. (Skipping colour rows is the only allowed skip.)
+   planes of colour"). If the user picks one, raise it. **Black / white / gray / "India ink wash"
+   are NOT colour** — those are doable as tone.
 5. When an instruction needs a capability we lack, **propose a new generator and confirm** before
    adding it.
 

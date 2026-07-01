@@ -1,0 +1,1152 @@
+{
+  "round": 19,
+  "rule": {
+    "lewittId": 365,
+    "instruction": "A square divided horizontally and vertically into four equal parts, each with a progressively darker gradation of gray.",
+    "year": 1984
+  },
+  "bounds": {
+    "left": 150,
+    "right": 150,
+    "up": 150,
+    "down": 150
+  },
+  "designs": [
+    {
+      "id": 1,
+      "title": "spacing ramp, vertical",
+      "intent": "tone by SPACING only, all vertical lines (Klee #5, density=tone).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 701
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 20,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 702
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 703
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 704
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "spacing ramp, cross-hatch",
+      "intent": "tone by spacing, cross-hatched (v+h) throughout (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 34,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 711
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 22,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 712
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 14,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 713
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 714
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "direction-count ramp",
+      "intent": "tone by NUMBER OF DIRECTIONS: single -> hatch -> cross -> four-way, same spacing (Klee #5, #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 721
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 722
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 723
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 724
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "direction ramp, fine",
+      "intent": "direction-count tone on a finer grid (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 731
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 732
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 733
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 734
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "hybrid ramp",
+      "intent": "tone by BOTH more directions AND tighter spacing (Klee #5, #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 22,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 741
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 742
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 743
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 744
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "spacing ramp, diagonal",
+      "intent": "tone by spacing, all one diagonal direction (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 30,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 751
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 20,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 752
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 13,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 753
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 754
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "different direction per box",
+      "intent": "each box a different line METHOD + spacing: v / diag / cross / four-way (user's 'other ways').",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 26,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 761
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 18,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 762
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 763
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 764
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "direction ramp, energetic",
+      "intent": "direction-count tone, strong wobble — living lines (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 771
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 772
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 773
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 5,
+            "jitterSeed": 774
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "angle + spacing ramp",
+      "intent": "rotating direction (v -> diagR -> h -> diagL) with tightening spacing (Klee #5, #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 28,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 781
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 19,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 782
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": false,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 783
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 784
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "cross-hatch density, wavy",
+      "intent": "cross-hatch tone by spacing, hand-drawn medium (Klee #5, #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 791
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 20,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 792
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 793
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 794
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "seamless spacing ramp",
+      "intent": "no gutter — a continuous vertical density gradient across the whole square (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 801
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 20,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 802
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 803
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 804
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "seamless direction ramp",
+      "intent": "no gutter — direction-count tone with parts meeting edge to edge (Klee #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 811
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 150,
+            "h": 150,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 812
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 813
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 150,
+            "h": 150,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 814
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "hybrid, fine",
+      "intent": "hybrid tone pushed finer — darkest box near-solid but still open (paper-rip cap) (Klee #5).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 18,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 821
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 822
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 823
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 7,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 824
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "gentle-to-wild hand",
+      "intent": "light boxes calm, dark boxes energetic — hand energy tracks tone (Klee #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 30,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 2,
+            "jitterSeed": 831
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 20,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 832
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 13,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 833
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 9,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 5,
+            "jitterSeed": 834
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "diagonal method ramp",
+      "intent": "diagonal-based methods: one diag -> crossed diags -> +cross -> four-way (Klee #6).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 26,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 841
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 18,
+            "vertical": false,
+            "horizontal": false,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 842
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 12,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 3,
+            "jitterSeed": 843
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 3,
+            "jitterSeed": 844
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "hybrid, wavy",
+      "intent": "hybrid method+spacing tone with a lively hand throughout (Klee #5, #3).",
+      "layers": [
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 22,
+            "vertical": true,
+            "horizontal": false,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 851
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": -75,
+            "w": 140,
+            "h": 140,
+            "spacing": 16,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": false,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 852
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": -75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 11,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": false,
+            "jitter": 4,
+            "jitterSeed": 853
+          }
+        },
+        {
+          "module": "ruledLines",
+          "params": {
+            "cx": 75,
+            "cy": 75,
+            "w": 140,
+            "h": 140,
+            "spacing": 8,
+            "vertical": true,
+            "horizontal": true,
+            "diagRight": true,
+            "diagLeft": true,
+            "jitter": 4,
+            "jitterSeed": 854
+          }
+        }
+      ]
+    }
+  ]
+}
