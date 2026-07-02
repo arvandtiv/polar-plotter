@@ -1,0 +1,51 @@
+{
+  "round": 31,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "designs": [
+    { "id": 1, "title": "irregular web 12", "intent": "Klee #8: 12 random points, dense complete-graph web, hand-drawn lines — the living antithesis of R8's clean corner mesh.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 12, "pointSeed": 5, "jitter": 3.5, "size": 285, "jitterSeed": 11 } } ] },
+    { "id": 2, "title": "irregular web 15", "intent": "Denser irregular web — more points, more complexity, still asymmetric.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 15, "pointSeed": 8, "jitter": 4, "size": 285, "jitterSeed": 3 } } ] },
+    { "id": 3, "title": "irregular web 9 open", "intent": "Fewer points, more negative space — an open irregular web (test the sparse end).",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 9, "pointSeed": 2, "jitter": 3, "size": 285, "jitterSeed": 21 } } ] },
+    { "id": 4, "title": "irregular web 18 dense", "intent": "High count, dense wandering web — complexity + hand (watch paper-rip on plot).",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 18, "pointSeed": 14, "jitter": 3, "size": 285, "jitterSeed": 6 } } ] },
+    { "id": 5, "title": "perimeter web jittered", "intent": "Architectural-honest: 14 perimeter points, but lines hand-drawn so the mesh never reads crisp.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "perimeter", "count": 14, "jitter": 5, "size": 285, "jitterSeed": 9 } } ] },
+    { "id": 6, "title": "perimeter web wild", "intent": "Same architecture, wilder hand — heavy jitter dissolves the boundary polygon into living lines.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "perimeter", "count": 12, "jitter": 8, "size": 285, "jitterSeed": 17 } } ] },
+    { "id": 7, "title": "grid dissolved", "intent": "Klee #14 straight-vs-curve: a 4x4 grid of points, but heavy jitter melts the rigid lattice into an organic net.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "grid", "count": 4, "jitter": 7, "size": 285, "jitterSeed": 4 } } ] },
+    { "id": 8, "title": "grid dissolved fine", "intent": "5x5 grid dissolved — denser organic net from a regular seed.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "grid", "count": 5, "jitter": 6, "size": 285, "jitterSeed": 33 } } ] },
+    { "id": 9, "title": "architectural anchors, hand-drawn", "intent": "The DIRECT organic redo of R8's dud: corners+midpoints+centre, but lines are living/not-straight.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "cornersMidCenter", "jitter": 6, "size": 285, "jitterSeed": 7 } } ] },
+    { "id": 10, "title": "anchors + scatter", "intent": "Architectural anchors PLUS a random scatter (two layers) — structure meets irregularity.",
+      "layers": [
+        { "module": "connectDots", "params": { "preset": "cornersMid", "jitter": 5, "size": 285, "jitterSeed": 7 } },
+        { "module": "connectDots", "params": { "preset": "random", "count": 8, "pointSeed": 12, "jitter": 4, "size": 200, "cx": 20, "cy": 15, "jitterSeed": 19 } }
+      ] },
+    { "id": 11, "title": "off-centre web", "intent": "Klee #8 equilibrium: an irregular web pushed off-centre, balanced by open space.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 13, "pointSeed": 22, "jitter": 3.5, "size": 200, "cx": -45, "cy": -35, "jitterSeed": 5 } } ] },
+    { "id": 12, "title": "two clusters", "intent": "R30 multi-mass win: two irregular webs of comparable weight with open space between.",
+      "layers": [
+        { "module": "connectDots", "params": { "preset": "random", "count": 10, "pointSeed": 5, "jitter": 3.5, "size": 160, "cx": -55, "cy": -30, "jitterSeed": 11 } },
+        { "module": "connectDots", "params": { "preset": "random", "count": 9, "pointSeed": 31, "jitter": 3.5, "size": 150, "cx": 55, "cy": 35, "jitterSeed": 27 } }
+      ] },
+    { "id": 13, "title": "three clusters", "intent": "Three irregular webs in an asymmetric knot — a constellation of connected point-fields.",
+      "layers": [
+        { "module": "connectDots", "params": { "preset": "random", "count": 8, "pointSeed": 5, "jitter": 3, "size": 130, "cx": -60, "cy": -40, "jitterSeed": 11 } },
+        { "module": "connectDots", "params": { "preset": "random", "count": 8, "pointSeed": 22, "jitter": 3, "size": 120, "cx": 55, "cy": -15, "jitterSeed": 22 } },
+        { "module": "connectDots", "params": { "preset": "random", "count": 7, "pointSeed": 38, "jitter": 3, "size": 120, "cx": -5, "cy": 65, "jitterSeed": 38 } }
+      ] },
+    { "id": 14, "title": "big + satellite web", "intent": "One dominant irregular web + a smaller satellite web (asymmetric weights, balanced).",
+      "layers": [
+        { "module": "connectDots", "params": { "preset": "random", "count": 14, "pointSeed": 9, "jitter": 3.5, "size": 210, "cx": -35, "cy": -20, "jitterSeed": 6 } },
+        { "module": "connectDots", "params": { "preset": "random", "count": 7, "pointSeed": 44, "jitter": 3, "size": 110, "cx": 75, "cy": 65, "jitterSeed": 44 } }
+      ] },
+    { "id": 15, "title": "dense irregular 20", "intent": "Maximal complexity: 20 random points, moderate hand — a rich living network filling the wall.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 20, "pointSeed": 17, "jitter": 2.5, "size": 285, "jitterSeed": 8 } } ] },
+    { "id": 16, "title": "raw hand web", "intent": "The rawest hand (high jitter) on a mid web — lines wander freely, nothing crisp.",
+      "layers": [ { "module": "connectDots", "params": { "preset": "random", "count": 12, "pointSeed": 3, "jitter": 7, "size": 285, "jitterSeed": 50 } } ] }
+  ]
+}

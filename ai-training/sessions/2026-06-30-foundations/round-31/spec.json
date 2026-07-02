@@ -1,0 +1,18 @@
+{
+  "round": 31,
+  "title": "ITERATION 2 — redo of #51 'All architectural points connected by straight lines' (was R8, a DUD)",
+  "iteration": 2,
+  "redoOf": { "round": 8, "verdict": "rejected: 'avoid such simple things, geometric and symmetric'" },
+  "rule": {
+    "lewittId": 51,
+    "instruction": "All architectural points connected by straight lines.",
+    "year": 1970
+  },
+  "kleeStance": "Klee #3 (take the line for a walk) + #8 (equilibrium not symmetry): the web is a lattice of purposeful point-to-point runs, but the POINTS are irregular/asymmetric and the LINES are hand-drawn living lines, not a crisp CAD mesh.",
+  "concept": "Iteration-2 test: can the accumulated taste turn the R8 dud into a hit? R8 rendered #51 as clean symmetric corner/midpoint webs and was rejected ('avoid such simple things, geometric and symmetric'). Redo it THROUGH THE ORGANIC LENS: irregular/random point sets (asymmetric placement), dense complete-graph webs, and hand-drawn NOT-straight lines (jitter) so nothing resolves into a tidy shape. A few designs keep architectural anchors (corners/mid/perimeter) but dissolve them with jitter (the honest 'organic version of the dud'); others use off-centre scatters and MULTI-CLUSTER webs (the R30 multi-mass win). Governing taste: organic/irregular/asymmetric/complex, fills the wall, never crisp, dense-but-readable (watch paper-rip on the busiest).",
+  "allowedModules": ["connectDots"],
+  "maxLayers": 3,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-02"
+}
