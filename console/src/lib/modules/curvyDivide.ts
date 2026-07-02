@@ -22,7 +22,7 @@ export const curvyDivideModule: Module = {
     { title: "Grain", fields: [
       { key: "leftAngle", label: "Left angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 35 },
       { key: "rightAngle", label: "Right angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 125 },
-      { key: "spacing", label: "Grain spacing", type: "range", min: 6, max: 40, step: 1, unit: "mm", default: 16 },
+      { key: "spacing", label: "Grain spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 16 },
       { key: "swirl", label: "Flow swirl", type: "range", min: 0, max: 1.4, step: 0.05, unit: "rad", default: 0.6 },
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 14, step: 0.5, unit: "mm", default: 4 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },

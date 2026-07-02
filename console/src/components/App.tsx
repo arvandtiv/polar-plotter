@@ -27,14 +27,14 @@ import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../
 import { decodeBgcode } from '../lib/bgcode';
 import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
 import { compileFrame, expandGenerator } from '../lib/runPipeline';
-import { computeCell, gridClearQueries } from '../lib/gridScript';
+import { computeCell, gridClearQueries, saveActiveGrid, clearActiveGrid, activeGridMatching } from '../lib/gridScript';
 import type { Frame } from '../lib/frame';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer, type LayerGroup } from '../lib/pipeline';
 import { loadImageToGray } from '../lib/image';
 import type { GrayImage } from '../lib/registry';
 import type { VectorFont } from '../lib/textbox';
-import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc } from '../lib/studioDoc';
+import { loadDocs as loadStudioDocs, saveDocs as saveStudioDocs, serializeDoc, parseDocFile, type StudioDoc, type ExportContext } from '../lib/studioDoc';
 import { exportGcode, DEFAULT_EXPORT } from '../lib/gcode-export';
 import '../lib/modules';   // side effect: registers all generators/modifiers
 import { ParamPanel } from './ParamPanel';
@@ -267,16 +267,31 @@ function ParamSlider({ label, value, onInput, onCommit, min, max, step, unit, de
 }) {
   const pct = ((value - min) / (max - min)) * 100;
   const isDefault = value === def;
+  // Draft-while-typing (same fix as ParamPanel.RangeField): parsing+clamping every
+  // keystroke made decimals untypable ("0." → 0) and partial numbers fought the clamp.
+  // Hold the raw string while focused; parse/clamp only on blur / Enter; Escape cancels.
+  const [draft, setDraft] = useState<string | null>(null);
+  const clamp = (v: number) => Math.min(max, Math.max(min, v));
+  const commitDraft = () => {
+    if (draft !== null) {
+      const n = parseFloat(draft);
+      if (!isNaN(n)) onCommit(clamp(n));
+    }
+    setDraft(null);
+  };
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <span className="text-[12px] font-medium text-ink-300">{label}</span>
         <div className="flex items-center gap-2">
-          <input type="number" value={value}
-            onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => onInput(Math.min(max, Math.max(min, parseFloat(e.target.value) || min)))}
-            onBlur={(e) => onCommit(Math.min(max, Math.max(min, parseFloat(e.target.value) || min)))}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          <input type="text" inputMode="decimal" value={draft ?? String(value)}
+            onFocus={(e) => { setDraft(String(value)); e.currentTarget.select(); }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { commitDraft(); e.currentTarget.blur(); }
+              if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+            }}
             className="w-24 rounded-md border border-ink-700 bg-ink-850 px-2 py-1 text-right font-mono text-[13px] text-ink-100 outline-none focus:border-cyanx/50"
           />
           <span className="w-20 font-mono text-[10px] text-ink-500">{unit}</span>
@@ -967,7 +982,10 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
       const mw = await sendRaw(cell.matrixQuery, line.raw);
       if (mw !== 'ok') { pushLog('err', `[script] grid_select matrix failed (${mw})`); return false; }
       cellRef.current = { w: cell.cellW, h: cell.cellH };
-      if (col === 0) pushLog('sys', `[script] row ${row}: cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm`);
+      // Log EVERY cell change (not just column 0) and remember the selection so the
+      // status banner + Studio export can report the exact cell setup.
+      pushLog('sys', `[script] cell (${col},${row}) of ${gc.cols}×${gc.rows} active — ${cell.cellW}×${cell.cellH} mm at global (${cell.cx}, ${cell.cy})`);
+      saveActiveGrid({ ...gc, col, row, cellW: cell.cellW, cellH: cell.cellH, cx: cell.cx, cy: cell.cy });
       return true;
     };
 
@@ -979,6 +997,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
       const mw = await sendRaw(q.matrixQuery, line.raw);
       if (mw !== 'ok') { pushLog('err', `[script] grid_clear matrix failed (${mw})`); return false; }
       cellRef.current = null;
+      clearActiveGrid();
       pushLog('ok', '[script] grid cleared');
       return true;
     };
@@ -1460,9 +1479,31 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
   const renameDoc = (oldName: string, newName: string) => { if (newName.trim()) setDocs((ds) => ds.map((d) => (d.name === oldName ? { ...d, name: newName.trim() } : d))); setDocName(newName.trim()); };
   const deleteDoc = (name: string) => setDocs((ds) => ds.filter((d) => d.name !== name));
   const exportDoc = () => {
-    const blob = new Blob([serializeDoc(docName || 'design', layers, groups)], { type: 'application/json' });
+    // Embed the machine context (work area + active cell setup) so the file records
+    // where the design was meant to land — and say so in the log.
+    const m = status?.matrix ?? null;
+    const ag = activeGridMatching(m);
+    const cellActive = !!m && (Math.abs(m.tx) > 0.5 || Math.abs(m.ty) > 0.5);
+    const context: ExportContext = {
+      exported_at: new Date().toISOString(),
+      work_area: { xn: -bounds.left, xp: bounds.right, yn: -bounds.up, yp: bounds.down, shape: bounds.shape },
+      matrix: m,
+      cell_active: cellActive,
+      grid: ag ? {
+        cols: ag.cols, rows: ag.rows, padding_mm: ag.padding_mm,
+        col: ag.col, row: ag.row,
+        cell_w: ag.cellW, cell_h: ag.cellH,
+        centre_x: ag.cx, centre_y: ag.cy,
+      } : null,
+    };
+    const blob = new Blob([serializeDoc(docName || 'design', layers, groups, context)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `${(docName || 'design').replace(/[^\w.-]+/g, '_')}.json`; a.click(); URL.revokeObjectURL(a.href);
+    P.pushLog('ok', `[studio] exported "${docName || 'design'}" — ` + (ag
+      ? `grid cell (${ag.col},${ag.row}) of ${ag.cols}×${ag.rows} (${ag.cellW}×${ag.cellH} mm at ${ag.cx},${ag.cy}) embedded in metadata`
+      : cellActive
+        ? `affine offset (tx=${m!.tx.toFixed(1)}, ty=${m!.ty.toFixed(1)}) embedded — grid layout unknown (cell set outside console)`
+        : 'full work area (no cell active)'));
   };
   const exportGcodeFile = () => {
     const text = exportGcode(optFrame);
@@ -1655,10 +1696,11 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
                                 <span className="text-[9px] font-semibold uppercase tracking-wider text-ink-500 w-6 text-right">
                                   {k === 'tx' ? 'X' : k === 'ty' ? 'Y' : 'R°'}
                                 </span>
-                                <input type="number" step={k === 'rotateDeg' ? 1 : 0.5}
-                                  value={grp[k]}
+                                {/* Uncontrolled + key-remount (NumberField pattern): parsing every keystroke made "-"/"1." untypable. Commit on blur/Enter. */}
+                                <input type="text" inputMode="decimal" key={`${grp.id}-${k}-${grp[k]}`}
+                                  defaultValue={String(grp[k])}
                                   onFocus={(e) => e.currentTarget.select()}
-                                  onChange={(e) => updateGroup(grp.id, k, parseFloat(e.target.value) || 0)}
+                                  onBlur={(e) => { const n = parseFloat(e.currentTarget.value); if (!isNaN(n)) updateGroup(grp.id, k, n); }}
                                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                                   className="w-16 rounded bg-ink-950 border border-ink-700 px-1.5 py-0.5 text-[11px] text-ink-100 font-mono focus:outline-none focus:border-violet-500/50" />
                               </label>
@@ -2071,6 +2113,14 @@ export default function App() {
                 ⛔ E-STOP — clear
               </button>
             )}
+            <button onClick={() => P.setNotifyDone(!P.notifyDone)}
+              title={P.notifyDone
+                ? 'Artwork-ready notifications ON — a browser notification fires when the job queue finishes a plot'
+                : 'Notify me when the artwork is ready (browser notification when a plot finishes)'}
+              className={`rounded-lg border px-2 py-1.5 text-[14px] leading-none transition-colors ${
+                P.notifyDone ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-700 opacity-60 hover:opacity-100'}`}>
+              {P.notifyDone ? '🔔' : '🔕'}
+            </button>
             <IpInput ip={P.ip} onSave={P.setIp} />
             <StatusChip connected={connected} />
           </div>
@@ -2274,12 +2324,23 @@ export default function App() {
                 <Readout label="Pending" value={status?.pending ?? 0} unit="job" />
                 <Readout label="Done" value={status?.done ?? 0} unit="" />
               </div>
-              {(Math.abs(matrix.tx) > 0.5 || Math.abs(matrix.ty) > 0.5) && (
-                <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/40 px-2.5 py-1.5 text-[11px] text-amber-200">
-                  Affine offset active (tx={matrix.tx.toFixed(1)}, ty={matrix.ty.toFixed(1)}) — position is cell-local.
-                  Click <button type="button" className="underline hover:text-amber-100" onClick={() => P.resetMatrix()}>↺ Identity</button> or Home to reset.
-                </div>
-              )}
+              {(() => {
+                // Prefer the LIVE firmware matrix (a script/MCP may have changed it since
+                // the editor was seeded); fall back to the editor values.
+                const m = status?.matrix ?? matrix;
+                if (Math.abs(m.tx) <= 0.5 && Math.abs(m.ty) <= 0.5) return null;
+                const ag = activeGridMatching(m);   // known cell only if it matches tx/ty
+                return (
+                  <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/40 px-2.5 py-1.5 text-[11px] text-amber-200">
+                    {ag
+                      ? <>Grid cell <b>({ag.col},{ag.row})</b> of <b>{ag.cols}×{ag.rows}</b> active
+                          (pad {ag.padding_mm} mm) — {ag.cellW}×{ag.cellH} mm at global ({ag.cx}, {ag.cy}). Position is cell-local.</>
+                      : <>Affine offset active (tx={m.tx.toFixed(1)}, ty={m.ty.toFixed(1)}) — position is cell-local
+                          (cell set outside this console — grid layout unknown).</>}
+                    {' '}Click <button type="button" className="underline hover:text-amber-100" onClick={() => P.resetMatrix()}>↺ Identity</button> or Home to reset.
+                  </div>
+                );
+              })()}
               {/* Current job — its exact JSON while running (console + Script tab), else idle. */}
               <div className="mt-3">
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">Current job</div>

@@ -992,6 +992,20 @@ export function usePlotter() {
   const [status, setStatus]        = useState<PlotterStatus | null>(null);
   const [jobs, setJobs]            = useState<JobEntry[]>([]);
   const [papers, setPapers]        = useState<Paper[]>(() => loadPapers());
+  // "Notify me when the artwork is ready": fire a browser Notification when the job
+  // queue DRAINS after a real run (automated scripts / MCP plots included — anything
+  // that queues jobs). Pref persisted; enabling asks for Notification permission.
+  const [notifyDone, setNotifyDoneState] = useState<boolean>(() => {
+    try { return localStorage.getItem('plotter.notifyDone') === '1'; } catch { return false; }
+  });
+  const notifyDoneRef = useRef(notifyDone); notifyDoneRef.current = notifyDone;
+  const setNotifyDone = useCallback((on: boolean) => {
+    setNotifyDoneState(on);
+    try { localStorage.setItem('plotter.notifyDone', on ? '1' : '0'); } catch { /* ignore */ }
+    if (on && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
   // Affine matrix: `matrix` = the live 6 values being edited; `matrices` = saved
   // presets (localStorage). Firmware default is identity and is NEVER auto-applied
   // on connect — the user explicitly applies a warp.
@@ -1015,6 +1029,7 @@ export function usePlotter() {
   // before declaring the link down, so a single slow response doesn't flash the UI.
   const sseWasOpen  = useRef(false);
   const pollFails   = useRef(0);
+  const drainRef    = useRef<{ startDone: number; startTime: number } | null>(null);
 
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
@@ -1167,6 +1182,38 @@ export function usePlotter() {
         idle: s.idle, aborting: s.aborting, paused: s.paused, estop: !!s.estop, job: s.job,
         drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion, matrix: s.matrix,
       });
+
+      // Artwork-ready notification: detect the queue DRAINING (pending > 0 → 0).
+      // Only announce a real run (≥3 jobs finished during the drain) so a lone
+      // manual goto/pen test stays silent; skipped when the drain ended in an abort.
+      if (s.pending > 0 && !drainRef.current) {
+        drainRef.current = { startDone: s.done, startTime: Date.now() };
+      } else if (s.pending === 0 && drainRef.current) {
+        const jobsDone = s.done - drainRef.current.startDone;
+        const secs = Math.max(1, Math.round((Date.now() - drainRef.current.startTime) / 1000));
+        drainRef.current = null;
+        if (jobsDone >= 3 && !s.aborting && !s.estop) {
+          const dur = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+          pushLog('ok', `[done] 🎨 plot finished — ${jobsDone} jobs in ${dur}`);
+          if (notifyDoneRef.current && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            try {
+              new Notification('🎨 Polar Plotter — artwork ready', {
+                body: `Plot finished: ${jobsDone} jobs drawn in ${dur}. Queue is empty.`,
+                tag: 'plotter-done',
+              });
+            } catch { /* Notification constructor can throw on some platforms */ }
+          }
+          // Tab-title cue for a hidden tab (cleared when the user comes back).
+          if (document.hidden) {
+            const orig = document.title;
+            document.title = '✅ Plot done — Polar Plotter';
+            const restore = () => {
+              if (!document.hidden) { document.title = orig; document.removeEventListener('visibilitychange', restore); }
+            };
+            document.addEventListener('visibilitychange', restore);
+          }
+        }
+      }
 
       // Build the job rows. Cap to a trailing window so a long session doesn't
       // render hundreds of rows; always include everything from the current job
@@ -1438,6 +1485,7 @@ export function usePlotter() {
   return {
     ip, setIp,
     pen, moving, connected,
+    notifyDone, setNotifyDone,
     motion, bounds,
     queue, log,
     status, jobs, currentJob,

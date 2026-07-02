@@ -35,7 +35,7 @@ export const moireCurtainModule: Module = {
     { title: "Field", fields: [
       { key: "w", label: "Width", type: "range", min: 20, max: 600, step: 1, unit: "mm", default: 200 },
       { key: "h", label: "Height", type: "range", min: 20, max: 600, step: 1, unit: "mm", default: 200 },
-      { key: "spacing", label: "Line spacing", type: "range", min: 1, max: 30, step: 0.5, unit: "mm", default: 4 },
+      { key: "spacing", label: "Line spacing", type: "range", min: 0.5, max: 30, step: 0.5, unit: "mm", default: 4 },
     ]},
     { title: "Gratings", fields: [
       { key: "angle", label: "Base angle", type: "range", min: -90, max: 90, step: 1, unit: "°", default: 90 },

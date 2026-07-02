@@ -53,7 +53,7 @@ export const fillModule: Module = {
     { title: "Fill", fields: [
       { key: "mode", label: "Mode", type: "select", default: "hatch",
         options: [{ value: "hatch", label: "Hatch" }, { value: "concentric", label: "Concentric" }] },
-      { key: "spacing", label: "Spacing", type: "range", min: 1, max: 20, step: 0.5, unit: "mm", default: 3 },
+      { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
       { key: "angle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "°", default: 45 },
       { key: "keepOutline", label: "Keep outlines", type: "toggle", default: true },
     ]},

@@ -24,7 +24,7 @@ export const flowWhirlsModule: Module = {
       { key: "drift", label: "Base drift", type: "range", min: 0, max: 60, step: 1, default: 18 },
     ]},
     { title: "Streamlines", fields: [
-      { key: "spacing", label: "Line spacing", type: "range", min: 6, max: 30, step: 1, unit: "mm", default: 15 },
+      { key: "spacing", label: "Line spacing", type: "range", min: 0.5, max: 30, step: 0.5, unit: "mm", default: 15 },
       { key: "reach", label: "Line length", type: "range", min: 40, max: 400, step: 10, unit: "mm", default: 150 },
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 8, step: 0.5, unit: "mm", default: 1.5 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },

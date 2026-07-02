@@ -13,7 +13,7 @@ export const imageHalftoneModule: Module = {
   description: "A grid of dots sized by the image's darkness (load an image in the Studio).",
   sections: [
     { title: "Halftone", fields: [
-      { key: "spacing", label: "Dot spacing", type: "range", min: 1, max: 20, step: 0.5, unit: "mm", default: 4 },
+      { key: "spacing", label: "Dot spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 4 },
       { key: "maxDot", label: "Max dot", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 4 },
       { key: "invert", label: "Invert", type: "toggle", default: false },
     ]},

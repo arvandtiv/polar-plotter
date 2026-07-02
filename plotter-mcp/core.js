@@ -1,4 +1,4 @@
-// console/src/lib/registry.ts
+// src/lib/registry.ts
 var _registry = /* @__PURE__ */ new Map();
 function register(mod) {
   if (_registry.has(mod.key)) {
@@ -25,7 +25,7 @@ function num(values, key, fallback = 0) {
   return Number.isFinite(v) ? v : fallback;
 }
 
-// console/src/lib/frame.ts
+// src/lib/frame.ts
 function clonePath(path) {
   return { ...path, points: path.points.map((p) => ({ x: p.x, y: p.y })) };
 }
@@ -42,7 +42,7 @@ function rectPath(cx, cy, w, h) {
   };
 }
 
-// console/src/lib/modules/box.ts
+// src/lib/modules/box.ts
 var boxModule = {
   key: "box",
   label: "Box",
@@ -75,7 +75,7 @@ var boxModule = {
 };
 register(boxModule);
 
-// console/src/lib/modules/circle.ts
+// src/lib/modules/circle.ts
 var CHORD_ERR_MM = 0.2;
 function arcSegments(radiusMm, maxErrMm) {
   if (radiusMm <= 0 || maxErrMm <= 0) return 32;
@@ -120,7 +120,7 @@ var circleModule = {
 };
 register(circleModule);
 
-// console/src/lib/geom.ts
+// src/lib/geom.ts
 var dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 function bounds(points) {
   if (!points.length) return null;
@@ -235,7 +235,7 @@ function seededRandom(seed) {
   };
 }
 
-// console/src/lib/modules/square.ts
+// src/lib/modules/square.ts
 var squareModule = {
   key: "square",
   label: "Square",
@@ -275,7 +275,7 @@ var squareModule = {
 };
 register(squareModule);
 
-// console/src/lib/modules/wobbly.ts
+// src/lib/modules/wobbly.ts
 var wobblyModule = {
   key: "wobbly",
   label: "Wobbly",
@@ -328,7 +328,7 @@ var wobblyModule = {
 };
 register(wobblyModule);
 
-// console/src/lib/modules/ruledLines.ts
+// src/lib/modules/ruledLines.ts
 function clampGap(offs, minGap) {
   if (minGap <= 0) return offs;
   const out = [];
@@ -428,7 +428,7 @@ var ruledLinesModule = {
     { title: "Region", fields: [
       { key: "w", label: "Width", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 150 },
       { key: "h", label: "Height", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 150 },
-      { key: "spacing", label: "Line spacing", type: "range", min: 2, max: 40, step: 0.5, unit: "mm", default: 12 }
+      { key: "spacing", label: "Line spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 12 }
     ] },
     { title: "Directions", fields: [
       { key: "vertical", label: "Vertical \u2502", type: "toggle", default: true },
@@ -470,7 +470,7 @@ var ruledLinesModule = {
 };
 register(ruledLinesModule);
 
-// console/src/lib/modules/connectDots.ts
+// src/lib/modules/connectDots.ts
 function pointsFor(preset, h, cx, cy, count, seed) {
   const C = [{ x: cx - h, y: cy - h }, { x: cx + h, y: cy - h }, { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h }];
   const M = [{ x: cx, y: cy - h }, { x: cx + h, y: cy }, { x: cx, y: cy + h }, { x: cx - h, y: cy }];
@@ -587,7 +587,7 @@ var connectDotsModule = {
 };
 register(connectDotsModule);
 
-// console/src/lib/modules/strokeField.ts
+// src/lib/modules/strokeField.ts
 function curve(a, b, jitter, rng) {
   if (jitter <= 0) return { points: [a, b] };
   const len = Math.hypot(b.x - a.x, b.y - a.y);
@@ -667,7 +667,7 @@ var strokeFieldModule = {
 };
 register(strokeFieldModule);
 
-// console/src/lib/modules/arcs.ts
+// src/lib/modules/arcs.ts
 var inside = (p, r2) => p.x >= r2.x0 && p.x <= r2.x1 && p.y >= r2.y0 && p.y <= r2.y1;
 function centresFor(preset, h, cx, cy) {
   const C = [{ x: cx - h, y: cy - h }, { x: cx + h, y: cy - h }, { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h }];
@@ -774,7 +774,7 @@ var arcsModule = {
 };
 register(arcsModule);
 
-// console/src/lib/modules/locatedFigures.ts
+// src/lib/modules/locatedFigures.ts
 function anchorsFor(preset, h, cx, cy) {
   const C = [{ x: cx - h, y: cy - h }, { x: cx + h, y: cy - h }, { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h }];
   const M = [{ x: cx, y: cy - h }, { x: cx + h, y: cy }, { x: cx, y: cy + h }, { x: cx - h, y: cy }];
@@ -922,7 +922,7 @@ var locatedFiguresModule = {
 };
 register(locatedFiguresModule);
 
-// console/src/lib/modules/scribble.ts
+// src/lib/modules/scribble.ts
 function toneFn(form, x, y, cx, cy, h, archH, sigma) {
   const u = (x - (cx - h)) / (2 * h);
   if (form === "gradientV") return Math.min(1, Math.max(0, (y - (cy - h)) / (2 * h)));
@@ -1040,7 +1040,7 @@ var scribbleModule = {
 };
 register(scribbleModule);
 
-// console/src/lib/modules/curvyDivide.ts
+// src/lib/modules/curvyDivide.ts
 var curvyDivideModule = {
   key: "curvyDivide",
   label: "Curvy divide",
@@ -1055,7 +1055,7 @@ var curvyDivideModule = {
     { title: "Grain", fields: [
       { key: "leftAngle", label: "Left angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 35 },
       { key: "rightAngle", label: "Right angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 125 },
-      { key: "spacing", label: "Grain spacing", type: "range", min: 6, max: 40, step: 1, unit: "mm", default: 16 },
+      { key: "spacing", label: "Grain spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 16 },
       { key: "swirl", label: "Flow swirl", type: "range", min: 0, max: 1.4, step: 0.05, unit: "rad", default: 0.6 },
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 14, step: 0.5, unit: "mm", default: 4 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
@@ -1134,7 +1134,7 @@ var curvyDivideModule = {
 };
 register(curvyDivideModule);
 
-// console/src/lib/modules/whirls.ts
+// src/lib/modules/whirls.ts
 function whirl(ox, oy, r0, maxR, turns, dir, phase, squash, rot, jitter, rng) {
   const total = turns * 2 * Math.PI;
   const k = Math.log(maxR / r0) / total;
@@ -1204,7 +1204,7 @@ var whirlsModule = {
 };
 register(whirlsModule);
 
-// console/src/lib/modules/flowWhirls.ts
+// src/lib/modules/flowWhirls.ts
 var flowWhirlsModule = {
   key: "flowWhirls",
   label: "Flow whirls",
@@ -1219,7 +1219,7 @@ var flowWhirlsModule = {
       { key: "drift", label: "Base drift", type: "range", min: 0, max: 60, step: 1, default: 18 }
     ] },
     { title: "Streamlines", fields: [
-      { key: "spacing", label: "Line spacing", type: "range", min: 6, max: 30, step: 1, unit: "mm", default: 15 },
+      { key: "spacing", label: "Line spacing", type: "range", min: 0.5, max: 30, step: 0.5, unit: "mm", default: 15 },
       { key: "reach", label: "Line length", type: "range", min: 40, max: 400, step: 10, unit: "mm", default: 150 },
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 8, step: 0.5, unit: "mm", default: 1.5 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
@@ -1303,7 +1303,7 @@ var flowWhirlsModule = {
 };
 register(flowWhirlsModule);
 
-// console/src/lib/modules/growthField.ts
+// src/lib/modules/growthField.ts
 function stroke(mx, my, s, th, curve2, jitter, rng) {
   const dx = Math.cos(th), dy = Math.sin(th), nx = -dy, ny = dx;
   const n = Math.max(4, Math.round(s / 3));
@@ -1334,7 +1334,7 @@ var growthFieldModule = {
       { key: "radial", label: "Radial", type: "toggle", default: false }
     ] },
     { title: "Strokes", fields: [
-      { key: "spacing", label: "Spacing", type: "range", min: 8, max: 40, step: 1, unit: "mm", default: 18 },
+      { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 18 },
       { key: "sizeMin", label: "Min size", type: "range", min: 2, max: 40, step: 1, unit: "mm", default: 6 },
       { key: "sizeMax", label: "Max size", type: "range", min: 10, max: 80, step: 1, unit: "mm", default: 34 },
       { key: "curve", label: "Stroke curve", type: "range", min: 0, max: 0.6, step: 0.02, default: 0.28 },
@@ -1383,7 +1383,7 @@ var growthFieldModule = {
 };
 register(growthFieldModule);
 
-// console/src/lib/modules/branching.ts
+// src/lib/modules/branching.ts
 var branchingModule = {
   key: "branching",
   label: "Branching",
@@ -1501,7 +1501,7 @@ var branchingModule = {
 };
 register(branchingModule);
 
-// console/src/lib/modules/spirograph.ts
+// src/lib/modules/spirograph.ts
 function gcd(a, b) {
   a = Math.abs(Math.round(a));
   b = Math.abs(Math.round(b));
@@ -1565,7 +1565,7 @@ var spirographModule = {
 };
 register(spirographModule);
 
-// console/src/lib/modules/orbital-weave.ts
+// src/lib/modules/orbital-weave.ts
 var orbitalWeaveModule = {
   key: "orbitalWeave",
   label: "Orbital Weave",
@@ -1616,7 +1616,7 @@ var orbitalWeaveModule = {
 };
 register(orbitalWeaveModule);
 
-// console/src/lib/modules/random-walker.ts
+// src/lib/modules/random-walker.ts
 var randomWalkerModule = {
   key: "randomWalker",
   label: "Random Walker",
@@ -1684,7 +1684,7 @@ var randomWalkerModule = {
 };
 register(randomWalkerModule);
 
-// console/src/lib/modules/noised-hatches.ts
+// src/lib/modules/noised-hatches.ts
 function _hash(ix, iy, iz, seed) {
   let h = ix * 374761393 + iy * 668265263 + iz * 2246822519 + seed * 1013904223 | 0;
   h = Math.imul(h ^ h >>> 13, 1274126177);
@@ -1771,7 +1771,7 @@ var noisedHatchesModule = {
 };
 register(noisedHatchesModule);
 
-// console/src/lib/modules/noise-orbit.ts
+// src/lib/modules/noise-orbit.ts
 function _hash2(ix, iy, iz, seed) {
   let h = ix * 374761393 + iy * 668265263 + iz * 2246822519 + seed * 1013904223 | 0;
   h = Math.imul(h ^ h >>> 13, 1274126177);
@@ -1878,7 +1878,7 @@ var noiseOrbitModule = {
 };
 register(noiseOrbitModule);
 
-// console/src/lib/modules/sheets.ts
+// src/lib/modules/sheets.ts
 var sheetsModule = {
   key: "sheets",
   label: "Sheets",
@@ -1954,7 +1954,7 @@ var sheetsModule = {
 };
 register(sheetsModule);
 
-// console/src/lib/modules/moire-curtain.ts
+// src/lib/modules/moire-curtain.ts
 function grating(angleDeg, spacing, cx, cy, rect) {
   const th = angleDeg * Math.PI / 180;
   const dir = { x: Math.cos(th), y: Math.sin(th) };
@@ -1982,7 +1982,7 @@ var moireCurtainModule = {
     { title: "Field", fields: [
       { key: "w", label: "Width", type: "range", min: 20, max: 600, step: 1, unit: "mm", default: 200 },
       { key: "h", label: "Height", type: "range", min: 20, max: 600, step: 1, unit: "mm", default: 200 },
-      { key: "spacing", label: "Line spacing", type: "range", min: 1, max: 30, step: 0.5, unit: "mm", default: 4 }
+      { key: "spacing", label: "Line spacing", type: "range", min: 0.5, max: 30, step: 0.5, unit: "mm", default: 4 }
     ] },
     { title: "Gratings", fields: [
       { key: "angle", label: "Base angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 90 },
@@ -2009,7 +2009,7 @@ var moireCurtainModule = {
 };
 register(moireCurtainModule);
 
-// console/src/lib/modules/pattern-maker.ts
+// src/lib/modules/pattern-maker.ts
 function baseShape(kind, size) {
   const h = size / 2;
   if (kind === "circle") {
@@ -2084,7 +2084,7 @@ var patternMakerModule = {
 };
 register(patternMakerModule);
 
-// console/src/lib/clip.ts
+// src/lib/clip.ts
 function pointInPolygon(p, poly) {
   let inside2 = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -2136,7 +2136,7 @@ function clipPolylineToPolygon(points, poly, keepInside) {
   return out;
 }
 
-// console/src/lib/modules/mask.ts
+// src/lib/modules/mask.ts
 function maskPolygon(shape, size, sides, rotDeg, cx, cy) {
   let pts;
   if (shape === "square") {
@@ -2209,7 +2209,7 @@ var maskModule = {
 };
 register(maskModule);
 
-// console/src/lib/modules/fill.ts
+// src/lib/modules/fill.ts
 function hatchPolygon(poly, spacing, angleDeg) {
   const b = bounds(poly);
   if (!b) return [];
@@ -2257,7 +2257,7 @@ var fillModule = {
         default: "hatch",
         options: [{ value: "hatch", label: "Hatch" }, { value: "concentric", label: "Concentric" }]
       },
-      { key: "spacing", label: "Spacing", type: "range", min: 1, max: 20, step: 0.5, unit: "mm", default: 3 },
+      { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
       { key: "angle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 45 },
       { key: "keepOutline", label: "Keep outlines", type: "toggle", default: true }
     ] }
@@ -2278,7 +2278,7 @@ var fillModule = {
 };
 register(fillModule);
 
-// console/src/lib/modules/warp.ts
+// src/lib/modules/warp.ts
 var warpModule = {
   key: "warp",
   label: "Warp / Ripple",
@@ -2333,7 +2333,7 @@ var warpModule = {
 };
 register(warpModule);
 
-// console/src/lib/strokefont.ts
+// src/lib/strokefont.ts
 var GRID_H = 7;
 var ADVANCE = 5;
 var GLYPHS = {
@@ -2425,7 +2425,7 @@ function strokeFontDriver(name = "sans") {
   };
 }
 
-// console/src/lib/textbox.ts
+// src/lib/textbox.ts
 function wrapLines(text, driver, size, ls, boxW) {
   const out = [];
   for (const para of text.split("\n")) {
@@ -2543,7 +2543,7 @@ function opentypeFontDriver(font) {
   };
 }
 
-// console/src/lib/modules/text.ts
+// src/lib/modules/text.ts
 var textModule = {
   key: "text",
   label: "Text",
@@ -2606,7 +2606,7 @@ var textModule = {
 };
 register(textModule);
 
-// console/src/lib/modules/image-linework.ts
+// src/lib/modules/image-linework.ts
 function isoContours(gray, w, h, level) {
   const segs = [];
   const lerp = (va, vb) => Math.abs(vb - va) < 1e-9 ? 0.5 : (level - va) / (vb - va);
@@ -2699,7 +2699,7 @@ var imageLineworkModule = {
 };
 register(imageLineworkModule);
 
-// console/src/lib/image.ts
+// src/lib/image.ts
 function sampleGray(img, x, y) {
   const { width: w, height: h, gray } = img;
   const cx = Math.max(0, Math.min(w - 1, x));
@@ -2715,7 +2715,7 @@ function imageFit(img, plotSize, cx, cy) {
   return { s, offX: cx - img.width * s / 2, offY: cy - img.height * s / 2, plotW: img.width * s, plotH: img.height * s };
 }
 
-// console/src/lib/modules/image-halftone.ts
+// src/lib/modules/image-halftone.ts
 var imageHalftoneModule = {
   key: "imageHalftone",
   label: "Image Halftone",
@@ -2724,7 +2724,7 @@ var imageHalftoneModule = {
   description: "A grid of dots sized by the image's darkness (load an image in the Studio).",
   sections: [
     { title: "Halftone", fields: [
-      { key: "spacing", label: "Dot spacing", type: "range", min: 1, max: 20, step: 0.5, unit: "mm", default: 4 },
+      { key: "spacing", label: "Dot spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 4 },
       { key: "maxDot", label: "Max dot", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 4 },
       { key: "invert", label: "Invert", type: "toggle", default: false }
     ] },
@@ -2763,7 +2763,7 @@ var imageHalftoneModule = {
 };
 register(imageHalftoneModule);
 
-// console/src/lib/modules/image-squiggle.ts
+// src/lib/modules/image-squiggle.ts
 var imageSquiggleModule = {
   key: "imageSquiggle",
   label: "Image Squiggle",
@@ -2772,7 +2772,7 @@ var imageSquiggleModule = {
   description: "Wavy scanlines whose amplitude tracks darkness (load an image in the Studio).",
   sections: [
     { title: "Squiggle", fields: [
-      { key: "rowSpacing", label: "Row spacing", type: "range", min: 1, max: 20, step: 0.5, unit: "mm", default: 4 },
+      { key: "rowSpacing", label: "Row spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 4 },
       { key: "wavelength", label: "Wavelength", type: "range", min: 1, max: 30, step: 0.5, unit: "mm", default: 6 },
       { key: "maxAmp", label: "Max amplitude", type: "range", min: 0.5, max: 15, step: 0.5, unit: "mm", default: 2.5 },
       { key: "invert", label: "Invert", type: "toggle", default: false }
@@ -2811,7 +2811,7 @@ var imageSquiggleModule = {
 };
 register(imageSquiggleModule);
 
-// console/src/lib/modules/image-surface.ts
+// src/lib/modules/image-surface.ts
 var imageSurfaceModule = {
   key: "imageSurface",
   label: "Depth Map",
@@ -2867,7 +2867,7 @@ var imageSurfaceModule = {
 };
 register(imageSurfaceModule);
 
-// console/src/lib/arcfit.ts
+// src/lib/arcfit.ts
 var MIN_ARC_PTS = 4;
 var MAX_ARC_R = 1e5;
 function circleFrom3(a, b, c) {
@@ -2936,7 +2936,7 @@ function fitArcs(points, tol) {
   return prims;
 }
 
-// console/src/lib/compile.ts
+// src/lib/compile.ts
 var r = (n) => Math.round(n * 100) / 100;
 var r4 = (n) => Math.round(n * 1e4) / 1e4;
 function boundsRect(b) {
@@ -3001,7 +3001,7 @@ function compile(frame, opts = {}) {
   return out;
 }
 
-// console/src/lib/pipeline.ts
+// src/lib/pipeline.ts
 function emptyFrame(bounds2) {
   return { widthMm: bounds2.left + bounds2.right, heightMm: bounds2.up + bounds2.down, paths: [] };
 }
@@ -3044,7 +3044,7 @@ function evaluate(layers, bounds2, groups = [], image, font) {
   return acc;
 }
 
-// console/src/lib/toolpath.ts
+// src/lib/toolpath.ts
 function simplifyFrame(frame, tol = 0.2) {
   if (tol <= 0) return frame;
   const paths = frame.paths.map((p) => p.points.length > 2 ? { ...p, points: simplifyRDP(p.points, tol) } : clonePath(p));
@@ -3080,7 +3080,7 @@ function optimizeOrder(frame, start = ORIGIN) {
   return { ...frame, paths: ordered };
 }
 
-// console/src/lib/runPipeline.ts
+// src/lib/runPipeline.ts
 function clipBounds(b) {
   return { left: b.left, right: b.right, up: b.up, down: b.down };
 }
@@ -3175,7 +3175,7 @@ function boundsFromFirmware(b) {
   };
 }
 
-// console/src/lib/gridScript.ts
+// src/lib/gridScript.ts
 var rn = (n) => Math.round(n * 100) / 100;
 function firmwareWorkAreaFromPlotter(b) {
   return { xn: -b.left, xp: b.right, yn: -b.up, yp: b.down };
@@ -3305,7 +3305,7 @@ function hydrateGridCommands(commands, gc) {
   });
 }
 
-// console/src/lib/mcp-core.ts
+// src/lib/mcp-core.ts
 function listGenerators() {
   return listModules("make").map((m) => ({
     key: m.key,

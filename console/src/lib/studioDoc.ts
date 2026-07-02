@@ -64,9 +64,30 @@ export function saveDocs(docs: StudioDoc[]): void {
   try { localStorage.setItem(KEY, JSON.stringify(docs)); } catch { /* ignore */ }
 }
 
-/** Serialize a stack + groups for file download. */
-export function serializeDoc(name: string, layers: Layer[], groups: LayerGroup[]): string {
-  return JSON.stringify({ format: "polar-plotter-studio", version: "1.4", name, layers, groups }, null, 2);
+/** Machine context embedded in an exported doc so the file records WHERE it was
+ *  meant to be drawn: the work area, and — when a grid cell was active at export
+ *  time — the full cell setup + which cell was selected. Import ignores it. */
+export interface ExportContext {
+  exported_at: string;
+  work_area: { xn: number; xp: number; yn: number; yp: number; shape: string };
+  matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number } | null;
+  cell_active?: boolean;
+  grid?: {
+    cols: number; rows: number; padding_mm: number;
+    col: number; row: number;
+    cell_w: number; cell_h: number;
+    centre_x: number; centre_y: number;
+  } | null;
+}
+
+/** Serialize a stack + groups for file download (optionally with machine context). */
+export function serializeDoc(
+  name: string, layers: Layer[], groups: LayerGroup[], context?: ExportContext,
+): string {
+  return JSON.stringify({
+    format: "polar-plotter-studio", version: "1.4", name, layers, groups,
+    ...(context ? { metadata: context } : {}),
+  }, null, 2);
 }
 
 /** Parse an imported file: accepts { layers: [...], groups: [...] } or a bare layers array. */

@@ -18,15 +18,31 @@ function RangeField({ field, value, onChange }: {
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const pct = ((value - min) / (max - min)) * 100;
   const isDefault = value === def;
+  // Draft-while-typing: the old controlled input parsed+clamped EVERY keystroke, so
+  // typing "0." collapsed to "0" (decimals impossible) and partial numbers fought the
+  // clamp. While focused we hold the raw string and only parse/clamp on blur / Enter;
+  // Escape cancels. Unfocused, the box mirrors the canonical value (slider stays live).
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null) {
+      const n = parseFloat(draft);
+      if (!isNaN(n)) onChange(clamp(n));
+    }
+    setDraft(null);
+  };
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between">
         <span className="text-[12px] font-medium text-ink-300">{field.label}</span>
         <div className="flex items-center gap-2">
-          <input type="number" value={value}
-            onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => onChange(clamp(parseFloat(e.target.value) || min))}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          <input type="text" inputMode="decimal" value={draft ?? String(value)}
+            onFocus={(e) => { setDraft(String(value)); e.currentTarget.select(); }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { commit(); e.currentTarget.blur(); }
+              if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+            }}
             className="w-20 rounded-md border border-ink-700 bg-ink-850 px-2 py-1 text-right font-mono text-[13px] text-ink-100 outline-none focus:border-cyanx/50" />
           {field.unit && <span className="w-10 font-mono text-[10px] text-ink-500">{field.unit}</span>}
         </div>
@@ -60,7 +76,7 @@ function NumberField({ field, value, onChange }: {
     <label className="flex items-center justify-between gap-2">
       <span className="text-[12px] font-medium text-ink-300">{field.label}</span>
       <div className="flex items-center rounded-lg border border-ink-700 bg-ink-850 focus-within:border-cyanx/50">
-        <input key={value} ref={ref} type="text" inputMode="numeric" defaultValue={String(value)}
+        <input key={value} ref={ref} type="text" inputMode="decimal" defaultValue={String(value)}
           onFocus={(e) => e.currentTarget.select()}
           onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') { commit(); e.currentTarget.blur(); } }}
           className="w-24 bg-transparent px-2 py-1.5 text-right font-mono text-[13px] text-ink-200 outline-none" />

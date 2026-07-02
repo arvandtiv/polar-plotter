@@ -127,7 +127,7 @@ export const ruledLinesModule: Module = {
     { title: "Region", fields: [
       { key: "w", label: "Width", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 150 },
       { key: "h", label: "Height", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 150 },
-      { key: "spacing", label: "Line spacing", type: "range", min: 2, max: 40, step: 0.5, unit: "mm", default: 12 },
+      { key: "spacing", label: "Line spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 12 },
     ]},
     { title: "Directions", fields: [
       { key: "vertical", label: "Vertical │", type: "toggle", default: true },

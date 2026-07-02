@@ -178,6 +178,52 @@ export function gridClearQueries(gc: GridCtx): { boundsQuery: string; matrixQuer
   };
 }
 
+/* ---- Active-cell memory (browser-only; no-ops under node / the MCP bundle) ------
+ * The console records the last grid cell IT activated so the UI can say WHICH cell
+ * the live affine offset belongs to ("cell (1,2) of 3×3") and the Studio export can
+ * embed the cell setup. Cells selected by other clients (MCP) are unknown here —
+ * consumers must verify the stored centre still matches the live matrix tx/ty. */
+export interface ActiveGridInfo extends GridCtx {
+  col: number;
+  row: number;
+  cellW: number;
+  cellH: number;
+  cx: number;   /* cell centre in GLOBAL coords = the matrix tx/ty it was applied with */
+  cy: number;
+}
+
+const ACTIVE_GRID_KEY = "plotter.activeGrid";
+
+export function saveActiveGrid(info: ActiveGridInfo): void {
+  try { localStorage.setItem(ACTIVE_GRID_KEY, JSON.stringify(info)); } catch { /* node / private mode */ }
+}
+
+export function clearActiveGrid(): void {
+  try { localStorage.removeItem(ACTIVE_GRID_KEY); } catch { /* ignore */ }
+}
+
+export function loadActiveGrid(): ActiveGridInfo | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_GRID_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as ActiveGridInfo;
+    const nums = [o.cols, o.rows, o.col, o.row, o.cellW, o.cellH, o.cx, o.cy];
+    return nums.every((n) => isFinite(Number(n))) ? o : null;
+  } catch { return null; }
+}
+
+/** The stored cell info, but ONLY if it matches the live matrix offset (i.e. the
+ *  active cell really is the one the console selected — not stale, not MCP-set). */
+export function activeGridMatching(
+  m: { tx: number; ty: number } | undefined | null,
+  tolMm = 0.5,
+): ActiveGridInfo | null {
+  if (!m) return null;
+  const ag = loadActiveGrid();
+  if (!ag) return null;
+  return Math.abs(ag.cx - m.tx) <= tolMm && Math.abs(ag.cy - m.ty) <= tolMm ? ag : null;
+}
+
 /** Bake metadata into each grid_select / grid_clear so commands are self-contained. */
 export function hydrateGridCommands<T extends { type?: string }>(
   commands: T[],

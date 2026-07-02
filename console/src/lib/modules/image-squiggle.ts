@@ -14,7 +14,7 @@ export const imageSquiggleModule: Module = {
   description: "Wavy scanlines whose amplitude tracks darkness (load an image in the Studio).",
   sections: [
     { title: "Squiggle", fields: [
-      { key: "rowSpacing", label: "Row spacing", type: "range", min: 1, max: 20, step: 0.5, unit: "mm", default: 4 },
+      { key: "rowSpacing", label: "Row spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 4 },
       { key: "wavelength", label: "Wavelength", type: "range", min: 1, max: 30, step: 0.5, unit: "mm", default: 6 },
       { key: "maxAmp", label: "Max amplitude", type: "range", min: 0.5, max: 15, step: 0.5, unit: "mm", default: 2.5 },
       { key: "invert", label: "Invert", type: "toggle", default: false },

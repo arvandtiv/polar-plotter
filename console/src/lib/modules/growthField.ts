@@ -39,7 +39,7 @@ export const growthFieldModule: Module = {
       { key: "radial", label: "Radial", type: "toggle", default: false },
     ]},
     { title: "Strokes", fields: [
-      { key: "spacing", label: "Spacing", type: "range", min: 8, max: 40, step: 1, unit: "mm", default: 18 },
+      { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 18 },
       { key: "sizeMin", label: "Min size", type: "range", min: 2, max: 40, step: 1, unit: "mm", default: 6 },
       { key: "sizeMax", label: "Max size", type: "range", min: 10, max: 80, step: 1, unit: "mm", default: 34 },
       { key: "curve", label: "Stroke curve", type: "range", min: 0, max: 0.6, step: 0.02, default: 0.28 },
