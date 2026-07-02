@@ -230,6 +230,22 @@ void tmc5072_move_rate_matched(tmc5072_t *dev, int32_t t0, int32_t t1,
     int32_t d1 = t1 - from1; if (d1 < 0) d1 = -d1;
     int32_t dlong = (d0 > d1) ? d0 : d1;
     if (dlong > 0) {
+        /* Rate-matched joints must blend velocities at FULL acceleration (the design
+         * premise — see docs/motion_native_tmc5072.md §4 idea A). The path's first
+         * segment was issued with the whole profile geometrically scaled per motor
+         * (move_scaled_from), which also scaled A1/V1/AMAX/DMAX/D1 DOWN by that
+         * segment's distance ratio. Leaving those stale for the rest of the path made
+         * each motor track its changing VMAX at a DIFFERENT, frozen accel — the two
+         * axes drift out of ratio at every joint and the pen wiggles, worse the
+         * further the path direction rotates from the first segment (= later in the
+         * drawing). Restore the full-scale profile once, on the first rate-matched
+         * joint after any scaled move; applied_scale = -1 marks "accels full, VMAX
+         * custom" so subsequent joints stay on the lean 4-write path. */
+        for (int m = 0; m < 2; m++) {
+            if (dev->applied_scale[m] != -1.0f) {
+                tmc5072_set_ramp_scale(dev, m, 1.0f);   /* also rewrites VMAX; overridden below */
+            }
+        }
         uint32_t v0 = ramp_scl(dev->base_ramp.vmax, (float)d0 / (float)dlong, 1);
         uint32_t v1 = ramp_scl(dev->base_ramp.vmax, (float)d1 / (float)dlong, 1);
         tmc5072_write(dev, TMC5072_VMAX(0), v0);

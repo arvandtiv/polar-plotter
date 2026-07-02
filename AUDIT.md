@@ -134,7 +134,25 @@ other prefs.
 flag) so arbitrary polylines stream without per-vertex stops. Fixes P2; needs a flash + a
 bench test with the look-ahead at corners.
 
-**Phase 3 (tidy):** P4 partial-arc cycles fix in the same flash as Phase 2.
+**Phase 3 (tidy): ✅ DONE (this branch, needs flash).** P4 partial-arc cycles fix —
+`do_draw_arc` now alternates sweep direction per cycle (there-and-back, like
+`do_draw_line`) instead of drawing a chord back across the arc's mouth on each retrace.
+
+## 5 · Post-audit field finding: two-motor desync wobble — FIXED (needs flash)
+
+Reported after Phase 1 went live: a wobble appearing "closer to the end of the drawing" —
+the two motors drift slightly out of sync (pre-dates the arc change). Root cause found in
+`tmc5072_move_rate_matched`: the design premise (docs/motion_native_tmc5072.md §4 idea A,
+"joints blend at full AMAX") was violated. The path's first segment scales the WHOLE ramp
+(`A1/V1/AMAX/DMAX/D1`) per motor by that segment's distance ratio; interior joints then
+only rewrote `VMAX`, leaving each motor's accelerations **frozen at the first segment's
+ratios for the entire streamed path**. Short sub-segments are accel-dominated, so the two
+motors tracked their per-joint velocity targets at different stale rates → the velocity
+ratio drifted off the chord → wiggle, growing as the path direction rotates away from the
+first segment's (= later in long paths; Phase 1's longer single-job arcs made it more
+visible). Fix: restore the full-scale profile on the first rate-matched joint after any
+scaled move, then modulate only `VMAX` (see motion doc §5.1). Firmware builds clean
+(`build/main/polar_plotter.uf2`); **flash required** (BOOTSEL).
 
 ---
 *Audit verified against: `main/main.c`, `main/kinematics.h`, `main/board_config.h`,

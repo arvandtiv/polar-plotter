@@ -826,8 +826,13 @@ static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool 
     else      { move_to_xy(sx, sy); }
     path_begin(sx, sy);
     for (int c = 0; c < cycles; c++) {
+        /* Alternate sweep direction per cycle (like do_draw_line's there-and-back):
+         * re-sweeping forward from a0 each cycle drew a straight chord from the arc's
+         * END back across to its start on every retrace of a PARTIAL arc. Full circles
+         * were unaffected (end ≡ start) and still retrace the same path. */
         for (int k = 1; k <= n; k++) {
-            float t = a0 + span * ((float)k / (float)n);
+            float f = (c & 1) ? (float)(n - k) / (float)n : (float)k / (float)n;
+            float t = a0 + span * f;
             path_to(cx2 + r * cosf(t), cy2 + r * sinf(t));
         }
     }

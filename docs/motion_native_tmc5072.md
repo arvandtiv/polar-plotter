@@ -102,4 +102,24 @@ Expected effect on paper: circles/arcs lose the per-chord stutter and plot
 several times faster; streamed lines hold their path better mid-stroke
 (full-stiffness joints); stroke endpoints stay synchronized.
 
+### 5.1 Bug found & fixed (2026-07-02): stale scaled accels broke the "full AMAX" premise
+
+Idea A's premise — joints blend "at full `AMAX`" — was violated by the original
+implementation. The path's FIRST segment goes out via `move_scaled_from`, which scales
+the **whole** profile (`A1/V1/AMAX/DMAX/D1/VSTOP`) per motor by that segment's distance
+ratio; the interior `move_rate_matched` then only rewrote `VMAX`, so **each motor's
+accelerations stayed frozen at the first segment's ratios for the entire streamed
+path**. On short (≤`LINE_SEG_MM`) sub-segments motion is accel-dominated, so the two
+motors tracked their changing per-joint `VMAX` at different, stale rates — the velocity
+ratio drifted off the chord direction at every joint and the pen wiggled, visibly worse
+the further the path direction rotated from the first segment's (= later in long
+streamed paths: arc sweeps, borders, page-bottom lines). Symptom on paper: "the two
+motors go slightly out of sync near the end of the drawing".
+
+Fix (`tmc5072_move_rate_matched`): on the first rate-matched joint after any scaled
+move, restore the full-scale profile (`set_ramp_scale(m, 1.0)`) before writing the
+per-axis `VMAX`; `applied_scale = -1` marks "accels full, VMAX custom" so subsequent
+joints keep the lean 4-write path. The final segment still returns to a scaled profile
+(`move_scaled_from`) so both axes decelerate into the stop together.
+
 Not yet done: B and C tuning constants, D anchor-arc primitive, F coolStep.
