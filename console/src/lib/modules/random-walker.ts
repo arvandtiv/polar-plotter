@@ -6,6 +6,11 @@
 //   vx += random(-velStep, +velStep)  [clamped to ±maxVel]
 //   x  += vx  ;  y += vy
 //   stop when (x,y) leaves the work area.
+//
+// PIPE mode: the walk still wanders generatively, but the line itself is NOT drawn —
+// it becomes the invisible SPINE for a series of circles laid along it, radius
+// growing from rMin at the path's start to rMax at its end (a tapered tube). Each
+// circle is hand-wobbled (pipeJitter) so nothing reads crisp.
 
 import { register, num, type Module } from "../registry";
 import { seededRandom } from "../geom";
@@ -16,8 +21,18 @@ export const randomWalkerModule: Module = {
   label: "Random Walker",
   kind: "make",
   group: "Lines & Patterns",
-  description: "Agents drift with accumulating velocity, each tracing a line until they leave the canvas.",
+  description: "Agents drift with accumulating velocity, each tracing a line until they leave the canvas. Pipe mode draws growing circles along the invisible walk instead of the line.",
   sections: [
+    { title: "Pipe", fields: [
+      { key: "mode", label: "Draw as", type: "select", default: "walk", options: [
+        { value: "walk", label: "Line (classic walk)" },
+        { value: "pipe", label: "Pipe (circles along path)" },
+      ]},
+      { key: "rMin",        label: "Start radius (min r)", type: "range", min: 0.5, max: 30, step: 0.5, unit: "mm", default: 1 },
+      { key: "rMax",        label: "End radius (max r)",   type: "range", min: 0.5, max: 60, step: 0.5, unit: "mm", default: 8 },
+      { key: "pipeSpacing", label: "Circle spacing",       type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 6 },
+      { key: "pipeJitter",  label: "Hand jitter",          type: "range", min: 0,   max: 4,  step: 0.1, unit: "mm", default: 0.8 },
+    ]},
     { title: "Walkers", fields: [
       { key: "count",     label: "Walkers",       type: "range", min: 1,   max: 500,   step: 1,   default: 20  },
       { key: "steps",     label: "Max steps",     type: "range", min: 100, max: 10000, step: 100, default: 2000 },
@@ -49,8 +64,55 @@ export const randomWalkerModule: Module = {
     const x2        = num(params, "x2", 0);
     const y2        = num(params, "y2", 0);
     const cycles    = Math.max(1, Math.round(num(params, "cycles", 1)));
+    const mode      = String(params.mode ?? "walk");
+    const rMin      = Math.max(0.1, num(params, "rMin", 1));
+    const rMax      = Math.max(0.1, num(params, "rMax", 8));
+    const pipeSpacing = Math.max(0.5, num(params, "pipeSpacing", 6));
+    const pipeJitter  = Math.max(0, num(params, "pipeJitter", 0.8));
 
     const rng = seededRandom(seed);
+
+    // One hand-wobbled circle: radius modulated by two low-order harmonics with a
+    // random phase/mix per circle, so every ring is its own living line (never a
+    // crisp CAD circle — unless pipeJitter is 0, in which case the compiler's
+    // arc-fitter collapses it into a single firmware arc job).
+    const wobblyCircle = (cx: number, cy: number, r: number): Pt[] => {
+      const n = Math.min(96, Math.max(12, Math.round((2 * Math.PI * r) / 1.5)));
+      const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
+      const k1 = 2 + Math.floor(rng() * 2), k2 = 3 + Math.floor(rng() * 3);
+      const amp = pipeJitter * (0.7 + 0.6 * rng());
+      const pts: Pt[] = [];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * 2 * Math.PI;
+        const rr = r + amp * (0.6 * Math.sin(a * k1 + p1) + 0.4 * Math.sin(a * k2 + p2));
+        pts.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a) });
+      }
+      return pts;
+    };
+
+    // Circles along a spine: walk the polyline by arc length, dropping a circle every
+    // `pipeSpacing` mm; radius lerps rMin→rMax from the path's start to its end.
+    const emitPipe = (spine: Pt[], out: Path[]): void => {
+      let total = 0;
+      for (let i = 1; i < spine.length; i++)
+        total += Math.hypot(spine[i].x - spine[i - 1].x, spine[i].y - spine[i - 1].y);
+      if (total < 1e-6) return;
+      let seg = 0;                       // index of the spine segment being walked
+      let segStart = 0;                  // arc length at the start of that segment
+      let segLen = Math.hypot(spine[1].x - spine[0].x, spine[1].y - spine[0].y);
+      for (let d = 0; d <= total; d += pipeSpacing) {
+        while (d > segStart + segLen && seg < spine.length - 2) {
+          segStart += segLen;
+          seg++;
+          segLen = Math.hypot(spine[seg + 1].x - spine[seg].x, spine[seg + 1].y - spine[seg].y);
+        }
+        const f = segLen > 1e-9 ? (d - segStart) / segLen : 0;
+        const cx = spine[seg].x + (spine[seg + 1].x - spine[seg].x) * f;
+        const cy = spine[seg].y + (spine[seg + 1].y - spine[seg].y) * f;
+        const r = rMin + (rMax - rMin) * (d / total);
+        out.push({ points: wobblyCircle(cx, cy, r), closed: true, cycles });
+      }
+    };
 
     // Shared initial velocity — all walkers begin heading in flowAngle.
     const vx0 = maxVel * Math.cos(flowAngle);
@@ -87,10 +149,13 @@ export const randomWalkerModule: Module = {
         pts.push({ x, y });
       }
 
-      if (pts.length > 1) paths.push({ points: pts, closed: false, cycles });
+      if (pts.length > 1) {
+        if (mode === "pipe") emitPipe(pts, paths);   // spine invisible — circles only
+        else paths.push({ points: pts, closed: false, cycles });
+      }
     }
 
-    return { widthMm: w, heightMm: h, paths, meta: { title: "Random Walker" } };
+    return { widthMm: w, heightMm: h, paths, meta: { title: mode === "pipe" ? "Random Walker — pipe" : "Random Walker" } };
   },
 };
 
