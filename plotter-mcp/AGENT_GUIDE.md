@@ -169,6 +169,24 @@ art fits *entirely* inside the current bounds, and draw the first seed that fits
   generator's radius/size params, raise `max_seeds`, or raise `fit_tol_mm`).
 - Only generators that expose a `seed` param can be reseeded; others report `Fit: SKIPPED`.
 
+#### `plot_studio`
+Plot a FULL Studio layer-stack document — the exact JSON the web console's Studio tab
+exports ("⤓ Export"), or a bare `{ layers, groups? }`. This is the complete Studio
+pipeline over MCP: every generator PLUS the `mask` / `fill` / `warp` modifier layers,
+`text` (built-in stroke fonts), and group transforms — evaluated, clipped to the live
+work area (or the active grid cell), simplified, travel-optimized, arc-fitted and sent
+with flow control. Layer params merge over module defaults, so only overrides are
+needed. Inside `plot_script`, the same document plots per-cell via
+`{ "type": "studio", "layers": [...], "groups": [...] }`.
+Limitation: `image*` layers need an uploaded image — web console only.
+
+```json
+{ "doc": { "layers": [
+    { "module": "branching", "params": { "origin": "center", "coreR": 30 } },
+    { "module": "warp", "params": { "mode": "water" } }
+] } }
+```
+
 #### `plot_polylines`
 Send raw point arrays as firmware strokes — the lowest-level drawing primitive.
 Use this when you compute shapes mathematically (see §5 Recipes).

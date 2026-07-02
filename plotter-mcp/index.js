@@ -28,6 +28,9 @@ import {
   compilePathsWithWarp,
   expandGenerator,
   expandGeneratorFitted,
+  runLayerStack,
+  getModule,
+  defaultsOf,
   boundsFromFirmware,
   listGenerators,
   gridCtxFromMetadata,
@@ -211,7 +214,7 @@ async function batchSend(queries, { timeoutMs = 600_000 } = {}) {
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.5.0',
+  version: '1.6.0',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
@@ -920,6 +923,17 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
             else { fitMisses.push(where); results.push(`   ↳ ⚠ fit MISS (${where}): no seed in ${ex.attempts} fit — drawn clipped.`); }
           }
           json = await batchSend(ex.queries);
+        } else if (cmd.type === 'studio') {
+          // Full Studio layer-stack step (same doc shape as plot_studio / the console's
+          // "Export" JSON). Bounds are read live, so inside a grid_select the stack is
+          // evaluated + clipped for the ACTIVE CELL — a studio design per cell.
+          const s = await api('status');
+          const bounds = boundsFromFirmware(s.bounds ?? {});
+          const { layers, groups } = buildStudioStack(cmd.layers, cmd.groups);
+          const queries = runLayerStack(layers, bounds, groups, undefined, { arcTol: ARC_TOL });
+          results.push(`   ↳ studio stack: ${layers.length} layer(s) → ${queries.length} ops` +
+                       (activeCell ? ` (cell ${activeCell})` : ''));
+          json = await batchSend(queries);
         } else if (isDirect) {
           // Configuration commands bypass the draw queue and execute immediately.
           json = await executeDirectCmd(cmd, gridCtx);
@@ -998,6 +1012,36 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
 
 // ── Raw-path & generative tools ──────────────────────────────────────────────
 
+// Build Studio Layer[]/LayerGroup[] from a document (the console Studio tab's
+// "⤓ Export" JSON, or a bare { layers, groups }). Layers accept module|moduleKey;
+// params merge over the module's defaults so partial params are fine. Image-based
+// modules need an uploaded image, which only exists in the web console.
+function buildStudioStack(rawLayers, rawGroups) {
+  if (!Array.isArray(rawLayers) || rawLayers.length === 0)
+    throw new Error('studio: "layers" must be a non-empty array');
+  const layers = rawLayers.map((l, i) => {
+    const key = String(l?.moduleKey ?? l?.module ?? '');
+    const mod = getModule(key);
+    if (!mod) throw new Error(`studio: unknown module "${key}" (layer ${i + 1}) — see plot_list_generators`);
+    if (key.startsWith('image'))
+      throw new Error(`studio: "${key}" needs an uploaded image — image layers only work in the web console`);
+    return {
+      id: `l${i}`,
+      moduleKey: key,
+      params: { ...defaultsOf(mod), ...(l.params ?? {}) },
+      groupId: l.groupId != null ? String(l.groupId) : undefined,
+    };
+  });
+  const groups = Array.isArray(rawGroups) ? rawGroups.map((g, i) => ({
+    id: String(g?.id ?? `g${i}`),
+    name: String(g?.name ?? `group ${i + 1}`),
+    tx: Number(g?.tx ?? 0),
+    ty: Number(g?.ty ?? 0),
+    rotateDeg: Number(g?.rotateDeg ?? 0),
+  })) : [];
+  return { layers, groups };
+}
+
 server.tool(
   'plot_list_generators',
   'List all built-in generative algorithms available to plot_generate. ' +
@@ -1007,6 +1051,46 @@ server.tool(
   async () => ({
     content: [{ type: 'text', text: JSON.stringify(listGenerators(), null, 2) }],
   }),
+);
+
+server.tool(
+  'plot_studio',
+  `Plot a FULL Studio layer-stack document — the same JSON the web console's Studio tab
+exports ("⤓ Export"), so a saved design can be handed to this tool unchanged.
+Runs the complete Studio pipeline: evaluate every layer (all generators PLUS the
+mask / fill / warp modifier layers and text, with group transforms) → clip to the live
+work area (or the ACTIVE GRID CELL) → simplify → travel-optimize → arc-fit →
+flow-controlled send, waiting until drawing physically finishes.
+
+Accepts { layers, groups? } or the full export file { format, name, layers, groups,
+metadata }. Layer shape: { module: "<key>", params?: {...}, groupId?: "g1" } — params
+merge over the module's defaults, so only overrides are needed. Modifier layers
+(mask/fill/warp) apply to the composition below them, exactly like in the Studio.
+Limitation: image* modules need an uploaded image and only work in the web console.`,
+  {
+    doc: z.object({
+      name:   z.string().optional(),
+      layers: z.array(z.record(z.string(), z.unknown())).min(1)
+        .describe('Layer stack, bottom-first: [{ module, params?, groupId? }, …]'),
+      groups: z.array(z.record(z.string(), z.unknown())).optional()
+        .describe('Optional layer groups: [{ id, name, tx, ty, rotateDeg }]'),
+    }).passthrough().describe("Studio document (the console's ⤓ Export JSON works as-is)"),
+  },
+  async ({ doc }) => {
+    const { layers, groups } = buildStudioStack(doc.layers, doc.groups);
+    const s = await api('status');
+    const bounds = boundsFromFirmware(s.bounds ?? {});
+    if (![bounds.left, bounds.right, bounds.up, bounds.down].every((v) => isFinite(v) && v !== 0))
+      throw new Error('could not read live work-area bounds from the plotter (is it online?)');
+    const queries = runLayerStack(layers, bounds, groups, undefined, { arcTol: ARC_TOL });
+    const draws = queries.filter((q) => q.startsWith('line?') || q.startsWith('arc?')).length;
+    const result = await batchSend(queries);
+    return { content: [{ type: 'text', text: [
+      `Studio stack "${doc.name ?? 'untitled'}": ${layers.length} layer(s), ${groups.length} group(s) → ` +
+      `${queries.length} ops (${draws} drawn segments) inside x:[${-bounds.left}..${bounds.right}] y:[${-bounds.up}..${bounds.down}].`,
+      ok(result),
+    ].join('\n') }] };
+  },
 );
 
 server.tool(
