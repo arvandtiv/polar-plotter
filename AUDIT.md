@@ -130,9 +130,14 @@ other prefs.
    from Studio) to confirm the deployed firmware build accepts `/api/arc` and the
    sweep looks clean.
 
-**Phase 2 (firmware, the big one):** `WCMD_PATH` multi-point job (or a `flow` continuation
-flag) so arbitrary polylines stream without per-vertex stops. Fixes P2; needs a flash + a
-bench test with the look-ahead at corners.
+**Phase 2 (firmware, the big one): ✅ DONE (branch `phase-2-flow`, needs flash).** Went with
+the `flow` continuation flag (simpler than `WCMD_PATH`: no queue-memory format change, rides
+`/api/batch` untouched, graceful on old firmware/clients). `flow=1` on a line/arc job keeps
+the streamed path OPEN across jobs — one continuous stroke with rate-matched joints instead
+of a full stop per vertex. The CLIENT decides continuity per vertex (compile.ts: turn angle
+≤ 45° flows, sharp corners stop crisply — `flowMaxTurnDeg`/`flow:false` opts). Chain enders:
+flow=0, any non-line/arc command, a >0.5 mm discontinuity, pause/E-STOP, queue dry 250 ms.
+Even-cycle retraces never flow (they end back at the segment start). Fixes P2.
 
 **Phase 3 (tidy): ✅ DONE (this branch, needs flash).** P4 partial-arc cycles fix —
 `do_draw_arc` now alternates sweep direction per cycle (there-and-back, like

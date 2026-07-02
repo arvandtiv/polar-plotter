@@ -5,7 +5,7 @@
 
 import type { Pt } from "./frame";
 
-export interface ArcSeg { kind: "arc"; cx: number; cy: number; r: number; a0: number; a1: number; cw: boolean; }
+export interface ArcSeg { kind: "arc"; cx: number; cy: number; r: number; a0: number; a1: number; cw: boolean; span: number; }
 export interface LineSeg { kind: "line"; points: Pt[]; }
 export type Primitive = ArcSeg | LineSeg;
 
@@ -71,6 +71,7 @@ export function fitArcs(points: Pt[], tol: number): Primitive[] {
         a0: Math.atan2(points[i].y - bestC.cy, points[i].x - bestC.cx),
         a1: Math.atan2(points[best].y - bestC.cy, points[best].x - bestC.cx),
         cw: turn < 0,
+        span: best - i,   // ring segments this arc covers (for per-vertex flow mapping)
       });
       i = best; lineStart = best;
     } else {

@@ -57,5 +57,31 @@ console.log("[4] frameBounds / rectPath");
      JSON.stringify(b));
 }
 
+console.log("[flow] Phase-2 chaining flags");
+{
+  const wave: { x: number; y: number }[] = [];
+  for (let i = 0; i <= 20; i++) wave.push({ x: i * 5, y: 10 * Math.sin(i / 4) });
+  const wf = { widthMm: 100, heightMm: 40, paths: [{ points: wave, closed: false }] };
+  const q1 = compile(wf);
+  const lines1 = q1.filter((q) => q.startsWith("line?"));
+  ok("smooth polyline: all but last segment flow", 
+     lines1.slice(0, -1).every((q) => q.includes("flow=1")) &&
+     !lines1[lines1.length - 1].includes("flow=1"),
+     `${q1.filter((q) => q.includes("flow=1")).length}/${lines1.length}`);
+  ok("flow:false disables the flags", 
+     compile(wf, { flow: false }).every((q) => !q.includes("flow=1")));
+  ok("even cycles never flow (retrace ends at start)",
+     compile({ ...wf, paths: [{ points: wave, closed: false, cycles: 2 }] })
+       .every((q) => !q.includes("flow=1")));
+  const sq = compile({ widthMm: 100, heightMm: 100,
+    paths: [{ points: [{ x: 0, y: 0 }, { x: 80, y: 0 }, { x: 80, y: 80 }, { x: 0, y: 80 }], closed: true }] });
+  ok("square corners (90°) never flow", sq.every((q) => !q.includes("flow=1")));
+  // Tighter threshold flows FEWER vertices (near-straight inflections still pass —
+  // a ~0° turn should flow at any threshold, so "none" would be wrong to expect).
+  const n45 = compile(wf).filter((q) => q.includes("flow=1")).length;
+  const n1  = compile(wf, { flowMaxTurnDeg: 1 }).filter((q) => q.includes("flow=1")).length;
+  ok("tighter turn threshold flows fewer vertices", n1 < n45 && n1 > 0, `45°:${n45} 1°:${n1}`);
+}
+
 console.log(`\n${fails ? `TESTS FAILED (${fails})` : "ALL TESTS PASSED"}`);
 process.exit(fails ? 1 : 0);

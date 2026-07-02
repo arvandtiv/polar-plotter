@@ -314,6 +314,7 @@ static void handle_line(int sock, const char *qs)
     c.p[3] = qf(qs, "y1",    0.0f);
     c.p[4] = qf(qs, "cycles", 1.0f);
     c.p[5] = qf(qs, "lift",   1.0f);   /* 1 = standalone (pen up/travel/down/draw/up); 0 = continuous (no bob) */
+    c.p[6] = qf(qs, "flow",   0.0f);   /* 1 = more segments follow — chain into ONE streamed path, no stop at this vertex */
     if (!pt_ok(sock, c.p[0], c.p[1]) || !pt_ok(sock, c.p[2], c.p[3])) return;
     resp_enqueue(sock, "line queued", &c);
 }
@@ -455,6 +456,7 @@ static void handle_arc(int sock, const char *qs)
     c.p[5] = qf(qs, "cw", 0.0f);     /* 1 = clockwise */
     c.p[6] = qf(qs, "cycles", 1.0f);
     c.p[7] = qf(qs, "lift", 1.0f);   /* 0 = continuous (no pen bob) */
+    c.p[8] = qf(qs, "flow", 0.0f);   /* 1 = chain into the surrounding streamed path (no stop after the sweep) */
     resp_enqueue(sock, "arc queued", &c);
 }
 
@@ -723,6 +725,7 @@ static bool batch_build_cmd(const char *path, const char *qs, wcmd_t *c)
         c->p[0] = qf(qs, "x0", 0); c->p[1] = qf(qs, "y0", 0);
         c->p[2] = qf(qs, "x1", 0); c->p[3] = qf(qs, "y1", 0);
         c->p[4] = qf(qs, "cycles", 1); c->p[5] = qf(qs, "lift", 1);
+        c->p[6] = qf(qs, "flow", 0);
         return true;
     }
     if (strcmp(path, "goto") == 0) {
@@ -733,6 +736,7 @@ static bool batch_build_cmd(const char *path, const char *qs, wcmd_t *c)
         c->p[0] = qf(qs, "cx", 0); c->p[1] = qf(qs, "cy", 0); c->p[2] = qf(qs, "r", 10);
         c->p[3] = qf(qs, "a0", 0); c->p[4] = qf(qs, "a1", 0); c->p[5] = qf(qs, "cw", 0);
         c->p[6] = qf(qs, "cycles", 1); c->p[7] = qf(qs, "lift", 1);
+        c->p[8] = qf(qs, "flow", 0);
         return true;
     }
     if (strcmp(path, "pen") == 0) {

@@ -188,8 +188,9 @@ static void led_task(void *arg)
 
 /* Forward declarations */
 static void do_draw_goto(float x, float y);
-static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift);
-static void do_draw_arc(float cx, float cy, float r, float a0, float a1, bool cw, int cycles, bool lift);
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift, bool flow);
+static void do_draw_arc(float cx, float cy, float r, float a0, float a1, bool cw, int cycles, bool lift, bool flow);
+static void flow_break(void);
 static void do_draw_square(float cx, float cy, float size, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_circle(float cx, float cy, float r, int cycles, int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
 static void do_draw_bullseye(float cx, float cy);
@@ -731,6 +732,29 @@ static void draw_line_mm(float x0, float y0, float x1, float y1)
     path_end();
 }
 
+/* ---- Flow chaining (Phase 2, AUDIT.md §4) --------------------------------------
+ * `flow=1` on a line/arc job means "more segments of the same stroke follow": the
+ * motion task keeps ONE path_begin/path_to stream OPEN across consecutive flow jobs
+ * instead of path_end-ing (= full stop) at every vertex. The CLIENT decides
+ * continuity per vertex (compile.ts: smooth turns flow, sharp corners get flow=0 so
+ * they still stop crisply). Chain enders: a flow=0 job, any non-line/arc command, a
+ * spatial discontinuity, pause/E-STOP, or the queue running dry (FLOW_DRY_MS).    */
+#define FLOW_DRY_MS 250   /* chain open + queue empty this long → end the stroke cleanly */
+static struct {
+    bool     active;      /* a streamed path is open across jobs */
+    float    x, y;        /* where the open path currently ends (logical mm) */
+    uint32_t segs;        /* segments chained so far (for the completion log) */
+} s_flow = { false, 0.0f, 0.0f, 0 };
+
+static void flow_break(void)
+{
+    if (!s_flow.active) return;
+    s_flow.active = false;
+    path_end();           /* synchronized decel into the final waypoint */
+    web_log("flow path done — %lu segments, one continuous stroke", (unsigned long)s_flow.segs);
+    s_flow.segs = 0;
+}
+
 static int parse_cycles(const char *s) { int c = atoi(s); return (c < 1) ? 1 : c; }
 
 static bool clip_to_rect(float cx2, float cy2, float h,
@@ -816,25 +840,43 @@ static void do_draw_goto(float x, float y)
 /* lift = true: standalone line — pen up, travel to start, pen down, draw, pen up.
  * lift = false: continuous-path mode (the G-code digester chains segments) — leave
  * the pen wherever it is and just draw from the current point through (x0,y0)->(x1,y1)
- * so back-to-back segments don't bob the pen up/down at every vertex. */
-static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift)
+ * so back-to-back segments don't bob the pen up/down at every vertex.
+ * flow = true: keep the streamed path OPEN after this segment — the next flow job
+ * continues the same stroke with rate-matched joints instead of a full stop. */
+static void do_draw_line(float x0, float y0, float x1, float y1, int cycles, bool lift, bool flow)
 {
     tmc5072_enable(&tmc, true);
-    if (lift) { pen_lift(); move_to_xy(x0, y0); pen_drop(); }
-    else      { move_to_xy(x0, y0); }   /* pen already down; no-op if already at x0,y0 */
-    path_begin(x0, y0);
-    for (int c = 0; c < cycles; c++) {
-        if (c & 1) path_to(x0, y0);
-        else       path_to(x1, y1);
+    if (s_flow.active) {
+        /* Continue the open chain only if this segment starts where it ends. */
+        float ddx = x0 - s_flow.x, ddy = y0 - s_flow.y;
+        if (ddx * ddx + ddy * ddy > 0.25f) flow_break();   /* >0.5 mm gap = a new stroke */
     }
-    path_end();
+    if (!s_flow.active) {
+        if (lift) { pen_lift(); move_to_xy(x0, y0); pen_drop(); }
+        else      { move_to_xy(x0, y0); }   /* pen already down; no-op if already at x0,y0 */
+        path_begin(x0, y0);
+    }
+    float ex = x1, ey = y1;
+    for (int c = 0; c < cycles; c++) {
+        if (c & 1) { path_to(x0, y0); ex = x0; ey = y0; }
+        else       { path_to(x1, y1); ex = x1; ey = y1; }
+    }
+    if (flow && !motion_should_abort()) {
+        if (!s_flow.active) web_log("flow path start (%.1f,%.1f)", (double)x0, (double)y0);
+        s_flow.active = true;
+        s_flow.x = ex; s_flow.y = ey;
+        s_flow.segs++;
+        return;                       /* stroke stays open — no stop, no pen change */
+    }
+    if (s_flow.active) { s_flow.segs++; flow_break(); }
+    else               path_end();
     if (lift) pen_lift();
 }
 
 /* Draw a circular arc from angle a0 to a1 (radians), direction cw/ccw, streamed as
  * sub-segments (anti-bow, continuous). lift behaves like do_draw_line. Lets the console
  * collapse a fitted circular run into ONE job instead of many lines. */
-static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool cw, int cycles, bool lift)
+static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool cw, int cycles, bool lift, bool flow)
 {
     if (r <= 0.0f) return;
     float span = a1 - a0;
@@ -846,9 +888,16 @@ static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool 
     float sx = cx2 + r * cosf(a0), sy = cy2 + r * sinf(a0);
 
     tmc5072_enable(&tmc, true);
-    if (lift) { pen_lift(); move_to_xy(sx, sy); pen_drop(); }
-    else      { move_to_xy(sx, sy); }
-    path_begin(sx, sy);
+    if (s_flow.active) {
+        float ddx = sx - s_flow.x, ddy = sy - s_flow.y;
+        if (ddx * ddx + ddy * ddy > 0.25f) flow_break();
+    }
+    if (!s_flow.active) {
+        if (lift) { pen_lift(); move_to_xy(sx, sy); pen_drop(); }
+        else      { move_to_xy(sx, sy); }
+        path_begin(sx, sy);
+        if (flow) web_log("flow path start (%.1f,%.1f)", (double)sx, (double)sy);
+    }
     for (int c = 0; c < cycles; c++) {
         /* Alternate sweep direction per cycle (like do_draw_line's there-and-back):
          * re-sweeping forward from a0 each cycle drew a straight chord from the arc's
@@ -860,7 +909,17 @@ static void do_draw_arc(float cx2, float cy2, float r, float a0, float a1, bool 
             path_to(cx2 + r * cosf(t), cy2 + r * sinf(t));
         }
     }
-    path_end();
+    /* where the sweep physically ends: a1 after an odd cycle count, a0 after even */
+    float endT = (cycles & 1) ? a0 + span : a0;
+    if (flow && !motion_should_abort()) {
+        s_flow.active = true;
+        s_flow.x = cx2 + r * cosf(endT);
+        s_flow.y = cy2 + r * sinf(endT);
+        s_flow.segs++;
+        return;
+    }
+    if (s_flow.active) { s_flow.segs++; flow_break(); }
+    else               path_end();
     if (lift) pen_lift();
 }
 
@@ -1568,6 +1627,7 @@ static void web_draw_task(void *arg)
         if (g_paused || g_estop) {
             bool was_down  = s_pen_is_down;   /* remember so resume can continue a stroke pen-down */
             bool was_estop = g_estop;         /* E-STOP cuts drivers → re-home; never auto-drop the pen */
+            flow_break();                     /* end an open flow chain before parking */
             pen_lift();
             web_log(g_estop ? "!! E-STOP — motors cut, %lu job(s) held"
                             : "paused — %lu job(s) held in queue",
@@ -1577,7 +1637,17 @@ static void web_draw_task(void *arg)
             s_resume_pen_down = was_down && !was_estop;
         }
 
-        if (xQueueReceive(g_draw_queue, &cmd, portMAX_DELAY) != pdTRUE) continue;
+        /* With a flow chain OPEN, don't block forever on an empty queue: if the client
+         * stalls mid-stroke, end the stroke cleanly (synchronized stop) after a short
+         * grace instead of dwelling pen-down toward a stale target. */
+        TickType_t rx_wait = s_flow.active ? pdMS_TO_TICKS(FLOW_DRY_MS) : portMAX_DELAY;
+        if (xQueueReceive(g_draw_queue, &cmd, rx_wait) != pdTRUE) {
+            flow_break();
+            continue;
+        }
+        /* Any command that is not a line/arc ends the stroke first (pen ops, goto,
+         * speed changes, shapes… must not execute with a streamed path open). */
+        if (cmd.type != WCMD_LINE && cmd.type != WCMD_ARC) flow_break();
         g_job_abort = false;
         /* Restore a mid-stroke pen-down held across a pause/STOP so the next
          * continuation segment (lift=0) draws instead of skating in the air. */
@@ -1635,17 +1705,27 @@ static void web_draw_task(void *arg)
             do_draw_square(cmd.p[0],cmd.p[1],cmd.p[2],(int)cmd.p[3],fm,cmd.p[5],cmd.p[6],cmd.p[7]!=0.0f);
             emit_pos_event(); web_log("square done"); break;
         }
-        case WCMD_LINE:
-            web_log("line (%.1f,%.1f)->(%.1f,%.1f) x%d",
-                    (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(int)cmd.p[4]);
-            do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4], cmd.p[5]!=0.0f);
-            emit_pos_event(); web_log("line done"); break;
-        case WCMD_ARC:
-            web_log("arc (%.1f,%.1f) r=%.1f %.2f→%.2f %s",
-                    (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(double)cmd.p[4],
-                    cmd.p[5]!=0.0f?"cw":"ccw");
-            do_draw_arc(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],cmd.p[4], cmd.p[5]!=0.0f, (int)cmd.p[6], cmd.p[7]!=0.0f);
-            emit_pos_event(); web_log("arc done"); break;
+        case WCMD_LINE: {
+            bool fl = cmd.p[6] != 0.0f;
+            if (!fl && !s_flow.active)
+                web_log("line (%.1f,%.1f)->(%.1f,%.1f) x%d",
+                        (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(int)cmd.p[4]);
+            do_draw_line(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],(int)cmd.p[4], cmd.p[5]!=0.0f, fl);
+            emit_pos_event();
+            if (!fl && !s_flow.active) web_log("line done");
+            break;
+        }
+        case WCMD_ARC: {
+            bool fl = cmd.p[8] != 0.0f;
+            if (!fl && !s_flow.active)
+                web_log("arc (%.1f,%.1f) r=%.1f %.2f→%.2f %s",
+                        (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2],(double)cmd.p[3],(double)cmd.p[4],
+                        cmd.p[5]!=0.0f?"cw":"ccw");
+            do_draw_arc(cmd.p[0],cmd.p[1],cmd.p[2],cmd.p[3],cmd.p[4], cmd.p[5]!=0.0f, (int)cmd.p[6], cmd.p[7]!=0.0f, fl);
+            emit_pos_event();
+            if (!fl && !s_flow.active) web_log("arc done");
+            break;
+        }
         case WCMD_GOTO:
             web_log("goto (%.1f, %.1f)",(double)cmd.p[0],(double)cmd.p[1]);
             do_draw_goto(cmd.p[0],cmd.p[1]); web_log("goto done"); break;
@@ -1907,7 +1987,7 @@ static int cmd_line(int argc, char **argv)
     float x0=atof(argv[1]),y0=atof(argv[2]),x1=atof(argv[3]),y1=atof(argv[4]);
     int cycles=(argc>=6)?parse_cycles(argv[5]):1;
     printf("line (%.1f,%.1f)->(%.1f,%.1f) x%d\n",(double)x0,(double)y0,(double)x1,(double)y1,cycles);
-    do_draw_line(x0,y0,x1,y1,cycles,true);
+    do_draw_line(x0,y0,x1,y1,cycles,true,false);
     printf("line done\n"); return 0;
 }
 static int cmd_circle(int argc, char **argv)

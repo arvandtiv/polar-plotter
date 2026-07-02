@@ -3025,7 +3025,9 @@ function fitArcs(points, tol) {
         r: bestC.r,
         a0: Math.atan2(points[i].y - bestC.cy, points[i].x - bestC.cx),
         a1: Math.atan2(points[best].y - bestC.cy, points[best].x - bestC.cx),
-        cw: turn < 0
+        cw: turn < 0,
+        span: best - i
+        // ring segments this arc covers (for per-vertex flow mapping)
       });
       i = best;
       lineStart = best;
@@ -3040,6 +3042,22 @@ function fitArcs(points, tol) {
 // src/lib/compile.ts
 var r = (n) => Math.round(n * 100) / 100;
 var r4 = (n) => Math.round(n * 1e4) / 1e4;
+function vertexFlow(pts, maxTurnRad) {
+  const n = pts.length;
+  const f = new Array(n).fill(false);
+  for (let i = 1; i < n - 1; i++) {
+    const ax = pts[i].x - pts[i - 1].x, ay = pts[i].y - pts[i - 1].y;
+    const bx = pts[i + 1].x - pts[i].x, by = pts[i + 1].y - pts[i].y;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la < 1e-9 || lb < 1e-9) {
+      f[i] = true;
+      continue;
+    }
+    const dot = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+    f[i] = Math.acos(dot) <= maxTurnRad;
+  }
+  return f;
+}
 function boundsRect(b) {
   return [
     { x: -b.left, y: -b.up },
@@ -3048,7 +3066,7 @@ function boundsRect(b) {
     { x: -b.left, y: b.down }
   ];
 }
-function emitArcPath(path, tol, out) {
+function emitArcPath(path, tol, out, flowOn, maxTurnRad) {
   const pts = path.points;
   if (pts.length === 0) return;
   const cycles = path.cycles && path.cycles > 0 ? Math.round(path.cycles) : 1;
@@ -3056,34 +3074,46 @@ function emitArcPath(path, tol, out) {
   out.push(`goto?x=${r(ring[0].x)}&y=${r(ring[0].y)}`);
   if (ring.length === 1) return;
   out.push("pen?pos=down");
+  const flowAt = flowOn && cycles % 2 === 1 ? vertexFlow(ring, maxTurnRad) : null;
+  let idx = 0;
   for (const prim of fitArcs(ring, tol)) {
     if (prim.kind === "arc") {
-      out.push(`arc?cx=${r(prim.cx)}&cy=${r(prim.cy)}&r=${r(prim.r)}&a0=${r4(prim.a0)}&a1=${r4(prim.a1)}&cw=${prim.cw ? 1 : 0}&cycles=${cycles}&lift=0`);
+      idx += prim.span;
+      const fl = flowAt?.[idx] ? "&flow=1" : "";
+      out.push(`arc?cx=${r(prim.cx)}&cy=${r(prim.cy)}&r=${r(prim.r)}&a0=${r4(prim.a0)}&a1=${r4(prim.a1)}&cw=${prim.cw ? 1 : 0}&cycles=${cycles}&lift=0${fl}`);
     } else {
       for (let i = 1; i < prim.points.length; i++) {
         const a = prim.points[i - 1], b = prim.points[i];
-        out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0`);
+        idx++;
+        const fl = flowAt?.[idx] ? "&flow=1" : "";
+        out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0${fl}`);
       }
     }
   }
   out.push("pen?pos=up");
 }
-function emitPath(path, out) {
+function emitPath(path, out, flowOn = false, maxTurnRad = Math.PI) {
   const pts = path.points;
   if (pts.length === 0) return;
   const cycles = path.cycles && path.cycles > 0 ? Math.round(path.cycles) : 1;
-  out.push(`goto?x=${r(pts[0].x)}&y=${r(pts[0].y)}`);
-  if (pts.length === 1) return;
+  const ring = path.closed && pts.length > 2 ? [...pts, pts[0]] : pts;
+  out.push(`goto?x=${r(ring[0].x)}&y=${r(ring[0].y)}`);
+  if (ring.length === 1) return;
   out.push("pen?pos=down");
-  const seg = (a, b) => out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0`);
-  for (let i = 1; i < pts.length; i++) seg(pts[i - 1], pts[i]);
-  if (path.closed && pts.length > 2) seg(pts[pts.length - 1], pts[0]);
+  const flowAt = flowOn && cycles % 2 === 1 ? vertexFlow(ring, maxTurnRad) : null;
+  for (let i = 1; i < ring.length; i++) {
+    const a = ring[i - 1], b = ring[i];
+    const fl = flowAt?.[i] ? "&flow=1" : "";
+    out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0${fl}`);
+  }
   out.push("pen?pos=up");
 }
 function compile(frame, opts = {}) {
   const out = ["pen?pos=up"];
   const tol = opts.arcTol ?? 0;
   const rect = opts.clipBounds ? boundsRect(opts.clipBounds) : null;
+  const flowOn = opts.flow !== false;
+  const maxTurnRad = (opts.flowMaxTurnDeg ?? 45) * Math.PI / 180;
   for (const path of frame.paths) {
     if (rect) {
       const ring = path.closed && path.points.length > 2 ? [...path.points, path.points[0]] : path.points;
@@ -3091,12 +3121,12 @@ function compile(frame, opts = {}) {
       for (const pts of segments) {
         if (pts.length < 2) continue;
         const cp = { ...path, points: pts, closed: false };
-        if (tol > 0) emitArcPath(cp, tol, out);
-        else emitPath(cp, out);
+        if (tol > 0) emitArcPath(cp, tol, out, flowOn, maxTurnRad);
+        else emitPath(cp, out, flowOn, maxTurnRad);
       }
     } else {
-      if (tol > 0) emitArcPath(path, tol, out);
-      else emitPath(path, out);
+      if (tol > 0) emitArcPath(path, tol, out, flowOn, maxTurnRad);
+      else emitPath(path, out, flowOn, maxTurnRad);
     }
   }
   return out;

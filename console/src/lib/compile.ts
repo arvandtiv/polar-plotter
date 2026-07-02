@@ -21,6 +21,32 @@ export interface CompileOpts {
   /** Clip all paths to the work area before emitting — out-of-bounds segments are
    *  trimmed at the boundary rather than rejected by the firmware. */
   clipBounds?: { left: number; right: number; up: number; down: number };
+  /** Flow chaining (Phase 2): mark segments `flow=1` so the firmware streams a whole
+   *  polyline as ONE continuous stroke instead of fully stopping at every vertex.
+   *  The CLIENT decides continuity per vertex: a segment flows into the next only
+   *  when the turn angle at their shared vertex ≤ flowMaxTurnDeg — sharp corners
+   *  still get a crisp stop. Default ON; older firmware ignores the param (it just
+   *  stops per vertex as before). Set false to disable. */
+  flow?: boolean;
+  /** Max direction change (degrees) a stroke may flow through without stopping.
+   *  Default 45. */
+  flowMaxTurnDeg?: number;
+}
+
+/** flowAt[i] = the pen may pass THROUGH pts[i] without stopping (turn ≤ maxTurnRad).
+ *  Endpoints are always false — a stroke ends with a synchronized stop. */
+function vertexFlow(pts: Pt[], maxTurnRad: number): boolean[] {
+  const n = pts.length;
+  const f = new Array<boolean>(n).fill(false);
+  for (let i = 1; i < n - 1; i++) {
+    const ax = pts[i].x - pts[i - 1].x, ay = pts[i].y - pts[i - 1].y;
+    const bx = pts[i + 1].x - pts[i].x, by = pts[i + 1].y - pts[i].y;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la < 1e-9 || lb < 1e-9) { f[i] = true; continue; }   // degenerate: keep flowing
+    const dot = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+    f[i] = Math.acos(dot) <= maxTurnRad;
+  }
+  return f;
 }
 
 function boundsRect(b: { left: number; right: number; up: number; down: number }): Pt[] {
@@ -32,7 +58,7 @@ function boundsRect(b: { left: number; right: number; up: number; down: number }
   ];
 }
 
-function emitArcPath(path: Path, tol: number, out: string[]): void {
+function emitArcPath(path: Path, tol: number, out: string[], flowOn: boolean, maxTurnRad: number): void {
   const pts = path.points;
   if (pts.length === 0) return;
   const cycles = path.cycles && path.cycles > 0 ? Math.round(path.cycles) : 1;
@@ -40,33 +66,44 @@ function emitArcPath(path: Path, tol: number, out: string[]): void {
   out.push(`goto?x=${r(ring[0].x)}&y=${r(ring[0].y)}`);
   if (ring.length === 1) return;
   out.push("pen?pos=down");
+  // Per-vertex continuity on the ring; a primitive ending at ring[j] flows iff the
+  // stroke may pass through ring[j]. Retraced (cycles even) strokes end back at their
+  // START, so the next segment would be discontinuous — never flow those.
+  const flowAt = flowOn && cycles % 2 === 1 ? vertexFlow(ring, maxTurnRad) : null;
+  let idx = 0;   // ring index where the previous primitive ended
   for (const prim of fitArcs(ring, tol)) {
     if (prim.kind === "arc") {
-      out.push(`arc?cx=${r(prim.cx)}&cy=${r(prim.cy)}&r=${r(prim.r)}&a0=${r4(prim.a0)}&a1=${r4(prim.a1)}&cw=${prim.cw ? 1 : 0}&cycles=${cycles}&lift=0`);
+      idx += prim.span;
+      const fl = flowAt?.[idx] ? "&flow=1" : "";
+      out.push(`arc?cx=${r(prim.cx)}&cy=${r(prim.cy)}&r=${r(prim.r)}&a0=${r4(prim.a0)}&a1=${r4(prim.a1)}&cw=${prim.cw ? 1 : 0}&cycles=${cycles}&lift=0${fl}`);
     } else {
       for (let i = 1; i < prim.points.length; i++) {
         const a = prim.points[i - 1], b = prim.points[i];
-        out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0`);
+        idx++;
+        const fl = flowAt?.[idx] ? "&flow=1" : "";
+        out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0${fl}`);
       }
     }
   }
   out.push("pen?pos=up");
 }
 
-function emitPath(path: Path, out: string[]): void {
+function emitPath(path: Path, out: string[], flowOn = false, maxTurnRad = Math.PI): void {
   const pts = path.points;
   if (pts.length === 0) return;
   const cycles = path.cycles && path.cycles > 0 ? Math.round(path.cycles) : 1;
+  const ring = path.closed && pts.length > 2 ? [...pts, pts[0]] : pts;
 
-  out.push(`goto?x=${r(pts[0].x)}&y=${r(pts[0].y)}`);   // pen-up travel to start
-  if (pts.length === 1) return;                          // a lone point: nothing to draw
+  out.push(`goto?x=${r(ring[0].x)}&y=${r(ring[0].y)}`);   // pen-up travel to start
+  if (ring.length === 1) return;                           // a lone point: nothing to draw
   out.push("pen?pos=down");
 
-  const seg = (a: Pt, b: Pt) =>
-    out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0`);
-
-  for (let i = 1; i < pts.length; i++) seg(pts[i - 1], pts[i]);
-  if (path.closed && pts.length > 2) seg(pts[pts.length - 1], pts[0]);
+  const flowAt = flowOn && cycles % 2 === 1 ? vertexFlow(ring, maxTurnRad) : null;
+  for (let i = 1; i < ring.length; i++) {
+    const a = ring[i - 1], b = ring[i];
+    const fl = flowAt?.[i] ? "&flow=1" : "";
+    out.push(`line?x0=${r(a.x)}&y0=${r(a.y)}&x1=${r(b.x)}&y1=${r(b.y)}&cycles=${cycles}&lift=0${fl}`);
+  }
 
   out.push("pen?pos=up");
 }
@@ -79,6 +116,8 @@ export function compile(frame: Frame, opts: CompileOpts = {}): string[] {
   const out: string[] = ["pen?pos=up"];   // known-safe start
   const tol = opts.arcTol ?? 0;
   const rect = opts.clipBounds ? boundsRect(opts.clipBounds) : null;
+  const flowOn = opts.flow !== false;   // Phase 2 default ON (older firmware ignores it)
+  const maxTurnRad = ((opts.flowMaxTurnDeg ?? 45) * Math.PI) / 180;
 
   for (const path of frame.paths) {
     if (rect) {
@@ -90,12 +129,12 @@ export function compile(frame: Frame, opts: CompileOpts = {}): string[] {
       for (const pts of segments) {
         if (pts.length < 2) continue;
         const cp: Path = { ...path, points: pts, closed: false };
-        if (tol > 0) emitArcPath(cp, tol, out);
-        else emitPath(cp, out);
+        if (tol > 0) emitArcPath(cp, tol, out, flowOn, maxTurnRad);
+        else emitPath(cp, out, flowOn, maxTurnRad);
       }
     } else {
-      if (tol > 0) emitArcPath(path, tol, out);
-      else emitPath(path, out);
+      if (tol > 0) emitArcPath(path, tol, out, flowOn, maxTurnRad);
+      else emitPath(path, out, flowOn, maxTurnRad);
     }
   }
   return out;

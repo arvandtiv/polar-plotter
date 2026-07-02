@@ -153,4 +153,17 @@ strokes are accel-dominated, so higher AMAX = more uniform speed = more uniform 
 width AND faster; back off if pendulum swing appears. The desync fix (§5.1) made
 higher accel safe to explore.
 
+### 5.3 Phase 2 (2026-07-03): flow-chained strokes — no stop at polyline vertices
+
+The last big loss was BETWEEN jobs: every compiled `line` job ended in `path_end()` =
+a full synchronized stop, so organic polylines (the bulk of the generative art)
+stopped at every vertex. Now a `flow=1` flag on line/arc jobs keeps the ONE streamed
+path open across consecutive jobs — the interior joints are ordinary rate-matched
+hand-offs at full accel (§5.1), identical to within-job streaming. The client
+compiler marks continuity per vertex (turn ≤ 45° flows; sharp corners keep their
+crisp stop — that rule lives client-side where the geometry is known). Safety: any
+other command type, a spatial discontinuity, pause/E-STOP, or a 250 ms dry queue
+ends the stroke with a clean synchronized stop. Old firmware ignores the flag; old
+clients simply never set it.
+
 Not yet done: D anchor-arc primitive, F coolStep.
