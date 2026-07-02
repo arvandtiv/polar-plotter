@@ -7,6 +7,7 @@
   },
   "exclude": [
     "truchet_preview_test.ts",
-    "test"
+    "test",
+    "scripts"
   ]
 }

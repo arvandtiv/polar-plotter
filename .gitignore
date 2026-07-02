@@ -42,5 +42,9 @@ console-ui-clean.png
 layout-check.png
 log-layout.png
 
+# AI-training: individual per-design renders are regenerable (keep only contact.png).
+# Rebuild any with: cd console && npx tsx scripts/train-render.ts <roundDir>
+ai-training/sessions/**/png/
+
 # Editor
 .vscode/

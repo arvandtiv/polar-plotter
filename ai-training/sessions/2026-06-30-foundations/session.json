@@ -1,0 +1,7 @@
+{
+  "id": "2026-06-30-foundations",
+  "goal": "Establish a baseline aesthetic vocabulary: learn which single-generator studies read as 'eye-pleasing' before introducing layering and modifiers.",
+  "createdAt": "2026-06-30",
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "rounds": ["round-01"]
+}
