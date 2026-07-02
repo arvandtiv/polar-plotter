@@ -6,7 +6,7 @@
 
 import { register, num, type Module } from "../registry";
 import { clipSegmentToRect, seededRandom } from "../geom";
-import type { Frame, Path } from "../frame";
+import type { Frame, Path, Pt } from "../frame";
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
@@ -74,7 +74,56 @@ function bandOffsets(omin: number, omax: number, s: number, gradient: number, st
 /** Parallel lines through `rect` at angle `theta` (screen coords, y-down), spaced `spacing`.
  *  `jitter` > 0 makes them NOT straight: each line is resampled and pushed sideways by smooth
  *  seeded noise (a hand-drawn / Klee "living line" quality). `rng` is shared for determinism. */
-function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rng: () => number, gradient = 0, stops: number[] = [], minGap = 0): Path[] {
+
+/** Not-straight line a→b as a chain of GENUINE circular arcs (G1 tangent-continuous —
+ *  the heading never jumps, so bows flow into each other with no sharp deviations).
+ *  Each arc's sagitta ≈ jitter, bow side alternating, chord ~35–75 mm randomized per
+ *  line. Built from the origin heading +x, then rotated+uniformly-scaled onto a→b
+ *  (endpoints land EXACTLY on the rect edges; scaling keeps circles circular, so the
+ *  compiler's arc-fitter collapses each bow into a single firmware `arc` job). */
+function arcSnake(a: Pt, b: Pt, jitter: number, rng: () => number): Pt[] {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 4) return [a, b];
+  const per = 35 + rng() * 40;                       // nominal chord per bow
+  const n = Math.max(1, Math.round(len / per));
+  const chord = len / n;
+
+  let x = 0, y = 0, h = 0;                            // position + heading along the chain
+  const pts: Pt[] = [{ x: 0, y: 0 }];
+  let sign = rng() < 0.5 ? 1 : -1;
+  for (let i = 0; i < n; i++) {
+    const sag = Math.min(jitter * (0.5 + rng()), chord * 0.45);   // keep bows gentle vs chord
+    const theta = 4 * Math.atan((2 * sag) / chord) * sign;         // subtended angle (signed)
+    if (Math.abs(theta) < 1e-4) {                                  // ~straight leg
+      x += Math.cos(h) * chord; y += Math.sin(h) * chord;
+      pts.push({ x, y });
+    } else {
+      const R = chord / (2 * Math.sin(Math.abs(theta) / 2));
+      // centre sits on the left/right normal of the current heading; walk the EXACT circle
+      const cxA = x + (theta > 0 ? R : -R) * -Math.sin(h);
+      const cyA = y + (theta > 0 ? R : -R) *  Math.cos(h);
+      const phi0 = Math.atan2(y - cyA, x - cxA);
+      const steps = Math.min(200, Math.max(6, Math.ceil((R * Math.abs(theta)) / 2)));
+      for (let k = 1; k <= steps; k++) {
+        const phi = phi0 + theta * (k / steps);
+        pts.push({ x: cxA + R * Math.cos(phi), y: cyA + R * Math.sin(phi) });
+      }
+      x = pts[pts.length - 1].x; y = pts[pts.length - 1].y;
+      h += theta;
+    }
+    sign = -sign;
+  }
+  // Map the chain's end onto b: rotate + uniform-scale about the origin, translate to a.
+  const ex = x, ey = y;
+  const elen = Math.hypot(ex, ey);
+  if (elen < 1e-6) return [a, b];
+  const rot = Math.atan2(b.y - a.y, b.x - a.x) - Math.atan2(ey, ex);
+  const sc = len / elen;
+  const cr = Math.cos(rot) * sc, sr = Math.sin(rot) * sc;
+  return pts.map((p) => ({ x: a.x + p.x * cr - p.y * sr, y: a.y + p.x * sr + p.y * cr }));
+}
+
+function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rng: () => number, gradient = 0, stops: number[] = [], minGap = 0, style = "arc"): Path[] {
   const s = Math.max(0.5, spacing);
   const cx = (rect.x0 + rect.x1) / 2, cy = (rect.y0 + rect.y1) / 2;
   const dx = Math.cos(theta), dy = Math.sin(theta);     // line direction
@@ -97,6 +146,12 @@ function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rn
     const seg = clipSegmentToRect({ x: bx - L * dx, y: by - L * dy }, { x: bx + L * dx, y: by + L * dy }, rect);
     if (!seg) continue;
     if (jitter <= 0) { out.push({ points: [seg[0], seg[1]] }); continue; }
+    if (style === "arc") {
+      // not-straight as SMOOTH ARCS: gentle tangent-continuous circular bows instead of
+      // the wavier polyline — and each bow compiles into a firmware arc job.
+      out.push({ points: arcSnake(seg[0], seg[1], jitter, rng) });
+      continue;
+    }
     // not-straight: resample the clipped segment and offset interior points perpendicular by a
     // smooth two-harmonic wave (random amp/phase per line) — endpoints stay on the rect edge.
     const [a, b] = seg;
@@ -137,6 +192,10 @@ export const ruledLinesModule: Module = {
     ]},
     { title: "Hand-drawn (not straight)", fields: [
       { key: "jitter", label: "Jitter", type: "range", min: 0, max: 20, step: 0.5, unit: "mm", default: 0 },
+      { key: "jitterStyle", label: "Deviation", type: "select", default: "arc", options: [
+        { value: "arc", label: "Arcs (smooth bows)" },
+        { value: "wave", label: "Waves (hand wobble)" },
+      ]},
       { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 },
     ]},
     { title: "Density ramp", fields: [
@@ -158,13 +217,14 @@ export const ruledLinesModule: Module = {
     const minGap = num(params, "minGap", 0);
     // multi-point density profile: comma/space-separated non-negative weights (≥2 to take effect)
     const stops = String(params.densityStops ?? "").split(/[,\s]+/).map(Number).filter((x) => Number.isFinite(x) && x >= 0);
+    const style = String(params.jitterStyle ?? "arc");
     const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
     const rect: Rect = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
     const paths: Path[] = [];
-    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient, stops, minGap));            // ─
-    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient, stops, minGap));     // │
-    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));             // ╱
-    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));               // ╲
+    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient, stops, minGap, style));            // ─
+    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient, stops, minGap, style));     // │
+    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap, style));             // ╱
+    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap, style));               // ╲
     return { widthMm: w, heightMm: h, paths, meta: { title: "Ruled lines" } };
   },
 };

@@ -379,7 +379,47 @@ function bandOffsets(omin, omax, s, gradient, stops, minGap) {
   }
   return clampGap(offs, minGap);
 }
-function ruledDir(rect, theta, spacing, jitter, rng, gradient = 0, stops = [], minGap = 0) {
+function arcSnake(a, b, jitter, rng) {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 4) return [a, b];
+  const per = 35 + rng() * 40;
+  const n = Math.max(1, Math.round(len / per));
+  const chord = len / n;
+  let x = 0, y = 0, h = 0;
+  const pts = [{ x: 0, y: 0 }];
+  let sign = rng() < 0.5 ? 1 : -1;
+  for (let i = 0; i < n; i++) {
+    const sag = Math.min(jitter * (0.5 + rng()), chord * 0.45);
+    const theta = 4 * Math.atan(2 * sag / chord) * sign;
+    if (Math.abs(theta) < 1e-4) {
+      x += Math.cos(h) * chord;
+      y += Math.sin(h) * chord;
+      pts.push({ x, y });
+    } else {
+      const R = chord / (2 * Math.sin(Math.abs(theta) / 2));
+      const cxA = x + (theta > 0 ? R : -R) * -Math.sin(h);
+      const cyA = y + (theta > 0 ? R : -R) * Math.cos(h);
+      const phi0 = Math.atan2(y - cyA, x - cxA);
+      const steps = Math.min(200, Math.max(6, Math.ceil(R * Math.abs(theta) / 2)));
+      for (let k = 1; k <= steps; k++) {
+        const phi = phi0 + theta * (k / steps);
+        pts.push({ x: cxA + R * Math.cos(phi), y: cyA + R * Math.sin(phi) });
+      }
+      x = pts[pts.length - 1].x;
+      y = pts[pts.length - 1].y;
+      h += theta;
+    }
+    sign = -sign;
+  }
+  const ex = x, ey = y;
+  const elen = Math.hypot(ex, ey);
+  if (elen < 1e-6) return [a, b];
+  const rot = Math.atan2(b.y - a.y, b.x - a.x) - Math.atan2(ey, ex);
+  const sc = len / elen;
+  const cr = Math.cos(rot) * sc, sr = Math.sin(rot) * sc;
+  return pts.map((p) => ({ x: a.x + p.x * cr - p.y * sr, y: a.y + p.x * sr + p.y * cr }));
+}
+function ruledDir(rect, theta, spacing, jitter, rng, gradient = 0, stops = [], minGap = 0, style = "arc") {
   const s = Math.max(0.5, spacing);
   const cx = (rect.x0 + rect.x1) / 2, cy = (rect.y0 + rect.y1) / 2;
   const dx = Math.cos(theta), dy = Math.sin(theta);
@@ -399,6 +439,10 @@ function ruledDir(rect, theta, spacing, jitter, rng, gradient = 0, stops = [], m
     if (!seg) continue;
     if (jitter <= 0) {
       out.push({ points: [seg[0], seg[1]] });
+      continue;
+    }
+    if (style === "arc") {
+      out.push({ points: arcSnake(seg[0], seg[1], jitter, rng) });
       continue;
     }
     const [a, b] = seg;
@@ -438,6 +482,10 @@ var ruledLinesModule = {
     ] },
     { title: "Hand-drawn (not straight)", fields: [
       { key: "jitter", label: "Jitter", type: "range", min: 0, max: 20, step: 0.5, unit: "mm", default: 0 },
+      { key: "jitterStyle", label: "Deviation", type: "select", default: "arc", options: [
+        { value: "arc", label: "Arcs (smooth bows)" },
+        { value: "wave", label: "Waves (hand wobble)" }
+      ] },
       { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
     ] },
     { title: "Density ramp", fields: [
@@ -458,13 +506,14 @@ var ruledLinesModule = {
     const gradient = num(params, "gradient", 0);
     const minGap = num(params, "minGap", 0);
     const stops = String(params.densityStops ?? "").split(/[,\s]+/).map(Number).filter((x) => Number.isFinite(x) && x >= 0);
+    const style = String(params.jitterStyle ?? "arc");
     const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
     const rect = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
     const paths = [];
-    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient, stops, minGap));
-    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient, stops, minGap));
-    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));
-    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));
+    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient, stops, minGap, style));
+    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient, stops, minGap, style));
+    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap, style));
+    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap, style));
     return { widthMm: w, heightMm: h, paths, meta: { title: "Ruled lines" } };
   }
 };
