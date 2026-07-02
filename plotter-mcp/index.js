@@ -7,8 +7,11 @@
  * without constructing raw URLs.
  *
  * Configuration (environment variables):
- *   PLOTTER_IP   — IP address of the plotter (default: 192.168.1.71)
- *   PLOTTER_PORT — HTTP port (default: 80)
+ *   PLOTTER_IP      — IP address of the plotter (default: 192.168.1.71)
+ *   PLOTTER_PORT    — HTTP port (default: 80)
+ *   PLOTTER_ARC_TOL — mm tolerance for collapsing circular runs in compiled art
+ *                     into single firmware `arc` jobs (default 0.3 = the firmware's
+ *                     own chord error; 0 disables → line-only output, pre-arc behaviour)
  *
  * Start: node index.js
  * Register in .mcp.json (see project root).
@@ -35,6 +38,11 @@ import {
 const PLOTTER_IP   = process.env.PLOTTER_IP   ?? '192.168.1.71';
 const PLOTTER_PORT = process.env.PLOTTER_PORT ?? '80';
 const BASE = `http://${PLOTTER_IP}:${PLOTTER_PORT}`;
+
+// Arc-fitting tolerance (mm) for compiled art: circular runs within this tolerance
+// collapse into single firmware `arc` jobs (continuous sweep, no per-chord stop/start)
+// instead of many `line` jobs. Requires firmware with /api/arc (v1.1+). 0 = off.
+const ARC_TOL = Math.max(0, Number(process.env.PLOTTER_ARC_TOL ?? 0.3) || 0);
 
 // ── HTTP helper ──────────────────────────────────────────────────────────────
 
@@ -785,6 +793,7 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
             maxSeeds: Number(cmd.max_seeds ?? fitMaxSeed),
             fitTolMm: Number(cmd.fit_tol_mm ?? fitTolMm),
             ellipse: !!s.bounds?.ellipse,
+            arcTol: ARC_TOL,
           });
           if (wantFit) {
             const where = activeCell ? `cell ${activeCell}` : `${spec.key}`;
@@ -952,6 +961,7 @@ All coordinates in mm, Y+ = DOWN. Check plot_status for current bounds.`,
       paths,
       fwBounds,
       warp_mode !== 'none' ? { mode: warp_mode, params: warp_params ?? {} } : null,
+      { arcTol: ARC_TOL },
     );
     const result = await batchSend(queries);
 
@@ -1049,6 +1059,7 @@ Available generators (call plot_list_generators for descriptions):
       maxSeeds: max_seeds,
       fitTolMm: fit_tol_mm,
       ellipse: !!s.bounds?.ellipse,
+      arcTol: ARC_TOL,
     });
     const result = await batchSend(ex.queries);
 

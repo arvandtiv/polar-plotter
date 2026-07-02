@@ -159,7 +159,6 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
   let cx = 0, cy = 0, cz = 0;   // current position (mm)
   let ox = 0, oy = 0;      // G92 offsets (mm)
   let penDown = false;
-  let hasArcs = false;     // set if any G2/G3 found (enables arcTol in compile)
   const ops: Op[] = [];
   const setPen = (d: boolean) => { if (d !== penDown) { penDown = d; ops.push({ kind: 'pen', down: d }); } };
 
@@ -218,7 +217,6 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
     if (isG2 || isG3) {
       const I = (NUM(field('I', u)) ?? 0) * unit;
       const J = (NUM(field('J', u)) ?? 0) * unit;
-      hasArcs = true;
       for (const p of tessellateArc(cx, cy, nx, ny, I, J, isG2))
         ops.push({ kind: 'move', x: p.x, y: p.y });
     } else {
@@ -263,7 +261,10 @@ export function digestGcode(text: string, opts: GcodeOptions): GcodeResult {
   flush();
 
   const frame: Frame = { widthMm: opts.bounds.left + opts.bounds.right, heightMm: opts.bounds.up + opts.bounds.down, paths };
-  const queries = compile(optimizeOrder(simplifyFrame(frame)), hasArcs ? { arcTol: CHORD_ERR_MM } : {});
+  // Always arc-fit: fitArcs only fires on genuinely circular runs, so G1-only files
+  // with tessellated arcs (most slicer output) get collapsed too; anything else is
+  // untouched. (Previously gated on the source containing G2/G3.)
+  const queries = compile(optimizeOrder(simplifyFrame(frame)), { arcTol: CHORD_ERR_MM });
   // arc? queries are drawn segments just like line? — fold them into draws
   const draws = queries.filter((q) => q.startsWith('line?') || q.startsWith('arc?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;

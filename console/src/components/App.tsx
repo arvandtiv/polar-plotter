@@ -1352,7 +1352,16 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
   const selMod = sel ? getModule(sel.moduleKey) : undefined;
 
   const [orderPct, setOrderPct] = useState(100);   // drawing-order scrubber (% revealed)
-  const [useArcs, setUseArcs] = useState(false);   // collapse circular runs to arc jobs (needs firmware flash)
+  // Collapse circular runs to single firmware arc jobs (continuous sweep — no per-chord
+  // stop/start). Default ON (firmware ≥ v1.1 has /api/arc); persisted across sessions.
+  const [useArcs, setUseArcsState] = useState(() => {
+    try { return localStorage.getItem('plotter.useArcs') !== '0'; } catch { return true; }
+  });
+  const setUseArcs = (fn: (v: boolean) => boolean) => setUseArcsState((v) => {
+    const next = fn(v);
+    try { localStorage.setItem('plotter.useArcs', next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
   const frame = useMemo(
     () => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, groups, image, font),
     [layers, groups, bounds.left, bounds.right, bounds.up, bounds.down, image, font],
@@ -1363,7 +1372,9 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
     [frame, useArcs, bounds.left, bounds.right, bounds.up, bounds.down],
   );
   const previewFrame = useMemo(() => buildProgressPaths(optFrame, orderPct / 100), [optFrame, orderPct]);
-  const draws = queries.filter((q) => q.startsWith('line?')).length;
+  // arc? jobs are drawn segments just like line? — count both, or a circles-only
+  // frame would report 0 draws and disable ▶ Run when arcs are on.
+  const draws = queries.filter((q) => q.startsWith('line?') || q.startsWith('arc?')).length;
   const travels = queries.filter((q) => q.startsWith('goto?')).length;
 
   const addLayer = () => {
@@ -1501,7 +1512,7 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
                 : <Btn variant="danger" onClick={abort}>Abort feed</Btn>}
               <Btn variant="default" onClick={resetSel} disabled={busy || !selMod}>⟲ Reset layer</Btn>
               <button onClick={() => setUseArcs((v) => !v)} disabled={busy}
-                title="Collapse circular runs into single arc jobs (needs firmware with /api/arc — flash first)"
+                title="Collapse circular runs into single arc jobs — continuous sweep, no stop at every chord (firmware ≥ v1.1; turn off for older firmware)"
                 className={`rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-50 ${useArcs ? 'bg-cyanx/15 text-cyanx border border-cyanx/40' : 'text-ink-500 hover:text-ink-300 border border-ink-700'}`}>
                 ◜ Arcs {useArcs ? 'on' : 'off'}
               </button>

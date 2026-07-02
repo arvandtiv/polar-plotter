@@ -101,15 +101,34 @@ other prefs.
 
 ## 4 · Recommended plan
 
-**Phase 1 (client-only, ship first):**
-1. MCP: pass `arcTol: 0.3` in both `expandGeneratorFitted` call sites (+ env override
-   `PLOTTER_ARC_TOL`, `0` = off).
-2. Studio: default `useArcs = true`, persist in localStorage, relabel ("Arcs on — firmware
-   ≥ v1.1 required").
-3. G-code: always pass `arcTol` (drop the `hasArcs` gate) — `fitArcs` is a no-op on runs
-   that aren't genuinely circular.
-4. Validate with the existing suites + a compiled-query diff on a known frame (circle,
-   spirograph, wobbly): expect `arc?` jobs replacing chord runs, unchanged geometry.
+**Phase 1 (client-only, ship first): ✅ DONE (this branch).**
+1. ✅ MCP: `arcTol` passed in both `expandGeneratorFitted` call sites **and**
+   `plot_polylines` (`compilePathsWithWarp`); env override `PLOTTER_ARC_TOL` (default 0.3,
+   `0` = off).
+2. ✅ Studio: `useArcs` defaults **on**, persisted in `localStorage('plotter.useArcs')`,
+   stale "(needs firmware flash)" label replaced. Also fixed: the `draws` count now
+   includes `arc?` jobs (a circles-only frame previously reported 0 draws with arcs on,
+   disabling ▶ Run).
+3. ✅ G-code: `hasArcs` gate dropped — always arc-fit (`fitArcs` is a no-op on
+   non-circular runs).
+4. ✅ Validated: tsc + arcfit/compile/digest/streamqueries/runpipeline/toolpath suites +
+   console build all green; MCP `node --check` ok. Compiled-job diff through the real
+   pipeline (bounds 300×300):
+
+   | generator | jobs before | jobs after | of which arcs |
+   |---|---|---|---|
+   | circle r=50 | 37 | **3** | 1 |
+   | spirograph | 257 | **53** | 38 |
+   | wobbly | 62 | **10** | 7 |
+   | arcs | 1104 | **96** | 48 |
+
+   Geometry check: every source point of the r=50 circle lies at 0.0000 mm radial
+   deviation from the fitted arc (tol 0.3). Each removed job = one removed full
+   stop/start of the gondola.
+
+   ⚠️ Remaining step for the user: one plot on the real machine (e.g. `circle r=50`
+   from Studio) to confirm the deployed firmware build accepts `/api/arc` and the
+   sweep looks clean.
 
 **Phase 2 (firmware, the big one):** `WCMD_PATH` multi-point job (or a `flow` continuation
 flag) so arbitrary polylines stream without per-vertex stops. Fixes P2; needs a flash + a
