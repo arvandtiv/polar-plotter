@@ -4,6 +4,7 @@ import {
   gridCtxFromPlotterBounds,
   computeCell,
   resolveGridCtx,
+  isIdentityMatrix,
 } from "../src/lib/gridScript.ts";
 
 let fails = 0;
@@ -55,6 +56,21 @@ console.log("[3] resolveGridCtx: live bounds override flipped inline full_*");
   // grid_clear (no cols/rows) still gets authoritative bounds.
   const clr = resolveGridCtx({ type: "grid_clear", full_xn: -276, full_xp: 263, full_yn: -273, full_yp: 115 }, live)!;
   ok("grid_clear bounds from live ctx", clr.full_yn === -115 && clr.full_yp === 273);
+}
+
+console.log("[6] isIdentityMatrix — stale-cell detection from /api/status");
+{
+  ok("identity matrix -> true",
+     isIdentityMatrix({ a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }) === true);
+  ok("float-noise identity -> true",
+     isIdentityMatrix({ a: 1.0004, b: -0.0002, c: 0, d: 0.9997, tx: 0.0005, ty: -0.0009 }) === true);
+  ok("cell offset (tx/ty) -> false (cell active)",
+     isIdentityMatrix({ a: 1, b: 0, c: 0, d: 1, tx: -87.5, ty: 42.3 }) === false);
+  ok("rotation/shear -> false",
+     isIdentityMatrix({ a: 0.9, b: 0.1, c: -0.1, d: 0.9, tx: 0, ty: 0 }) === false);
+  ok("missing field -> null (old firmware)", isIdentityMatrix({ a: 1, b: 0 }) === null);
+  ok("no matrix at all -> null", isIdentityMatrix(undefined) === null);
+  ok("garbage -> null", isIdentityMatrix("nope") === null);
 }
 
 console.log(`\n${fails ? `TESTS FAILED (${fails})` : "ALL TESTS PASSED"}`);

@@ -30,6 +30,7 @@ export {
   resolveGridCtx,
   gridClearQueries,
   hydrateGridCommands,
+  isIdentityMatrix,
 } from "./gridScript";
 export type { GridCtx, CellLayout } from "./gridScript";
 

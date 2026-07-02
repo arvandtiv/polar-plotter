@@ -33,6 +33,7 @@ import {
   resolveGridCtx,
   gridClearQueries,
   hydrateGridCommands,
+  isIdentityMatrix,
 } from './core.js';
 
 const PLOTTER_IP   = process.env.PLOTTER_IP   ?? '192.168.1.71';
@@ -767,17 +768,36 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
     // re-derive gridCtx from the machine's real bounds so a script carrying stale or
     // wrong-convention inline full_* (e.g. a Y-flipped work area) can't place cells off
     // the canvas. Grid shape (cols/rows/padding) still comes from metadata/the command.
+    //
+    // ⚠ EXCEPT when a grid cell is still ACTIVE on the machine (a previous run halted
+    // before grid_clear): then the live bounds are that CELL's bounds, not the full
+    // area — deriving the grid from them tiles the inside of the stale cell (draws land
+    // squished/offset) and grid_clear "restores" the wrong area. The firmware reports
+    // the affine matrix in /api/status: non-identity matrix = a cell is active → fall
+    // back to the document's metadata/inline full_* instead of live bounds.
     const hasGrid = all.some((c) => c?.type === 'grid_select' || c?.type === 'grid_clear');
+    const results = [];
     if (hasGrid) {
       const s = await api('status');
       const fb = boundsFromFirmware(s.bounds ?? {});
-      if ([fb.left, fb.right, fb.up, fb.down].every((v) => isFinite(v) && v !== 0)) {
+      const liveOk = [fb.left, fb.right, fb.up, fb.down].every((v) => isFinite(v) && v !== 0);
+      const ident = isIdentityMatrix(s.matrix);   // null = firmware without the field
+      if (liveOk && ident !== false) {
         gridCtx = gridCtxFromPlotterBounds(fb, gridCtx ?? { cols: 1, rows: 1, padding_mm: 5 });
-        all = hydrateGridCommands(all, gridCtx);
+      } else if (ident === false) {
+        if (gridCtx) {
+          results.push(`⚠ A grid cell was still active on the machine (leftover matrix tx=${s.matrix?.tx} ty=${s.matrix?.ty}) — ` +
+                       `using the document's work_area as the full area instead of the live (cell) bounds.`);
+        } else {
+          throw new Error(
+            'A grid cell is still active on the machine (non-identity matrix) and this script has no ' +
+            'metadata.work_area to define the FULL area. Run plot_grid_clear first (with the full bounds), ' +
+            'or add metadata.work_area to the script.');
+        }
       }
+      if (gridCtx) all = hydrateGridCommands(all, gridCtx);
     }
     const commands = all.filter((c) => c?.type && c.type !== 'status');
-    const results = [];
 
     // Reseed-until-fits feature (toggle): script-wide via metadata.fit_in_bounds,
     // per-generate override via cmd.fit. When on, each cell's generator is reseeded
@@ -864,6 +884,21 @@ Wrapped document (grid tests — metadata supplies work_area + grid for grid_sel
           ? 'Script halted (escape/abort triggered).'
           : 'Script aborted (firmware returned error).');
         break;
+      }
+    }
+
+    // Auto-cleanup (parity with the console Script tab's finally-block): if the script
+    // activated a grid cell and ended — or HALTED mid-run — without a grid_clear,
+    // restore the full work area + identity matrix now. A cell left active is exactly
+    // what poisons the next run's "live bounds = full area" derivation above.
+    if (activeCell && gridCtx) {
+      try {
+        const q = gridClearQueries(gridCtx);
+        await drawAndWait(q.boundsQuery);
+        await api(q.matrixQuery);
+        results.push(`Grid auto-cleared (cell ${activeCell} was still active) — full work area restored.`);
+      } catch (err) {
+        results.push(`⚠ Grid auto-clear failed: ${err.message} — run plot_grid_clear manually.`);
       }
     }
 

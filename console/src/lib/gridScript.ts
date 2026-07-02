@@ -150,6 +150,27 @@ export function resolveGridCtx(
   };
 }
 
+/**
+ * True when a firmware /api/status "matrix" object is (numerically) the identity —
+ * i.e. NO grid cell is active. A non-identity matrix means a cell's tx/ty offset is
+ * live, so the firmware's reported bounds are that CELL's bounds, NOT the full work
+ * area — deriving a grid from them tiles the inside of the stale cell (art lands
+ * squished/offset) and grid_clear "restores" the wrong area. Returns null when the
+ * status has no matrix field (older firmware) — caller should assume live-is-full.
+ */
+export function isIdentityMatrix(
+  m: unknown,
+  eps = 1e-3,
+): boolean | null {
+  if (!m || typeof m !== "object") return null;
+  const o = m as Record<string, unknown>;
+  const vals = [o.a, o.b, o.c, o.d, o.tx, o.ty].map(Number);
+  if (!vals.every(isFinite)) return null;
+  const [a, b, c, d, tx, ty] = vals;
+  return Math.abs(a - 1) < eps && Math.abs(b) < eps && Math.abs(c) < eps &&
+         Math.abs(d - 1) < eps && Math.abs(tx) < eps && Math.abs(ty) < eps;
+}
+
 export function gridClearQueries(gc: GridCtx): { boundsQuery: string; matrixQuery: string } {
   return {
     boundsQuery: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0`,

@@ -953,6 +953,10 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
     // If we apply every grid_select first and queue all draws later, the matrix
     // ends up on the last cell and every circle lands in the same place.
     const gridMode = good.some(l => l.gridSelect);
+    // Active cell size while a grid_select is live — generators must be expanded &
+    // CLIPPED against the CELL bounds, not the full Work Area, or their art spills
+    // past the cell and the firmware clamps strays onto the cell edge (edge-walk).
+    const cellRef = { current: null as { w: number; h: number } | null };
 
     const runGridSelect = async (line: typeof good[0]) => {
       const { col, row, gc } = line.gridSelect!;
@@ -962,6 +966,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
       if (bw !== 'ok') { pushLog('err', `[script] grid_select bounds failed (${bw})`); return false; }
       const mw = await sendRaw(cell.matrixQuery, line.raw);
       if (mw !== 'ok') { pushLog('err', `[script] grid_select matrix failed (${mw})`); return false; }
+      cellRef.current = { w: cell.cellW, h: cell.cellH };
       if (col === 0) pushLog('sys', `[script] row ${row}: cell (${col},${row}) active — ${cell.cellW}×${cell.cellH} mm`);
       return true;
     };
@@ -973,6 +978,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
       if (bw !== 'ok') { pushLog('err', `[script] grid_clear bounds failed (${bw})`); return false; }
       const mw = await sendRaw(q.matrixQuery, line.raw);
       if (mw !== 'ok') { pushLog('err', `[script] grid_clear matrix failed (${mw})`); return false; }
+      cellRef.current = null;
       pushLog('ok', '[script] grid cleared');
       return true;
     };
@@ -1047,15 +1053,23 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
             continue;
           }
           if (line.generator) {
+            // Inside an active cell, expand + clip against the CELL bounds (cell-local
+            // coords, (0,0) = cell centre) — the full Work Area would leave the art
+            // unclipped and the firmware clamp walks strays along the cell edge.
+            const cd = cellRef.current;
+            const genBounds = cd
+              ? { left: cd.w / 2, right: cd.w / 2, up: cd.h / 2, down: cd.h / 2 }
+              : plotterBounds(bounds);
             let queries: string[];
             try {
-              queries = expandGenerator(line.generator, plotterBounds(bounds));
+              queries = expandGenerator(line.generator, genBounds, { arcTol: 0.3 });
             } catch (e) {
               pushLog('err', `[script] generate "${line.generator.key}" failed: ${(e as Error).message}`);
               errors++; setRun(r => ({ ...r, errors }));
               continue;
             }
-            pushLog('sys', `[script] generate "${line.generator.key}" → ${queries.length} commands`);
+            pushLog('sys', `[script] generate "${line.generator.key}" → ${queries.length} commands`
+              + (cd ? ` (clipped to ${cd.w}×${cd.h} mm cell)` : ''));
             for (const q of queries) pendingDraws.push({ query: q, raw: line.raw });
             sent++; setRun(r => ({ ...r, sent }));
             continue;
@@ -1089,7 +1103,7 @@ function ScriptTab({ sendRaw, sendAndWait, sendBatch, getPending, getHealth, run
       if (line.generator) {
         let queries: string[];
         try {
-          queries = expandGenerator(line.generator, plotterBounds(bounds));
+          queries = expandGenerator(line.generator, plotterBounds(bounds), { arcTol: 0.3 });
         } catch (e) {
           pushLog('err', `[script] generate "${line.generator.key}" failed: ${(e as Error).message}`);
           continue;

@@ -1,4 +1,4 @@
-// ../console/src/lib/registry.ts
+// console/src/lib/registry.ts
 var _registry = /* @__PURE__ */ new Map();
 function register(mod) {
   if (_registry.has(mod.key)) {
@@ -25,7 +25,7 @@ function num(values, key, fallback = 0) {
   return Number.isFinite(v) ? v : fallback;
 }
 
-// ../console/src/lib/frame.ts
+// console/src/lib/frame.ts
 function clonePath(path) {
   return { ...path, points: path.points.map((p) => ({ x: p.x, y: p.y })) };
 }
@@ -42,7 +42,7 @@ function rectPath(cx, cy, w, h) {
   };
 }
 
-// ../console/src/lib/modules/box.ts
+// console/src/lib/modules/box.ts
 var boxModule = {
   key: "box",
   label: "Box",
@@ -75,7 +75,7 @@ var boxModule = {
 };
 register(boxModule);
 
-// ../console/src/lib/modules/circle.ts
+// console/src/lib/modules/circle.ts
 var CHORD_ERR_MM = 0.2;
 function arcSegments(radiusMm, maxErrMm) {
   if (radiusMm <= 0 || maxErrMm <= 0) return 32;
@@ -120,7 +120,7 @@ var circleModule = {
 };
 register(circleModule);
 
-// ../console/src/lib/geom.ts
+// console/src/lib/geom.ts
 var dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 function bounds(points) {
   if (!points.length) return null;
@@ -183,6 +183,19 @@ function clipSegmentToRect(a, b, rect) {
   }
   return [{ x: a.x + t0 * dx, y: a.y + t0 * dy }, { x: a.x + t1 * dx, y: a.y + t1 * dy }];
 }
+function sampleBezier(p0, p1, p2, p3, n) {
+  const out = [];
+  const steps = Math.max(1, Math.floor(n));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps, u = 1 - t;
+    const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    out.push({
+      x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
+      y: a * p0.y + b * p1.y + c * p2.y + d * p3.y
+    });
+  }
+  return out;
+}
 function pointLineDistance(p, a, b) {
   const dx = b.x - a.x, dy = b.y - a.y;
   const len2 = dx * dx + dy * dy;
@@ -222,7 +235,7 @@ function seededRandom(seed) {
   };
 }
 
-// ../console/src/lib/modules/square.ts
+// console/src/lib/modules/square.ts
 var squareModule = {
   key: "square",
   label: "Square",
@@ -262,7 +275,7 @@ var squareModule = {
 };
 register(squareModule);
 
-// ../console/src/lib/modules/wobbly.ts
+// console/src/lib/modules/wobbly.ts
 var wobblyModule = {
   key: "wobbly",
   label: "Wobbly",
@@ -315,7 +328,1180 @@ var wobblyModule = {
 };
 register(wobblyModule);
 
-// ../console/src/lib/modules/spirograph.ts
+// console/src/lib/modules/ruledLines.ts
+function clampGap(offs, minGap) {
+  if (minGap <= 0) return offs;
+  const out = [];
+  let last = -Infinity;
+  for (const o of offs) {
+    if (o - last >= minGap) {
+      out.push(o);
+      last = o;
+    }
+  }
+  return out;
+}
+function bandOffsets(omin, omax, s, gradient, stops, minGap) {
+  const span = omax - omin;
+  if (span <= 0) return [omin];
+  if (stops.length >= 2) {
+    const dens = (u) => {
+      const x = u * (stops.length - 1);
+      const i = Math.min(stops.length - 2, Math.floor(x));
+      const f = x - i;
+      return Math.max(0, stops[i] * (1 - f) + stops[i + 1] * f);
+    };
+    const M = 400;
+    const cdf = new Array(M + 1);
+    cdf[0] = 0;
+    for (let i = 1; i <= M; i++) cdf[i] = cdf[i - 1] + 0.5 * (dens((i - 1) / M) + dens(i / M)) / M;
+    const total = cdf[M];
+    if (total > 1e-9) {
+      const N = Math.max(1, Math.round(span / s));
+      const offs2 = [];
+      let j = 0;
+      for (let k = 0; k <= N; k++) {
+        const target = k / N * total;
+        while (j < M && cdf[j + 1] < target) j++;
+        const segLen = cdf[j + 1] - cdf[j];
+        const f = segLen > 1e-12 ? (target - cdf[j]) / segLen : 0;
+        offs2.push(omin + span * ((j + f) / M));
+      }
+      return clampGap(offs2, minGap);
+    }
+  }
+  const offs = [];
+  if (gradient > 0) {
+    const N = Math.max(1, Math.round(span / s)), p = 1 + 2 * gradient;
+    for (let k = 0; k <= N; k++) offs.push(omin + span * Math.pow(k / N, p));
+  } else {
+    for (let o = Math.ceil(omin / s) * s; o <= omax + 1e-9; o += s) offs.push(o);
+  }
+  return clampGap(offs, minGap);
+}
+function ruledDir(rect, theta, spacing, jitter, rng, gradient = 0, stops = [], minGap = 0) {
+  const s = Math.max(0.5, spacing);
+  const cx = (rect.x0 + rect.x1) / 2, cy = (rect.y0 + rect.y1) / 2;
+  const dx = Math.cos(theta), dy = Math.sin(theta);
+  const nx = -Math.sin(theta), ny = Math.cos(theta);
+  let omin = Infinity, omax = -Infinity;
+  for (const [x, y] of [[rect.x0, rect.y0], [rect.x1, rect.y0], [rect.x1, rect.y1], [rect.x0, rect.y1]]) {
+    const o = (x - cx) * nx + (y - cy) * ny;
+    if (o < omin) omin = o;
+    if (o > omax) omax = o;
+  }
+  const offsets = bandOffsets(omin, omax, s, gradient, stops, minGap);
+  const L = rect.x1 - rect.x0 + (rect.y1 - rect.y0) + 10;
+  const out = [];
+  for (const o of offsets) {
+    const bx = cx + o * nx, by = cy + o * ny;
+    const seg = clipSegmentToRect({ x: bx - L * dx, y: by - L * dy }, { x: bx + L * dx, y: by + L * dy }, rect);
+    if (!seg) continue;
+    if (jitter <= 0) {
+      out.push({ points: [seg[0], seg[1]] });
+      continue;
+    }
+    const [a, b] = seg;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(2, Math.round(len / 5));
+    const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
+    const k1 = 1 + Math.floor(rng() * 2), k2 = 2 + Math.floor(rng() * 3);
+    const amp = jitter * (0.7 + 0.6 * rng());
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const env = Math.sin(Math.PI * t);
+      const off = amp * env * (0.6 * Math.sin(t * k1 * 2 * Math.PI + p1) + 0.4 * Math.sin(t * k2 * 2 * Math.PI + p2));
+      pts.push({ x: a.x + (b.x - a.x) * t + nx * off, y: a.y + (b.y - a.y) * t + ny * off });
+    }
+    out.push({ points: pts });
+  }
+  return out;
+}
+var ruledLinesModule = {
+  key: "ruledLines",
+  label: "Ruled lines",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Straight parallel lines filling a rectangle, in any mix of the four LeWitt directions (\u2502 \u2500 \u2571 \u2572), superimposed.",
+  sections: [
+    { title: "Region", fields: [
+      { key: "w", label: "Width", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 150 },
+      { key: "h", label: "Height", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 150 },
+      { key: "spacing", label: "Line spacing", type: "range", min: 2, max: 40, step: 0.5, unit: "mm", default: 12 }
+    ] },
+    { title: "Directions", fields: [
+      { key: "vertical", label: "Vertical \u2502", type: "toggle", default: true },
+      { key: "horizontal", label: "Horizontal \u2500", type: "toggle", default: true },
+      { key: "diagRight", label: "Diagonal \u2571", type: "toggle", default: false },
+      { key: "diagLeft", label: "Diagonal \u2572", type: "toggle", default: false }
+    ] },
+    { title: "Hand-drawn (not straight)", fields: [
+      { key: "jitter", label: "Jitter", type: "range", min: 0, max: 20, step: 0.5, unit: "mm", default: 0 },
+      { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Density ramp", fields: [
+      { key: "gradient", label: "Gradient", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "densityStops", label: "Density stops", type: "text", placeholder: "e.g. 1,0.2,1  (overrides gradient)", default: "" },
+      { key: "minGap", label: "Min line gap", type: "range", min: 0, max: 20, step: 0.5, unit: "mm", default: 0 }
+    ] },
+    { title: "Position", fields: [
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const w = num(params, "w", 150), h = num(params, "h", 150);
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const spacing = num(params, "spacing", 12);
+    const jitter = num(params, "jitter", 0);
+    const gradient = num(params, "gradient", 0);
+    const minGap = num(params, "minGap", 0);
+    const stops = String(params.densityStops ?? "").split(/[,\s]+/).map(Number).filter((x) => Number.isFinite(x) && x >= 0);
+    const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
+    const rect = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
+    const paths = [];
+    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient, stops, minGap));
+    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient, stops, minGap));
+    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));
+    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));
+    return { widthMm: w, heightMm: h, paths, meta: { title: "Ruled lines" } };
+  }
+};
+register(ruledLinesModule);
+
+// console/src/lib/modules/connectDots.ts
+function pointsFor(preset, h, cx, cy, count, seed) {
+  const C = [{ x: cx - h, y: cy - h }, { x: cx + h, y: cy - h }, { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h }];
+  const M = [{ x: cx, y: cy - h }, { x: cx + h, y: cy }, { x: cx, y: cy + h }, { x: cx - h, y: cy }];
+  const center = { x: cx, y: cy };
+  switch (preset) {
+    case "corners":
+      return C;
+    case "cornersCenter":
+      return [...C, center];
+    case "cornersMid":
+      return [...C, ...M];
+    case "cornersMidCenter":
+      return [...C, ...M, center];
+    case "perimeter": {
+      const n = Math.max(3, Math.round(count));
+      const side = 2 * h, total = 4 * side, out = [];
+      for (let k = 0; k < n; k++) {
+        let d = k * total / n;
+        if (d < side) out.push({ x: cx - h + d, y: cy - h });
+        else if (d < 2 * side) {
+          d -= side;
+          out.push({ x: cx + h, y: cy - h + d });
+        } else if (d < 3 * side) {
+          d -= 2 * side;
+          out.push({ x: cx + h - d, y: cy + h });
+        } else {
+          d -= 3 * side;
+          out.push({ x: cx - h, y: cy + h - d });
+        }
+      }
+      return out;
+    }
+    case "grid": {
+      const m = Math.max(2, Math.round(count)), out = [];
+      for (let i = 0; i < m; i++) for (let j = 0; j < m; j++)
+        out.push({ x: cx - h + 2 * h * i / (m - 1), y: cy - h + 2 * h * j / (m - 1) });
+      return out;
+    }
+    case "random": {
+      const n = Math.max(3, Math.round(count)), rng = seededRandom(seed), out = [];
+      for (let k = 0; k < n; k++) out.push({ x: cx - h + rng() * 2 * h, y: cy - h + rng() * 2 * h });
+      return out;
+    }
+    default:
+      return C;
+  }
+}
+function joinLine(a, b, jitter, rng) {
+  if (jitter <= 0) return { points: [a, b] };
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 1e-6) return { points: [a, b] };
+  const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+  const steps = Math.max(2, Math.round(len / 8));
+  const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
+  const k1 = 1 + Math.floor(rng() * 2), k2 = 2 + Math.floor(rng() * 2);
+  const amp = jitter * (0.7 + 0.6 * rng());
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps, env = Math.sin(Math.PI * t);
+    const off = amp * env * (0.6 * Math.sin(t * k1 * 2 * Math.PI + p1) + 0.4 * Math.sin(t * k2 * 2 * Math.PI + p2));
+    pts.push({ x: a.x + (b.x - a.x) * t + nx * off, y: a.y + (b.y - a.y) * t + ny * off });
+  }
+  return { points: pts };
+}
+var connectDotsModule = {
+  key: "connectDots",
+  label: "Connect dots",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Places architectural points (corners / midpoints / perimeter / grid / random) and joins every pair with a straight (or hand-drawn) line \u2014 a complete-graph web.",
+  sections: [
+    { title: "Points", fields: [
+      { key: "preset", label: "Point set", type: "select", default: "cornersMidCenter", options: [
+        { value: "corners", label: "4 corners" },
+        { value: "cornersCenter", label: "Corners + center" },
+        { value: "cornersMid", label: "Corners + edge midpoints" },
+        { value: "cornersMidCenter", label: "Corners + midpoints + center" },
+        { value: "perimeter", label: "Perimeter (count)" },
+        { value: "grid", label: "Grid (count \xD7 count)" },
+        { value: "random", label: "Random (count)" }
+      ] },
+      { key: "count", label: "Count", type: "range", min: 3, max: 24, step: 1, default: 12 },
+      { key: "pointSeed", label: "Point seed", type: "range", min: 0, max: 9999, step: 1, default: 3 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 260 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] },
+    { title: "Hand-drawn (not straight)", fields: [
+      { key: "jitter", label: "Jitter", type: "range", min: 0, max: 16, step: 0.5, unit: "mm", default: 0 },
+      { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 260), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const pts = pointsFor(
+      String(params.preset ?? "cornersMidCenter"),
+      h,
+      cx,
+      cy,
+      num(params, "count", 12),
+      Math.round(num(params, "pointSeed", 3))
+    );
+    const jitter = num(params, "jitter", 0);
+    const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
+    const paths = [];
+    for (let i = 0; i < pts.length; i++)
+      for (let j = i + 1; j < pts.length; j++)
+        paths.push(joinLine(pts[i], pts[j], jitter, rng));
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Connect dots" } };
+  }
+};
+register(connectDotsModule);
+
+// console/src/lib/modules/strokeField.ts
+function curve(a, b, jitter, rng) {
+  if (jitter <= 0) return { points: [a, b] };
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 1e-6) return { points: [a, b] };
+  const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+  const steps = Math.max(2, Math.round(len / 8));
+  const p1 = rng() * 2 * Math.PI, amp = jitter * (0.6 + 0.5 * rng());
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps, off = amp * Math.sin(Math.PI * t) * Math.sin(t * 2 * Math.PI + p1);
+    pts.push({ x: a.x + (b.x - a.x) * t + nx * off, y: a.y + (b.y - a.y) * t + ny * off });
+  }
+  return { points: pts };
+}
+var strokeFieldModule = {
+  key: "strokeField",
+  label: "Stroke field",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "A field of many short strokes covering the wall evenly (jittered grid), oriented randomly, by a smooth flow field, or aligned. Optionally hand-drawn.",
+  sections: [
+    { title: "Field", fields: [
+      { key: "count", label: "Strokes", type: "range", min: 50, max: 2e3, step: 10, default: 600 },
+      { key: "length", label: "Stroke length", type: "range", min: 5, max: 120, step: 1, unit: "mm", default: 40 },
+      { key: "lengthVar", label: "Length variation", type: "range", min: 0, max: 1, step: 0.05, default: 0.4 },
+      { key: "spread", label: "Position jitter", type: "range", min: 0, max: 1, step: 0.05, default: 0.7 }
+    ] },
+    { title: "Orientation", fields: [
+      { key: "orient", label: "Mode", type: "select", default: "flow", options: [
+        { value: "random", label: "Random" },
+        { value: "flow", label: "Flow field" },
+        { value: "aligned", label: "Aligned" }
+      ] },
+      { key: "angleDeg", label: "Angle / base", type: "range", min: 0, max: 180, step: 1, unit: "\xB0", default: 0 },
+      { key: "flowScale", label: "Flow scale", type: "range", min: 0.2, max: 4, step: 0.1, default: 1.2 },
+      { key: "flowSeed", label: "Flow / pos seed", type: "range", min: 0, max: 9999, step: 1, default: 5 }
+    ] },
+    { title: "Hand-drawn", fields: [
+      { key: "jitter", label: "Jitter", type: "range", min: 0, max: 12, step: 0.5, unit: "mm", default: 0 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 290 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const count = Math.round(num(params, "count", 600));
+    const len = num(params, "length", 40), lvar = num(params, "lengthVar", 0.4), spread = num(params, "spread", 0.7);
+    const orient = String(params.orient ?? "flow");
+    const base = num(params, "angleDeg", 0) * Math.PI / 180;
+    const fScale = num(params, "flowScale", 1.2) / 100;
+    const jitter = num(params, "jitter", 0);
+    const size = num(params, "size", 290), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const rng = seededRandom(Math.round(num(params, "flowSeed", 5)));
+    const fp1 = rng() * 6.28, fp2 = rng() * 6.28, fk = 1 + rng();
+    const n = Math.max(2, Math.round(Math.sqrt(count)));
+    const pitch = size / n;
+    const paths = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const px = cx - h + pitch * (i + 0.5) + (rng() - 0.5) * pitch * spread;
+        const py = cy - h + pitch * (j + 0.5) + (rng() - 0.5) * pitch * spread;
+        let ang;
+        if (orient === "aligned") ang = base + (rng() - 0.5) * 0.25;
+        else if (orient === "flow")
+          ang = base + 1.4 * Math.sin(px * fScale * fk + py * fScale + fp1) + 0.8 * Math.sin(py * fScale * 1.7 - px * fScale + fp2);
+        else ang = rng() * Math.PI;
+        const L = len * (1 + lvar * (rng() * 2 - 1));
+        const dx = Math.cos(ang) * L / 2, dy = Math.sin(ang) * L / 2;
+        paths.push(curve({ x: px - dx, y: py - dy }, { x: px + dx, y: py + dy }, jitter, rng));
+      }
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Stroke field" } };
+  }
+};
+register(strokeFieldModule);
+
+// console/src/lib/modules/arcs.ts
+var inside = (p, r2) => p.x >= r2.x0 && p.x <= r2.x1 && p.y >= r2.y0 && p.y <= r2.y1;
+function centresFor(preset, h, cx, cy) {
+  const C = [{ x: cx - h, y: cy - h }, { x: cx + h, y: cy - h }, { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h }];
+  const M = [{ x: cx, y: cy - h }, { x: cx + h, y: cy }, { x: cx, y: cy + h }, { x: cx - h, y: cy }];
+  switch (preset) {
+    case "corners":
+      return C;
+    case "midpoints":
+      return M;
+    case "cornersMid":
+      return [...C, ...M];
+    case "center":
+      return [{ x: cx, y: cy }];
+    default:
+      return C;
+  }
+}
+function arcRuns(c, R, rect, jitter, rng) {
+  const steps = Math.max(48, Math.round(R * 0.9));
+  const p1 = rng() * 6.28, p2 = rng() * 6.28, k1 = 2 + Math.floor(rng() * 2), k2 = 3 + Math.floor(rng() * 3);
+  const runs = [];
+  let cur = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = 2 * Math.PI * i / steps;
+    const rr = R + (jitter > 0 ? jitter * (0.6 * Math.sin(a * k1 + p1) + 0.4 * Math.sin(a * k2 + p2)) : 0);
+    const p = { x: c.x + rr * Math.cos(a), y: c.y + rr * Math.sin(a) };
+    if (inside(p, rect)) cur.push(p);
+    else {
+      if (cur.length > 1) runs.push({ points: cur });
+      cur = [];
+    }
+  }
+  if (cur.length > 1) runs.push({ points: cur });
+  return runs;
+}
+var arcsModule = {
+  key: "arcs",
+  label: "Arcs",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Concentric arcs swung from chosen centres (corners / edge midpoints / centre), clipped to the frame. Optionally hand-drawn.",
+  sections: [
+    { title: "Arcs", fields: [
+      { key: "centres", label: "Swung from", type: "select", default: "corners", options: [
+        { value: "corners", label: "Four corners" },
+        { value: "midpoints", label: "Edge midpoints" },
+        { value: "cornersMid", label: "Corners + midpoints" },
+        { value: "center", label: "Centre" }
+      ] },
+      { key: "count", label: "Arcs per centre", type: "range", min: 1, max: 40, step: 1, default: 12 },
+      { key: "maxR", label: "Max radius", type: "range", min: 20, max: 500, step: 5, unit: "mm", default: 300 }
+    ] },
+    { title: "Hand-drawn", fields: [
+      { key: "jitter", label: "Jitter", type: "range", min: 0, max: 16, step: 0.5, unit: "mm", default: 0 },
+      { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Break symmetry", fields: [
+      { key: "centreJitter", label: "Centre offset", type: "range", min: 0, max: 200, step: 1, unit: "mm", default: 0 },
+      { key: "countJitter", label: "Count spread", type: "range", min: 0, max: 20, step: 1, default: 0 },
+      { key: "radiusJitter", label: "Spacing irregularity", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "inset", label: "Centre inset", type: "range", min: 0, max: 150, step: 1, unit: "mm", default: 0 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const rect = { x0: cx - h, y0: cy - h, x1: cx + h, y1: cy + h };
+    let centres = centresFor(String(params.centres ?? "corners"), h, cx, cy);
+    const inset = num(params, "inset", 0);
+    if (inset > 0)
+      centres = centres.map((c) => {
+        const dx = cx - c.x, dy = cy - c.y, d = Math.hypot(dx, dy);
+        return d < 1e-6 ? c : { x: c.x + dx / d * Math.min(inset, d), y: c.y + dy / d * Math.min(inset, d) };
+      });
+    const count = Math.max(1, Math.round(num(params, "count", 12)));
+    const maxR = num(params, "maxR", 300);
+    const jitter = num(params, "jitter", 0);
+    const seed = Math.round(num(params, "jitterSeed", 7));
+    const rng = seededRandom(seed);
+    const centreJitter = num(params, "centreJitter", 0);
+    const countJitter = num(params, "countJitter", 0);
+    const radiusJitter = num(params, "radiusJitter", 0);
+    const arng = seededRandom(seed + 1e3);
+    if (centreJitter > 0)
+      centres = centres.map((c) => ({
+        x: c.x + (arng() * 2 - 1) * centreJitter,
+        y: c.y + (arng() * 2 - 1) * centreJitter
+      }));
+    const paths = [];
+    for (const c of centres) {
+      const n = countJitter > 0 ? Math.max(1, Math.round(count + (arng() * 2 - 1) * countJitter)) : count;
+      for (let k = 1; k <= n; k++) {
+        const frac = radiusJitter > 0 ? Math.min(1, Math.max(0.02, k / n + (arng() * 2 - 1) * radiusJitter / n)) : k / n;
+        paths.push(...arcRuns(c, frac * maxR, rect, jitter, rng));
+      }
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Arcs" } };
+  }
+};
+register(arcsModule);
+
+// console/src/lib/modules/locatedFigures.ts
+function anchorsFor(preset, h, cx, cy) {
+  const C = [{ x: cx - h, y: cy - h }, { x: cx + h, y: cy - h }, { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h }];
+  const M = [{ x: cx, y: cy - h }, { x: cx + h, y: cy }, { x: cx, y: cy + h }, { x: cx - h, y: cy }];
+  const center = { x: cx, y: cy };
+  switch (preset) {
+    case "corners":
+      return C;
+    case "cornersMid":
+      return [...C, ...M];
+    case "cornersMidCenter":
+      return [...C, ...M, center];
+    default:
+      return [...C, ...M, center];
+  }
+}
+function joinLine2(a, b, jitter, rng) {
+  if (jitter <= 0) return { points: [a, b] };
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 1e-6) return { points: [a, b] };
+  const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+  const steps = Math.max(2, Math.round(len / 8));
+  const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
+  const k1 = 1 + Math.floor(rng() * 2), k2 = 2 + Math.floor(rng() * 2);
+  const amp = jitter * (0.7 + 0.6 * rng());
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps, env = Math.sin(Math.PI * t);
+    const off = amp * env * (0.6 * Math.sin(t * k1 * 2 * Math.PI + p1) + 0.4 * Math.sin(t * k2 * 2 * Math.PI + p2));
+    pts.push({ x: a.x + (b.x - a.x) * t + nx * off, y: a.y + (b.y - a.y) * t + ny * off });
+  }
+  return { points: pts };
+}
+function figureVerts(kind, fx, fy, w, hgt, topRatio, ang, shear, skew, rng) {
+  const hy = hgt / 2, bw = w / 2;
+  let base;
+  if (kind === "parallelogram") {
+    const k = shear;
+    base = [{ x: -bw - k * hy, y: -hy }, { x: bw - k * hy, y: -hy }, { x: bw + k * hy, y: hy }, { x: -bw + k * hy, y: hy }];
+  } else if (kind === "irregular") {
+    const n = 5 + Math.floor(rng() * 4);
+    const angles = [];
+    for (let i = 0; i < n; i++) angles.push(2 * Math.PI * i / n + (rng() * 2 - 1) * (Math.PI / n) * 0.85);
+    angles.sort((a, b) => a - b);
+    base = angles.map((a) => {
+      const r2 = bw * (0.45 + rng() * 0.8);
+      return { x: r2 * Math.cos(a), y: r2 * Math.sin(a) };
+    });
+  } else {
+    const tw = w * topRatio / 2;
+    base = [{ x: -tw, y: -hy }, { x: tw, y: -hy }, { x: bw, y: hy }, { x: -bw, y: hy }];
+  }
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  return base.map((p) => ({
+    x: fx + (p.x * ca - p.y * sa) + (rng() * 2 - 1) * skew,
+    y: fy + (p.x * sa + p.y * ca) + (rng() * 2 - 1) * skew
+  }));
+}
+var locatedFiguresModule = {
+  key: "locatedFigures",
+  label: "Located figures",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Irregular trapezoids placed asymmetrically, each fixed by a hand-drawn 'location web' of not-straight lines to the nearest architectural anchor points. Density-capped so no corner saturates.",
+  sections: [
+    { title: "Figures", fields: [
+      { key: "figure", label: "Figure", type: "select", default: "trapezoid", options: [
+        { value: "trapezoid", label: "Trapezoid" },
+        { value: "parallelogram", label: "Parallelogram" },
+        { value: "irregular", label: "Irregular polygon" }
+      ] },
+      { key: "count", label: "Figures", type: "range", min: 1, max: 12, step: 1, default: 4 },
+      { key: "sizeMin", label: "Min size", type: "range", min: 20, max: 150, step: 1, unit: "mm", default: 45 },
+      { key: "sizeMax", label: "Max size", type: "range", min: 30, max: 220, step: 1, unit: "mm", default: 95 },
+      { key: "shear", label: "Shear (parallelogram)", type: "range", min: 0, max: 1.5, step: 0.05, default: 0.6 },
+      { key: "rotMax", label: "Orientation spread", type: "range", min: 0, max: 1.2, step: 0.05, unit: "rad", default: 0.5 },
+      { key: "skew", label: "Vertex skew", type: "range", min: 0, max: 30, step: 1, unit: "mm", default: 6 },
+      { key: "cluster", label: "Cluster", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "figSeed", label: "Placement seed", type: "range", min: 0, max: 9999, step: 1, default: 5 }
+    ] },
+    { title: "Location web", fields: [
+      { key: "anchors", label: "Anchor points", type: "select", default: "cornersMidCenter", options: [
+        { value: "corners", label: "4 corners" },
+        { value: "cornersMid", label: "Corners + midpoints" },
+        { value: "cornersMidCenter", label: "Corners + midpoints + center" }
+      ] },
+      { key: "anchorsPerFigure", label: "Anchors per figure", type: "range", min: 1, max: 9, step: 1, default: 3 },
+      { key: "vertsPerAnchor", label: "Verts per anchor", type: "range", min: 1, max: 4, step: 1, default: 2 }
+    ] },
+    { title: "Hand-drawn (not straight)", fields: [
+      { key: "jitter", label: "Jitter", type: "range", min: 0, max: 16, step: 0.5, unit: "mm", default: 0 },
+      { key: "jitterSeed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 280 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 280), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const kind = String(params.figure ?? "trapezoid");
+    const count = Math.max(1, Math.round(num(params, "count", 4)));
+    const sizeMin = num(params, "sizeMin", 45), sizeMax = Math.max(sizeMin + 1, num(params, "sizeMax", 95));
+    const shear = num(params, "shear", 0.6), rotMax = num(params, "rotMax", 0.5);
+    const skew = num(params, "skew", 6);
+    const anchors = anchorsFor(String(params.anchors ?? "cornersMidCenter"), h, cx, cy);
+    const anchorsPerFigure = Math.max(1, Math.round(num(params, "anchorsPerFigure", 3)));
+    const vertsPerAnchor = Math.max(1, Math.round(num(params, "vertsPerAnchor", 2)));
+    const jitter = num(params, "jitter", 0);
+    const frng = seededRandom(Math.round(num(params, "figSeed", 5)));
+    const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
+    const margin = Math.min(h * 0.7, sizeMax * 0.6);
+    const cluster = num(params, "cluster", 0);
+    let ccx = cx, ccy = cy, pr = h - margin;
+    if (cluster > 0) {
+      const oang = frng() * 2 * Math.PI, offR = (h - margin) * 0.55 * cluster;
+      ccx = cx + Math.cos(oang) * offR;
+      ccy = cy + Math.sin(oang) * offR;
+      pr = (h - margin) * (1 - 0.55 * cluster);
+    }
+    const figs = [];
+    for (let i = 0; i < count; i++) {
+      const w = sizeMin + frng() * (sizeMax - sizeMin);
+      const hgt = (sizeMin + frng() * (sizeMax - sizeMin)) * 0.75;
+      const topRatio = 0.35 + frng() * 0.55;
+      const ang = (frng() * 2 - 1) * rotMax;
+      const fx = ccx - pr + frng() * (2 * pr);
+      const fy = ccy - pr + frng() * (2 * pr);
+      figs.push({ c: { x: fx, y: fy }, verts: figureVerts(kind, fx, fy, w, hgt, topRatio, ang, shear, skew, frng) });
+    }
+    const paths = [];
+    for (const f of figs)
+      for (let k = 0; k < f.verts.length; k++) paths.push(joinLine2(f.verts[k], f.verts[(k + 1) % f.verts.length], jitter, rng));
+    const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+    for (const f of figs) {
+      const near = [...anchors].sort((a, b) => d2(a, f.c) - d2(b, f.c)).slice(0, anchorsPerFigure);
+      for (const a of near) {
+        const vs = [...f.verts].sort((p, q) => d2(a, p) - d2(a, q)).slice(0, vertsPerAnchor);
+        for (const v of vs) paths.push(joinLine2(a, v, jitter, rng));
+      }
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Located figures" } };
+  }
+};
+register(locatedFiguresModule);
+
+// console/src/lib/modules/scribble.ts
+function toneFn(form, x, y, cx, cy, h, archH, sigma) {
+  const u = (x - (cx - h)) / (2 * h);
+  if (form === "gradientV") return Math.min(1, Math.max(0, (y - (cy - h)) / (2 * h)));
+  if (form === "band") {
+    const d2 = (y - cy) / sigma;
+    return Math.exp(-0.5 * d2 * d2);
+  }
+  const archY = cy - archH * h * (1 - Math.pow(2 * u - 1, 2));
+  const d = (y - archY) / sigma;
+  return Math.exp(-0.5 * d * d);
+}
+function shadeArch(cx, cy, h, archH, thick, crownBoost, coils, loopR, jitter, passPhase, rng) {
+  const left = cx - h, span = 2 * h;
+  const steps = Math.max(200, Math.round(coils * 14));
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const bell = 1 - Math.pow(2 * t - 1, 2);
+    const x0 = left + t * span;
+    const yC = cy - archH * h * bell;
+    const halfT = 0.5 * thick * (0.3 + 0.7 * bell) * (1 + crownBoost * bell);
+    const phase = t * coils * 2 * Math.PI + passPhase;
+    const off = halfT * Math.sin(phase);
+    const lx = loopR * Math.cos(phase * 1.9), ly = loopR * Math.sin(phase * 1.9);
+    pts.push({ x: x0 + lx + (rng() * 2 - 1) * jitter, y: yC + off + ly + (rng() * 2 - 1) * jitter });
+  }
+  return pts;
+}
+function squiggle(px, py, size, loops, jitter, rng) {
+  const steps = Math.max(4, Math.round(loops));
+  const stepLen = size / 3.2;
+  let x = px, y = py, th = rng() * 2 * Math.PI;
+  const pts = [{ x, y }];
+  for (let i = 0; i < steps; i++) {
+    th += (rng() * 2 - 1) * 1.15;
+    x += Math.cos(th) * stepLen + (rng() * 2 - 1) * jitter * 0.3;
+    y += Math.sin(th) * stepLen + (rng() * 2 - 1) * jitter * 0.3;
+    pts.push({ x, y });
+  }
+  return pts;
+}
+var scribbleModule = {
+  key: "scribble",
+  label: "Scribble",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Hand-made looping scribble marks whose density forms a tonal shape (e.g. an inverted curve). Open, gestural, never mechanical.",
+  sections: [
+    { title: "Form", fields: [
+      { key: "form", label: "Tonal form", type: "select", default: "invertedCurveH", options: [
+        { value: "invertedCurveH", label: "Inverted curve (horizontal)" },
+        { value: "band", label: "Horizontal band" },
+        { value: "gradientV", label: "Vertical gradient" }
+      ] },
+      { key: "archH", label: "Arch height", type: "range", min: 0, max: 0.9, step: 0.05, default: 0.45 },
+      { key: "sigma", label: "Band width", type: "range", min: 10, max: 160, step: 1, unit: "mm", default: 55 }
+    ] },
+    { title: "Technique", fields: [
+      { key: "mode", label: "Mode", type: "select", default: "marks", options: [
+        { value: "marks", label: "Scattered marks" },
+        { value: "shade", label: "Continuous shading (form)" }
+      ] }
+    ] },
+    { title: "Scattered marks", fields: [
+      { key: "marks", label: "Marks", type: "range", min: 20, max: 900, step: 10, default: 260 },
+      { key: "markSize", label: "Mark size", type: "range", min: 4, max: 60, step: 1, unit: "mm", default: 16 },
+      { key: "loops", label: "Loopiness", type: "range", min: 4, max: 24, step: 1, default: 10 },
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 12, step: 0.5, unit: "mm", default: 3 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Continuous shading", fields: [
+      { key: "thick", label: "Ribbon thickness", type: "range", min: 10, max: 220, step: 2, unit: "mm", default: 90 },
+      { key: "crownBoost", label: "Crown swell", type: "range", min: 0, max: 2, step: 0.1, default: 0.6 },
+      { key: "coils", label: "Coils", type: "range", min: 20, max: 240, step: 2, default: 90 },
+      { key: "loopR", label: "Loop size", type: "range", min: 0, max: 16, step: 0.5, unit: "mm", default: 4 },
+      { key: "passes", label: "Passes", type: "range", min: 1, max: 4, step: 1, default: 2 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const form = String(params.form ?? "invertedCurveH");
+    const mode = String(params.mode ?? "marks");
+    const archH = num(params, "archH", 0.45), sigma = num(params, "sigma", 55);
+    const marks = Math.max(1, Math.round(num(params, "marks", 260)));
+    const markSize = num(params, "markSize", 16);
+    const loops = num(params, "loops", 10);
+    const jitter = num(params, "jitter", 3);
+    const rng = seededRandom(Math.round(num(params, "seed", 7)));
+    const paths = [];
+    if (mode === "shade") {
+      const thick = num(params, "thick", 90), crownBoost = num(params, "crownBoost", 0.6);
+      const coils = num(params, "coils", 90), loopR = num(params, "loopR", 4);
+      const passes = Math.max(1, Math.round(num(params, "passes", 2)));
+      for (let p = 0; p < passes; p++)
+        paths.push({ points: shadeArch(cx, cy, h, archH, thick, crownBoost, coils, loopR, jitter, p * Math.PI / passes, rng) });
+      return { widthMm: size, heightMm: size, paths, meta: { title: "Scribble" } };
+    }
+    let placed = 0, attempts = 0, maxAttempts = marks * 40;
+    while (placed < marks && attempts < maxAttempts) {
+      attempts++;
+      const px = cx - h + rng() * 2 * h;
+      const py = cy - h + rng() * 2 * h;
+      if (rng() > toneFn(form, px, py, cx, cy, h, archH, sigma)) continue;
+      paths.push({ points: squiggle(px, py, markSize, loops, jitter, rng) });
+      placed++;
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Scribble" } };
+  }
+};
+register(scribbleModule);
+
+// console/src/lib/modules/curvyDivide.ts
+var curvyDivideModule = {
+  key: "curvyDivide",
+  label: "Curvy divide",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "A wall split corner-to-corner by a curvy line; each side filled with open hand-drawn grain running a contrasting direction.",
+  sections: [
+    { title: "Divide", fields: [
+      { key: "curviness", label: "Curviness", type: "range", min: 0, max: 120, step: 2, unit: "mm", default: 40 },
+      { key: "freq", label: "Waves", type: "range", min: 0.5, max: 5, step: 0.1, default: 1.6 }
+    ] },
+    { title: "Grain", fields: [
+      { key: "leftAngle", label: "Left angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 35 },
+      { key: "rightAngle", label: "Right angle", type: "range", min: 0, max: 180, step: 1, unit: "deg", default: 125 },
+      { key: "spacing", label: "Grain spacing", type: "range", min: 6, max: 40, step: 1, unit: "mm", default: 16 },
+      { key: "swirl", label: "Flow swirl", type: "range", min: 0, max: 1.4, step: 0.05, unit: "rad", default: 0.6 },
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 14, step: 0.5, unit: "mm", default: 4 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const curviness = num(params, "curviness", 40), freq = num(params, "freq", 1.6);
+    const spacing = Math.max(1, num(params, "spacing", 16));
+    const swirl = num(params, "swirl", 0.6);
+    const jitter = num(params, "jitter", 4);
+    const rng = seededRandom(Math.round(num(params, "seed", 7)));
+    const leftRad = num(params, "leftAngle", 35) * Math.PI / 180;
+    const rightRad = num(params, "rightAngle", 125) * Math.PI / 180;
+    const A = { x: cx - h, y: cy - h }, B = { x: cx + h, y: cy + h };
+    const L = Math.hypot(B.x - A.x, B.y - A.y);
+    const ux = (B.x - A.x) / L, uy = (B.y - A.y) / L;
+    const px = -uy, py = ux;
+    const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
+    const curveOffset = (t) => curviness * (0.7 * Math.sin(t * freq * 2 * Math.PI + ph1) + 0.3 * Math.sin(t * freq * 2.3 * 2 * Math.PI + ph2));
+    const sideOf = (x, y) => {
+      const rx = x - A.x, ry = y - A.y;
+      const t = (rx * ux + ry * uy) / L;
+      const off = rx * px + ry * py;
+      return off - curveOffset(t);
+    };
+    const inFrame = (x, y) => x >= cx - h && x <= cx + h && y >= cy - h && y <= cy + h;
+    const sw1 = rng() * 6.28, sw2 = rng() * 6.28;
+    const flowAngle = (x, y, base) => base + swirl * (Math.sin(x * 0.011 + sw1) * Math.cos(y * 0.012 - sw2) + 0.5 * Math.sin((x + y) * 7e-3 + sw1));
+    const grain = (theta, sign) => {
+      const out = [];
+      const ds = 4, half = Math.round(2.4 * h / ds);
+      for (let gx = cx - h; gx <= cx + h; gx += spacing)
+        for (let gy = cy - h; gy <= cy + h; gy += spacing) {
+          if (Math.sign(sideOf(gx, gy)) !== sign) continue;
+          if (rng() > 0.92) continue;
+          const seg = [];
+          for (const dir of [1, -1]) {
+            let x = gx, y = gy;
+            const pts = [];
+            for (let i = 0; i < half; i++) {
+              const a = flowAngle(x, y, theta);
+              x += dir * Math.cos(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
+              y += dir * Math.sin(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
+              if (!inFrame(x, y) || Math.sign(sideOf(x, y)) !== sign) break;
+              pts.push({ x, y });
+            }
+            if (dir === 1) seg.push(...pts.reverse(), { x: gx, y: gy });
+            else seg.push(...pts);
+          }
+          if (seg.length > 2) out.push({ points: seg });
+        }
+      return out;
+    };
+    const paths = [];
+    paths.push(...grain(leftRad, -1));
+    paths.push(...grain(rightRad, 1));
+    for (let pass = 0; pass < 2; pass++) {
+      const bpts = [];
+      const jb = pass === 0 ? 0 : 1.2;
+      for (let i = 0; i <= 260; i++) {
+        const t = i / 260, base = { x: A.x + t * (B.x - A.x), y: A.y + t * (B.y - A.y) };
+        const off = curveOffset(t) + (rng() * 2 - 1) * jb;
+        bpts.push({ x: base.x + px * off, y: base.y + py * off });
+      }
+      paths.push({ points: bpts });
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Curvy divide" } };
+  }
+};
+register(curvyDivideModule);
+
+// console/src/lib/modules/whirls.ts
+function whirl(ox, oy, r0, maxR, turns, dir, phase, squash, rot, jitter, rng) {
+  const total = turns * 2 * Math.PI;
+  const k = Math.log(maxR / r0) / total;
+  const steps = Math.max(48, Math.round(total / 0.11));
+  const wob1 = rng() * 6.28, breath = 0.04 + rng() * 0.05;
+  const ca = Math.cos(rot), sa = Math.sin(rot);
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const th = total * i / steps;
+    const r2 = r0 * Math.exp(k * th) * (1 + breath * Math.sin(th * 2.5 + wob1));
+    const ang = dir * th + phase;
+    const x = r2 * Math.cos(ang), y = r2 * Math.sin(ang) * squash;
+    const rx = x * ca - y * sa, ry = x * sa + y * ca;
+    pts.push({ x: ox + rx + (rng() * 2 - 1) * jitter, y: oy + ry + (rng() * 2 - 1) * jitter });
+  }
+  return pts;
+}
+var whirlsModule = {
+  key: "whirls",
+  label: "Whirls",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Bold organic spiralling whirls of varied size/direction + small twirl flourishes, composed asymmetrically with open space.",
+  sections: [
+    { title: "Whirls", fields: [
+      { key: "count", label: "Whirls", type: "range", min: 1, max: 10, step: 1, default: 3 },
+      { key: "maxR", label: "Max radius", type: "range", min: 20, max: 160, step: 2, unit: "mm", default: 100 },
+      { key: "turns", label: "Turns", type: "range", min: 1, max: 6, step: 0.25, default: 3.2 },
+      { key: "squash", label: "Squash", type: "range", min: 0.4, max: 1, step: 0.05, default: 0.85 }
+    ] },
+    { title: "Twirls", fields: [
+      { key: "twirls", label: "Twirls", type: "range", min: 0, max: 16, step: 1, default: 4 }
+    ] },
+    { title: "Hand", fields: [
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 10, step: 0.5, unit: "mm", default: 2 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const count = Math.max(1, Math.round(num(params, "count", 3)));
+    const maxR = num(params, "maxR", 100), turns = num(params, "turns", 3.2);
+    const squash = num(params, "squash", 0.85);
+    const twirls = Math.max(0, Math.round(num(params, "twirls", 4)));
+    const jitter = num(params, "jitter", 2);
+    const rng = seededRandom(Math.round(num(params, "seed", 7)));
+    const paths = [];
+    const place = (rmax, trn) => {
+      const R = rmax * (0.5 + 0.5 * rng());
+      const m = Math.min(h * 0.85, R * 0.7);
+      const ox = cx - h + m + rng() * (2 * (h - m));
+      const oy = cy - h + m + rng() * (2 * (h - m));
+      const dir = rng() < 0.5 ? 1 : -1;
+      const t = trn * (0.6 + 0.5 * rng());
+      paths.push({ points: whirl(ox, oy, 2, Math.max(6, R), t, dir, rng() * 6.28, squash + (rng() * 2 - 1) * 0.12, rng() * 6.28, jitter, rng) });
+    };
+    for (let i = 0; i < count; i++) place(maxR, turns);
+    for (let i = 0; i < twirls; i++) place(maxR * 0.22, 1.6 + rng() * 1.4);
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Whirls" } };
+  }
+};
+register(whirlsModule);
+
+// console/src/lib/modules/flowWhirls.ts
+var flowWhirlsModule = {
+  key: "flowWhirls",
+  label: "Flow whirls",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "The wall filled with flowing streamlines through a vortex field \u2014 swirling whirls and twirling currents. Full-field, dynamic, hand-made.",
+  sections: [
+    { title: "Field", fields: [
+      { key: "vortices", label: "Whirl centres", type: "range", min: 1, max: 10, step: 1, default: 4 },
+      { key: "strength", label: "Swirl strength", type: "range", min: 20, max: 200, step: 5, default: 90 },
+      { key: "spiralIn", label: "Spiral in/out", type: "range", min: -0.8, max: 0.8, step: 0.05, default: 0.25 },
+      { key: "drift", label: "Base drift", type: "range", min: 0, max: 60, step: 1, default: 18 }
+    ] },
+    { title: "Streamlines", fields: [
+      { key: "spacing", label: "Line spacing", type: "range", min: 6, max: 30, step: 1, unit: "mm", default: 15 },
+      { key: "reach", label: "Line length", type: "range", min: 40, max: 400, step: 10, unit: "mm", default: 150 },
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 8, step: 0.5, unit: "mm", default: 1.5 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Growth & decrease (breathing)", fields: [
+      { key: "growth", label: "Breathe amount", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "growthAxis", label: "Breathe axis", type: "range", min: 0, max: 180, step: 5, unit: "deg", default: 90 },
+      { key: "growthPeak", label: "Crest position", type: "range", min: 0, max: 1, step: 0.05, default: 0.5 },
+      { key: "growthWidth", label: "Crest breadth", type: "range", min: 0.1, max: 0.8, step: 0.05, default: 0.32 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const nV = Math.max(1, Math.round(num(params, "vortices", 4)));
+    const strength = num(params, "strength", 90), spiralIn = num(params, "spiralIn", 0.25);
+    const drift = num(params, "drift", 18);
+    const spacing = Math.max(3, num(params, "spacing", 15));
+    const reach = num(params, "reach", 150);
+    const jitter = num(params, "jitter", 1.5);
+    const rng = seededRandom(Math.round(num(params, "seed", 7)));
+    const vs = [];
+    for (let i = 0; i < nV; i++)
+      vs.push({
+        x: cx - h * 0.75 + rng() * 1.5 * h,
+        y: cy - h * 0.75 + rng() * 1.5 * h,
+        s: rng() < 0.5 ? 1 : -1,
+        k: strength * (0.6 + 0.8 * rng())
+      });
+    const driftAng = rng() * 6.28;
+    const core = 14;
+    const vecAngle = (x, y) => {
+      let vx = drift * Math.cos(driftAng), vy = drift * Math.sin(driftAng);
+      for (const v of vs) {
+        const dx = x - v.x, dy = y - v.y, d = Math.hypot(dx, dy) + core, f = v.k / d;
+        vx += (-dy / d * v.s + -dx / d * spiralIn) * f;
+        vy += (dx / d * v.s + -dy / d * spiralIn) * f;
+      }
+      return Math.atan2(vy, vx);
+    };
+    const inFrame = (x, y) => x >= cx - h && x <= cx + h && y >= cy - h && y <= cy + h;
+    const ds = 4, half = Math.max(6, Math.round(reach / 2 / ds));
+    const growth = num(params, "growth", 0);
+    const gAxis = num(params, "growthAxis", 90) * Math.PI / 180, gax = Math.cos(gAxis), gay = Math.sin(gAxis);
+    const gPeak = num(params, "growthPeak", 0.5), gWidth = num(params, "growthWidth", 0.32);
+    const envAt = (x, y) => {
+      if (growth <= 0) return 1;
+      const u = ((x - (cx - h)) * gax + (y - (cy - h)) * gay) / (2 * h);
+      const e = Math.exp(-0.5 * ((u - gPeak) / gWidth) ** 2);
+      return 1 - growth + growth * e;
+    };
+    const paths = [];
+    for (let gx = cx - h; gx <= cx + h; gx += spacing)
+      for (let gy = cy - h; gy <= cy + h; gy += spacing) {
+        const e = envAt(gx, gy);
+        if (rng() > 0.9 * e) continue;
+        const hi = Math.max(4, Math.round(half * e));
+        const seg = [];
+        for (const dir of [1, -1]) {
+          let x = gx, y = gy;
+          const pts = [];
+          for (let i = 0; i < hi; i++) {
+            const a = vecAngle(x, y);
+            x += dir * Math.cos(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
+            y += dir * Math.sin(a) * ds + (rng() * 2 - 1) * jitter * 0.05;
+            if (!inFrame(x, y)) break;
+            pts.push({ x, y });
+          }
+          if (dir === 1) seg.push(...pts.reverse(), { x: gx, y: gy });
+          else seg.push(...pts);
+        }
+        if (seg.length > 3) paths.push({ points: seg });
+      }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Flow whirls" } };
+  }
+};
+register(flowWhirlsModule);
+
+// console/src/lib/modules/growthField.ts
+function stroke(mx, my, s, th, curve2, jitter, rng) {
+  const dx = Math.cos(th), dy = Math.sin(th), nx = -dy, ny = dx;
+  const n = Math.max(4, Math.round(s / 3));
+  const bowPhase = rng() * 6.28, bowAmt = curve2 * s * (0.7 + 0.5 * rng());
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n - 0.5;
+    const along = t * s;
+    const bow = bowAmt * Math.cos(Math.PI * t + bowPhase * 0) * (0.25 - t * t) * 4;
+    pts.push({
+      x: mx + dx * along + nx * bow + (rng() * 2 - 1) * jitter,
+      y: my + dy * along + ny * bow + (rng() * 2 - 1) * jitter
+    });
+  }
+  return pts;
+}
+var growthFieldModule = {
+  key: "growthField",
+  label: "Growth field",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "A field of organic curved strokes whose size breathes (grows then shrinks) along an axis \u2014 Klee's growth-and-decrease as a living tonal wave.",
+  sections: [
+    { title: "Growth", fields: [
+      { key: "axisAngle", label: "Growth axis", type: "range", min: 0, max: 180, step: 5, unit: "deg", default: 90 },
+      { key: "peak", label: "Crest position", type: "range", min: 0, max: 1, step: 0.05, default: 0.5 },
+      { key: "width", label: "Crest breadth", type: "range", min: 0.1, max: 0.8, step: 0.05, default: 0.32 },
+      { key: "radial", label: "Radial", type: "toggle", default: false }
+    ] },
+    { title: "Strokes", fields: [
+      { key: "spacing", label: "Spacing", type: "range", min: 8, max: 40, step: 1, unit: "mm", default: 18 },
+      { key: "sizeMin", label: "Min size", type: "range", min: 2, max: 40, step: 1, unit: "mm", default: 6 },
+      { key: "sizeMax", label: "Max size", type: "range", min: 10, max: 80, step: 1, unit: "mm", default: 34 },
+      { key: "curve", label: "Stroke curve", type: "range", min: 0, max: 0.6, step: 0.02, default: 0.28 },
+      { key: "flowVary", label: "Orientation vary", type: "range", min: 0, max: 1.4, step: 0.05, unit: "rad", default: 0.4 }
+    ] },
+    { title: "Hand", fields: [
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 6, step: 0.5, unit: "mm", default: 1.2 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const axis = num(params, "axisAngle", 90) * Math.PI / 180;
+    const peak = num(params, "peak", 0.5), width = num(params, "width", 0.32);
+    const radial = params.radial === true;
+    const spacing = Math.max(4, num(params, "spacing", 18));
+    const sizeMin = num(params, "sizeMin", 6), sizeMax = Math.max(sizeMin + 1, num(params, "sizeMax", 34));
+    const curve2 = num(params, "curve", 0.28), flowVary = num(params, "flowVary", 0.4);
+    const jitter = num(params, "jitter", 1.2);
+    const rng = seededRandom(Math.round(num(params, "seed", 7)));
+    const ax = Math.cos(axis), ay = Math.sin(axis);
+    const env = (x, y) => {
+      let u;
+      if (radial) u = Math.min(1, Math.hypot(x - cx, y - cy) / h);
+      else u = ((x - (cx - h)) * ax + (y - (cy - h)) * ay) / (2 * h);
+      return Math.exp(-0.5 * ((u - peak) / width) ** 2);
+    };
+    const paths = [];
+    const baseTh = axis + Math.PI / 2;
+    for (let gx = cx - h; gx <= cx + h; gx += spacing)
+      for (let gy = cy - h; gy <= cy + h; gy += spacing) {
+        const jx = gx + (rng() * 2 - 1) * spacing * 0.35, jy = gy + (rng() * 2 - 1) * spacing * 0.35;
+        if (jx < cx - h || jx > cx + h || jy < cy - h || jy > cy + h) continue;
+        const s = sizeMin + (sizeMax - sizeMin) * env(jx, jy);
+        const th = baseTh + (rng() * 2 - 1) * flowVary;
+        paths.push({ points: stroke(jx, jy, s, th, curve2, jitter, rng) });
+      }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Growth field" } };
+  }
+};
+register(growthFieldModule);
+
+// console/src/lib/modules/branching.ts
+var branchingModule = {
+  key: "branching",
+  label: "Branching",
+  kind: "make",
+  group: "Lines & Patterns",
+  description: "Organic dendritic growth (tree / coral / delta / veins) that fills the wall \u2014 irregular splits, hand-drawn curved branches, shrinking length.",
+  sections: [
+    { title: "Growth", fields: [
+      { key: "origin", label: "Grows from", type: "select", default: "bottom", options: [
+        { value: "bottom", label: "Bottom (up)" },
+        { value: "top", label: "Top (down)" },
+        { value: "left", label: "Left (right)" },
+        { value: "center", label: "Centre (radial)" }
+      ] },
+      { key: "roots", label: "Roots / seeds", type: "range", min: 1, max: 12, step: 1, default: 3 },
+      { key: "depth", label: "Generations", type: "range", min: 3, max: 10, step: 1, default: 7 },
+      { key: "initLen", label: "First length", type: "range", min: 20, max: 140, step: 2, unit: "mm", default: 66 },
+      { key: "decay", label: "Length decay", type: "range", min: 0.5, max: 0.92, step: 0.02, default: 0.72 }
+    ] },
+    { title: "Split", fields: [
+      { key: "spread", label: "Branch spread", type: "range", min: 0.1, max: 1.4, step: 0.05, unit: "rad", default: 0.6 },
+      { key: "tropism", label: "Grow-direction pull", type: "range", min: 0, max: 0.6, step: 0.05, default: 0.15 },
+      { key: "curve", label: "Branch curve", type: "range", min: 0, max: 0.8, step: 0.05, default: 0.25 },
+      { key: "coreR", label: "Core scatter (radial)", type: "range", min: 0, max: 80, step: 1, unit: "mm", default: 0 },
+      { key: "flow", label: "Organic flow", type: "range", min: 0, max: 0.8, step: 0.05, default: 0 }
+    ] },
+    { title: "Hand", fields: [
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 6, step: 0.5, unit: "mm", default: 1.2 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 7 }
+    ] },
+    { title: "Frame", fields: [
+      { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "edgeAvoid", label: "Keep inside frame", type: "range", min: 0, max: 1, step: 0.05, default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const size = num(params, "size", 300), h = size / 2;
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const origin = String(params.origin ?? "bottom");
+    const roots = Math.max(1, Math.round(num(params, "roots", 3)));
+    const depth = Math.max(1, Math.round(num(params, "depth", 7)));
+    const initLen = num(params, "initLen", 66), decay = num(params, "decay", 0.72);
+    const spread = num(params, "spread", 0.6), tropism = num(params, "tropism", 0.15);
+    const curve2 = num(params, "curve", 0.25), jitter = num(params, "jitter", 1.2);
+    const coreR = num(params, "coreR", 0);
+    const flow = num(params, "flow", 0);
+    const edgeAvoid = num(params, "edgeAvoid", 0);
+    const rng = seededRandom(Math.round(num(params, "seed", 7)));
+    const curl = (x, y) => flow * (Math.sin((x - cx) * 0.02 + (y - cy) * 0.013 + 1.3) + 0.6 * Math.sin((y - cy) * 0.028 - (x - cx) * 0.021 + 4.1));
+    const margin = h * 0.4;
+    const steerInward = (x, y, ang) => {
+      if (edgeAvoid <= 0) return ang;
+      const md = Math.min(x - (cx - h), cx + h - x, y - (cy - h), cy + h - y);
+      if (md >= margin) return ang;
+      const toC = Math.atan2(cy - y, cx - x);
+      const w = Math.min(0.95, edgeAvoid * Math.max(0, Math.min(1.4, 1 - md / margin)));
+      return ang + w * Math.atan2(Math.sin(toC - ang), Math.cos(toC - ang));
+    };
+    const segment = (x, y, ang, len) => {
+      const steps = Math.max(3, Math.round(len / 6));
+      const drift = curve2 * (rng() * 2 - 1);
+      let a = ang, px = x, py = y;
+      const pts = [{ x, y }];
+      for (let i = 1; i <= steps; i++) {
+        a += drift / steps + curl(px, py) / steps;
+        px += Math.cos(a) * (len / steps) + (rng() * 2 - 1) * jitter * 0.25;
+        py += Math.sin(a) * (len / steps) + (rng() * 2 - 1) * jitter * 0.25;
+        pts.push({ x: px, y: py });
+      }
+      return { pts, ex: px, ey: py, ea: a };
+    };
+    const stack = [];
+    const growDir = { bottom: -Math.PI / 2, top: Math.PI / 2, left: 0, center: 0 };
+    for (let i = 0; i < roots; i++) {
+      let x = cx, y = cy, ang = growDir[origin] ?? -Math.PI / 2;
+      const f = roots === 1 ? 0.5 : (i + 0.5) / roots;
+      if (origin === "bottom") {
+        x = cx - h + f * 2 * h;
+        y = cy + h;
+      } else if (origin === "top") {
+        x = cx - h + f * 2 * h;
+        y = cy - h;
+      } else if (origin === "left") {
+        x = cx - h;
+        y = cy - h + f * 2 * h;
+      } else {
+        const rr = Math.sqrt(rng()) * coreR;
+        const th = rng() * 2 * Math.PI;
+        x = cx + Math.cos(th) * rr;
+        y = cy + Math.sin(th) * rr;
+        ang = coreR > 1e-3 ? th + (rng() * 2 - 1) * 0.5 : f * 2 * Math.PI;
+      }
+      stack.push({ x, y, ang: ang + (rng() * 2 - 1) * 0.2, len: initLen, gen: 0 });
+    }
+    const gd = growDir[origin] ?? -Math.PI / 2;
+    const paths = [];
+    let guard = 0;
+    while (stack.length && guard++ < 2e5) {
+      const nd = stack.pop();
+      if (nd.gen > depth || nd.len < 5) continue;
+      const seg = segment(nd.x, nd.y, nd.ang, nd.len);
+      paths.push({ points: seg.pts });
+      const nch = rng() < 0.55 ? 2 : 3;
+      for (let k = 0; k < nch; k++) {
+        const base = seg.ea + spread * ((k + 0.5) / nch * 2 - 1) + (rng() * 2 - 1) * 0.28;
+        const pulled = origin === "center" ? base : base + tropism * Math.atan2(Math.sin(gd - base), Math.cos(gd - base));
+        const steered = steerInward(seg.ex, seg.ey, pulled);
+        stack.push({ x: seg.ex, y: seg.ey, ang: steered, len: nd.len * decay * (0.8 + 0.4 * rng()), gen: nd.gen + 1 });
+      }
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Branching" } };
+  }
+};
+register(branchingModule);
+
+// console/src/lib/modules/spirograph.ts
 function gcd(a, b) {
   a = Math.abs(Math.round(a));
   b = Math.abs(Math.round(b));
@@ -379,7 +1565,7 @@ var spirographModule = {
 };
 register(spirographModule);
 
-// ../console/src/lib/modules/orbital-weave.ts
+// console/src/lib/modules/orbital-weave.ts
 var orbitalWeaveModule = {
   key: "orbitalWeave",
   label: "Orbital Weave",
@@ -430,7 +1616,7 @@ var orbitalWeaveModule = {
 };
 register(orbitalWeaveModule);
 
-// ../console/src/lib/modules/random-walker.ts
+// console/src/lib/modules/random-walker.ts
 var randomWalkerModule = {
   key: "randomWalker",
   label: "Random Walker",
@@ -498,7 +1684,7 @@ var randomWalkerModule = {
 };
 register(randomWalkerModule);
 
-// ../console/src/lib/modules/noised-hatches.ts
+// console/src/lib/modules/noised-hatches.ts
 function _hash(ix, iy, iz, seed) {
   let h = ix * 374761393 + iy * 668265263 + iz * 2246822519 + seed * 1013904223 | 0;
   h = Math.imul(h ^ h >>> 13, 1274126177);
@@ -585,7 +1771,7 @@ var noisedHatchesModule = {
 };
 register(noisedHatchesModule);
 
-// ../console/src/lib/modules/noise-orbit.ts
+// console/src/lib/modules/noise-orbit.ts
 function _hash2(ix, iy, iz, seed) {
   let h = ix * 374761393 + iy * 668265263 + iz * 2246822519 + seed * 1013904223 | 0;
   h = Math.imul(h ^ h >>> 13, 1274126177);
@@ -692,7 +1878,7 @@ var noiseOrbitModule = {
 };
 register(noiseOrbitModule);
 
-// ../console/src/lib/modules/sheets.ts
+// console/src/lib/modules/sheets.ts
 var sheetsModule = {
   key: "sheets",
   label: "Sheets",
@@ -768,7 +1954,7 @@ var sheetsModule = {
 };
 register(sheetsModule);
 
-// ../console/src/lib/modules/moire-curtain.ts
+// console/src/lib/modules/moire-curtain.ts
 function grating(angleDeg, spacing, cx, cy, rect) {
   const th = angleDeg * Math.PI / 180;
   const dir = { x: Math.cos(th), y: Math.sin(th) };
@@ -823,7 +2009,7 @@ var moireCurtainModule = {
 };
 register(moireCurtainModule);
 
-// ../console/src/lib/modules/pattern-maker.ts
+// console/src/lib/modules/pattern-maker.ts
 function baseShape(kind, size) {
   const h = size / 2;
   if (kind === "circle") {
@@ -898,16 +2084,16 @@ var patternMakerModule = {
 };
 register(patternMakerModule);
 
-// ../console/src/lib/clip.ts
+// console/src/lib/clip.ts
 function pointInPolygon(p, poly) {
-  let inside = false;
+  let inside2 = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const a = poly[i], b = poly[j];
     if (a.y > p.y !== b.y > p.y && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) {
-      inside = !inside;
+      inside2 = !inside2;
     }
   }
-  return inside;
+  return inside2;
 }
 function segCrossT(p, q, a, b) {
   const rx = q.x - p.x, ry = q.y - p.y;
@@ -950,7 +2136,7 @@ function clipPolylineToPolygon(points, poly, keepInside) {
   return out;
 }
 
-// ../console/src/lib/modules/mask.ts
+// console/src/lib/modules/mask.ts
 function maskPolygon(shape, size, sides, rotDeg, cx, cy) {
   let pts;
   if (shape === "square") {
@@ -1023,7 +2209,7 @@ var maskModule = {
 };
 register(maskModule);
 
-// ../console/src/lib/modules/fill.ts
+// console/src/lib/modules/fill.ts
 function hatchPolygon(poly, spacing, angleDeg) {
   const b = bounds(poly);
   if (!b) return [];
@@ -1092,7 +2278,7 @@ var fillModule = {
 };
 register(fillModule);
 
-// ../console/src/lib/modules/warp.ts
+// console/src/lib/modules/warp.ts
 var warpModule = {
   key: "warp",
   label: "Warp / Ripple",
@@ -1147,7 +2333,7 @@ var warpModule = {
 };
 register(warpModule);
 
-// ../console/src/lib/strokefont.ts
+// console/src/lib/strokefont.ts
 var GRID_H = 7;
 var ADVANCE = 5;
 var GLYPHS = {
@@ -1199,69 +2385,228 @@ var GLYPHS = {
 };
 function parseGlyph(spec) {
   if (!spec) return [];
-  return spec.split("|").map((stroke) => stroke.trim().split(/\s+/).map((pair) => {
+  return spec.split("|").map((stroke2) => stroke2.trim().split(/\s+/).map((pair) => {
     const [x, y] = pair.split(",").map(Number);
     return { x, y };
   }));
 }
-function textToStrokes(text, opts) {
-  const scale = opts.size / GRID_H;
-  const letterSpacing = opts.letterSpacing ?? 0;
-  const lineSpacing = opts.lineSpacing ?? opts.size * 0.4;
-  const strokes = [];
-  let cursorX = 0, lineY = 0, maxX = 0;
-  for (const raw of text) {
-    if (raw === "\n") {
-      maxX = Math.max(maxX, cursorX);
-      cursorX = 0;
-      lineY += opts.size + lineSpacing;
-      continue;
+var STROKE_FONTS = [
+  { value: "sans", label: "Built-in Sans" },
+  { value: "bold", label: "Built-in Bold" }
+];
+var BOLD_OFFSETS = [[0, 0], [1, 0], [0, 1], [1, 1]];
+function strokeFontDriver(name = "sans") {
+  const bold = name === "bold";
+  return {
+    measureRun(text, size, ls) {
+      if (!text) return 0;
+      const scale = size / GRID_H;
+      let w = 0;
+      for (let i = 0; i < text.length; i++) w += ADVANCE * scale + ls;
+      return Math.max(0, w - ls);
+    },
+    renderRun(text, size, ls) {
+      const scale = size / GRID_H;
+      const o = bold ? 0.05 * size : 0;
+      const out = [];
+      let cursor = 0;
+      for (const raw of text) {
+        const ch = raw.toUpperCase();
+        const spec = ch in GLYPHS ? GLYPHS[ch] : GLYPHS[" "];
+        for (const stroke2 of parseGlyph(spec)) {
+          const base = stroke2.map((p) => ({ x: cursor + p.x * scale, y: p.y * scale }));
+          if (!bold) out.push(base);
+          else for (const [dx, dy] of BOLD_OFFSETS) out.push(base.map((p) => ({ x: p.x + dx * o, y: p.y + dy * o })));
+        }
+        cursor += ADVANCE * scale + ls;
+      }
+      return out;
     }
-    const ch = raw.toUpperCase();
-    const spec = ch in GLYPHS ? GLYPHS[ch] : GLYPHS[" "];
-    for (const stroke of parseGlyph(spec)) {
-      strokes.push(stroke.map((p) => ({ x: cursorX + p.x * scale, y: lineY + p.y * scale })));
-    }
-    cursorX += ADVANCE * scale + letterSpacing;
-  }
-  maxX = Math.max(maxX, cursorX - letterSpacing);
-  return { strokes, width: maxX, height: lineY + opts.size };
+  };
 }
 
-// ../console/src/lib/modules/text.ts
+// console/src/lib/textbox.ts
+function wrapLines(text, driver, size, ls, boxW) {
+  const out = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const word of para.split(" ")) {
+      const trial = line === "" ? word : line + " " + word;
+      if (line !== "" && driver.measureRun(trial, size, ls) > boxW) {
+        out.push(line);
+        line = word;
+      } else line = trial;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function fitsBox(text, driver, size, opts) {
+  const lines = wrapLines(text, driver, size, opts.letterSpacing, opts.boxW);
+  if (lines.length * opts.lineHeight * size > opts.boxH + 1e-6) return false;
+  for (const line of lines) if (driver.measureRun(line, size, opts.letterSpacing) > opts.boxW + 1e-6) return false;
+  return true;
+}
+function layoutTextBox(text, driver, opts) {
+  let size = opts.size;
+  if (opts.autoFit && size > 0 && opts.boxW > 0 && opts.boxH > 0 && !fitsBox(text, driver, size, opts)) {
+    let lo = 0, hi = size;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (fitsBox(text, driver, mid, opts)) lo = mid;
+      else hi = mid;
+    }
+    size = lo;
+  }
+  const ls = opts.letterSpacing;
+  const lines = wrapLines(text, driver, size, ls, opts.boxW);
+  const lineH = opts.lineHeight * size;
+  const totalH = lines.length * lineH;
+  const startY = opts.vAlign === "top" ? 0 : opts.vAlign === "bottom" ? opts.boxH - totalH : (opts.boxH - totalH) / 2;
+  const strokes = [];
+  lines.forEach((line, i) => {
+    if (line === "") return;
+    const w = driver.measureRun(line, size, ls);
+    const xoff = opts.align === "left" ? 0 : opts.align === "right" ? opts.boxW - w : (opts.boxW - w) / 2;
+    const yoff = startY + i * lineH;
+    for (const s of driver.renderRun(line, size, ls)) strokes.push(s.map((p) => ({ x: p.x + xoff, y: p.y + yoff })));
+  });
+  return { strokes, size, lines };
+}
+function opentypeFontDriver(font) {
+  const ascent = (size) => font.ascender / font.unitsPerEm * size;
+  return {
+    measureRun(text, size, ls) {
+      if (!text) return 0;
+      let w = 0;
+      for (const ch of text) w += font.getAdvanceWidth(ch, size) + ls;
+      return Math.max(0, w - ls);
+    },
+    renderRun(text, size, ls) {
+      const out = [];
+      const yBase = ascent(size);
+      const n = Math.max(4, Math.round(size / 2));
+      let cursor = 0;
+      for (const ch of text) {
+        const { commands } = font.getPath(ch, cursor, yBase, size);
+        let poly = [];
+        let start = null;
+        let prev = null;
+        const flush = () => {
+          if (poly.length > 1) out.push(poly);
+          poly = [];
+        };
+        for (const c of commands) {
+          switch (c.type) {
+            case "M":
+              flush();
+              start = { x: c.x, y: c.y };
+              poly = [start];
+              prev = start;
+              break;
+            case "L": {
+              const p = { x: c.x, y: c.y };
+              poly.push(p);
+              prev = p;
+              break;
+            }
+            case "Q": {
+              const p0 = prev ?? { x: c.x, y: c.y };
+              const p3 = { x: c.x, y: c.y };
+              const c1 = { x: p0.x + 2 / 3 * (c.x1 - p0.x), y: p0.y + 2 / 3 * (c.y1 - p0.y) };
+              const c2 = { x: p3.x + 2 / 3 * (c.x1 - p3.x), y: p3.y + 2 / 3 * (c.y1 - p3.y) };
+              const seg = sampleBezier(p0, c1, c2, p3, n);
+              for (let i = 1; i < seg.length; i++) poly.push(seg[i]);
+              prev = p3;
+              break;
+            }
+            case "C": {
+              const p0 = prev ?? { x: c.x, y: c.y };
+              const p3 = { x: c.x, y: c.y };
+              const seg = sampleBezier(p0, { x: c.x1, y: c.y1 }, { x: c.x2, y: c.y2 }, p3, n);
+              for (let i = 1; i < seg.length; i++) poly.push(seg[i]);
+              prev = p3;
+              break;
+            }
+            case "Z":
+              if (start) poly.push({ ...start });
+              flush();
+              prev = start;
+              break;
+          }
+        }
+        flush();
+        cursor += font.getAdvanceWidth(ch, size) + ls;
+      }
+      return out;
+    }
+  };
+}
+
+// console/src/lib/modules/text.ts
 var textModule = {
   key: "text",
   label: "Text",
   kind: "make",
   group: "Shapes & Imports",
-  description: "Single-stroke plotter text (A\u2013Z, 0\u20139, punctuation). Use \\n for new lines.",
+  description: "Box text: word-wraps inside a width\xD7height box, auto-shrinks to fit. Built-in Sans/Bold or an uploaded TTF/OTF font.",
   sections: [
     { title: "Text", fields: [
-      { key: "text", label: "Text", type: "text", default: "HELLO", placeholder: "type here\u2026" },
-      { key: "size", label: "Size", type: "range", min: 4, max: 120, step: 1, unit: "mm", default: 30 },
-      { key: "letterSpacing", label: "Letter spacing", type: "range", min: -5, max: 20, step: 0.5, unit: "mm", default: 2 },
-      { key: "lineSpacing", label: "Line spacing", type: "range", min: 0, max: 60, step: 1, unit: "mm", default: 12 }
+      { key: "text", label: "Text", type: "text", default: "The quick brown fox jumps over the lazy dog", placeholder: "type here\u2026" },
+      { key: "font", label: "Font", type: "select", default: "sans", options: [
+        ...STROKE_FONTS,
+        { value: "custom", label: "Upload TTF/OTF\u2026" }
+      ] },
+      { key: "size", label: "Max size", type: "range", min: 4, max: 120, step: 1, unit: "mm", default: 28 },
+      { key: "letterSpacing", label: "Letter spacing", type: "range", min: -5, max: 20, step: 0.5, unit: "mm", default: 1 },
+      { key: "lineHeight", label: "Line height", type: "range", min: 0.8, max: 3, step: 0.05, unit: "\xD7", default: 1.3 },
+      { key: "align", label: "Align", type: "select", default: "left", options: [
+        { value: "left", label: "Left" },
+        { value: "center", label: "Center" },
+        { value: "right", label: "Right" }
+      ] }
+    ] },
+    { title: "Box", fields: [
+      { key: "boxW", label: "Box width", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 160 },
+      { key: "boxH", label: "Box height", type: "range", min: 10, max: 600, step: 1, unit: "mm", default: 100 },
+      { key: "vAlign", label: "Vertical align", type: "select", default: "top", options: [
+        { value: "top", label: "Top" },
+        { value: "middle", label: "Middle" },
+        { value: "bottom", label: "Bottom" }
+      ] },
+      { key: "autoFit", label: "Shrink to fit", type: "toggle", default: true },
+      { key: "showBorder", label: "Draw box border", type: "toggle", default: false }
     ] },
     { title: "Position", fields: [
       { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
       { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
     ] }
   ],
-  generate(params) {
+  generate(params, ctx) {
     const text = String(params.text ?? "");
-    const size = num(params, "size", 30);
-    const letterSpacing = num(params, "letterSpacing", 2);
-    const lineSpacing = num(params, "lineSpacing", 12);
+    const fontSel = String(params.font ?? "sans");
+    const boxW = num(params, "boxW", 160), boxH = num(params, "boxH", 100);
     const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
-    const { strokes, width, height } = textToStrokes(text, { size, letterSpacing, lineSpacing });
-    const ox = cx - width / 2, oy = cy - height / 2;
+    const driver = fontSel === "custom" && ctx.font ? opentypeFontDriver(ctx.font) : strokeFontDriver(fontSel === "bold" ? "bold" : "sans");
+    const { strokes } = layoutTextBox(text, driver, {
+      boxW,
+      boxH,
+      size: num(params, "size", 28),
+      letterSpacing: num(params, "letterSpacing", 1),
+      lineHeight: num(params, "lineHeight", 1.3),
+      align: String(params.align ?? "left"),
+      vAlign: String(params.vAlign ?? "top"),
+      autoFit: params.autoFit !== false
+    });
+    const ox = cx - boxW / 2, oy = cy - boxH / 2;
     const paths = strokes.map((s) => ({ points: s.map((p) => ({ x: p.x + ox, y: p.y + oy })) }));
-    return { widthMm: width || 1, heightMm: height || 1, paths, meta: { title: "Text" } };
+    if (params.showBorder) paths.push(rectPath(cx, cy, boxW, boxH));
+    return { widthMm: boxW, heightMm: boxH, paths, meta: { title: "Text" } };
   }
 };
 register(textModule);
 
-// ../console/src/lib/modules/image-linework.ts
+// console/src/lib/modules/image-linework.ts
 function isoContours(gray, w, h, level) {
   const segs = [];
   const lerp = (va, vb) => Math.abs(vb - va) < 1e-9 ? 0.5 : (level - va) / (vb - va);
@@ -1354,7 +2699,7 @@ var imageLineworkModule = {
 };
 register(imageLineworkModule);
 
-// ../console/src/lib/image.ts
+// console/src/lib/image.ts
 function sampleGray(img, x, y) {
   const { width: w, height: h, gray } = img;
   const cx = Math.max(0, Math.min(w - 1, x));
@@ -1370,7 +2715,7 @@ function imageFit(img, plotSize, cx, cy) {
   return { s, offX: cx - img.width * s / 2, offY: cy - img.height * s / 2, plotW: img.width * s, plotH: img.height * s };
 }
 
-// ../console/src/lib/modules/image-halftone.ts
+// console/src/lib/modules/image-halftone.ts
 var imageHalftoneModule = {
   key: "imageHalftone",
   label: "Image Halftone",
@@ -1418,7 +2763,7 @@ var imageHalftoneModule = {
 };
 register(imageHalftoneModule);
 
-// ../console/src/lib/modules/image-squiggle.ts
+// console/src/lib/modules/image-squiggle.ts
 var imageSquiggleModule = {
   key: "imageSquiggle",
   label: "Image Squiggle",
@@ -1466,7 +2811,7 @@ var imageSquiggleModule = {
 };
 register(imageSquiggleModule);
 
-// ../console/src/lib/modules/image-surface.ts
+// console/src/lib/modules/image-surface.ts
 var imageSurfaceModule = {
   key: "imageSurface",
   label: "Depth Map",
@@ -1522,7 +2867,7 @@ var imageSurfaceModule = {
 };
 register(imageSurfaceModule);
 
-// ../console/src/lib/arcfit.ts
+// console/src/lib/arcfit.ts
 var MIN_ARC_PTS = 4;
 var MAX_ARC_R = 1e5;
 function circleFrom3(a, b, c) {
@@ -1591,7 +2936,7 @@ function fitArcs(points, tol) {
   return prims;
 }
 
-// ../console/src/lib/compile.ts
+// console/src/lib/compile.ts
 var r = (n) => Math.round(n * 100) / 100;
 var r4 = (n) => Math.round(n * 1e4) / 1e4;
 function boundsRect(b) {
@@ -1656,7 +3001,7 @@ function compile(frame, opts = {}) {
   return out;
 }
 
-// ../console/src/lib/pipeline.ts
+// console/src/lib/pipeline.ts
 function emptyFrame(bounds2) {
   return { widthMm: bounds2.left + bounds2.right, heightMm: bounds2.up + bounds2.down, paths: [] };
 }
@@ -1683,13 +3028,13 @@ function applyGroupTransform(frame, g) {
     }))
   };
 }
-function evaluate(layers, bounds2, groups = [], image) {
+function evaluate(layers, bounds2, groups = [], image, font) {
   const groupMap = new Map(groups.map((g) => [g.id, g]));
   let acc = emptyFrame(bounds2);
   for (const layer of layers) {
     const mod = getModule(layer.moduleKey);
     if (!mod) continue;
-    let out = mod.generate(layer.params, { bounds: bounds2, lowerFrame: acc, image });
+    let out = mod.generate(layer.params, { bounds: bounds2, lowerFrame: acc, image, font });
     if (mod.kind === "make" && layer.groupId) {
       const g = groupMap.get(layer.groupId);
       if (g) out = applyGroupTransform(out, g);
@@ -1699,7 +3044,7 @@ function evaluate(layers, bounds2, groups = [], image) {
   return acc;
 }
 
-// ../console/src/lib/toolpath.ts
+// console/src/lib/toolpath.ts
 function simplifyFrame(frame, tol = 0.2) {
   if (tol <= 0) return frame;
   const paths = frame.paths.map((p) => p.points.length > 2 ? { ...p, points: simplifyRDP(p.points, tol) } : clonePath(p));
@@ -1735,7 +3080,7 @@ function optimizeOrder(frame, start = ORIGIN) {
   return { ...frame, paths: ordered };
 }
 
-// ../console/src/lib/runPipeline.ts
+// console/src/lib/runPipeline.ts
 function clipBounds(b) {
   return { left: b.left, right: b.right, up: b.up, down: b.down };
 }
@@ -1830,7 +3175,7 @@ function boundsFromFirmware(b) {
   };
 }
 
-// ../console/src/lib/gridScript.ts
+// console/src/lib/gridScript.ts
 var rn = (n) => Math.round(n * 100) / 100;
 function firmwareWorkAreaFromPlotter(b) {
   return { xn: -b.left, xp: b.right, yn: -b.up, yp: b.down };
@@ -1921,6 +3266,14 @@ function resolveGridCtx(cmd, ctx) {
     full_yp: ctx.full_yp
   };
 }
+function isIdentityMatrix(m, eps = 1e-3) {
+  if (!m || typeof m !== "object") return null;
+  const o = m;
+  const vals = [o.a, o.b, o.c, o.d, o.tx, o.ty].map(Number);
+  if (!vals.every(isFinite)) return null;
+  const [a, b, c, d, tx, ty] = vals;
+  return Math.abs(a - 1) < eps && Math.abs(b) < eps && Math.abs(c) < eps && Math.abs(d - 1) < eps && Math.abs(tx) < eps && Math.abs(ty) < eps;
+}
 function gridClearQueries(gc) {
   return {
     boundsQuery: `bounds?xn=${gc.full_xn}&xp=${gc.full_xp}&yn=${gc.full_yn}&yp=${gc.full_yp}&shape=0`,
@@ -1952,7 +3305,7 @@ function hydrateGridCommands(commands, gc) {
   });
 }
 
-// ../console/src/lib/mcp-core.ts
+// console/src/lib/mcp-core.ts
 function listGenerators() {
   return listModules("make").map((m) => ({
     key: m.key,
@@ -2006,6 +3359,7 @@ export {
   gridCtxFromMetadata,
   gridCtxFromPlotterBounds,
   hydrateGridCommands,
+  isIdentityMatrix,
   listGenerators,
   listModules,
   normalizeMetadataWorkArea,
