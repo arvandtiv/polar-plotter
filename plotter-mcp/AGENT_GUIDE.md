@@ -60,6 +60,14 @@ Rules:
 2. **Pen starts up.** Call `plot_pen("up")` before any travel if in doubt.
 3. **Sane motion** (optional): speed ~150000–200000 for normal; ~80000 for fine detail.
    Current ≤ 600 mA run (shared 12 V/2 A supply — hard cap).
+4. **Read the taste before composing.** Call `plot_style_guide` — it returns the
+   aesthetic distilled from 31+ human-ranked training rounds on this machine
+   (LEARNINGS.md), and `section="klee"` adds Paul Klee's method. What wins:
+   organic · irregular · asymmetric · dense-but-open · hand-drawn · multi-mass
+   compositions. Known rejects: crisp/geometric/symmetric, sparse floating
+   gestures, solid mud, repeating one engine 3+ times. Hard media limit: never
+   over-ink a small area (paper rips) — keep visible gaps in dense passages.
+   Also exposed as MCP resources `polar-plotter://style/learnings` and `…/klee`.
 
 ---
 

@@ -20,6 +20,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   compilePaths,
   compilePathsWithWarp,
@@ -208,7 +211,7 @@ async function batchSend(queries, { timeoutMs = 600_000 } = {}) {
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.4.1',
+  version: '1.5.0',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
@@ -233,8 +236,81 @@ const server = new McpServer({
     '• The firmware rejects out-of-area targets and clamps strays back onto the',
     '  boundary, which silently distorts art — so plan within bounds yourself.',
     '• plot_border traces the active boundary; useful to confirm the usable area.',
+    '',
+    'AESTHETICS (human-trained):',
+    '• Before COMPOSING any art, call plot_style_guide — it returns the taste',
+    '  distilled from 31+ human-ranked training rounds on this exact machine',
+    '  (what wins, what gets rejected, per-genre rules, media limits like the',
+    '  paper-rip density cap). Designs that ignore it score poorly with the owner.',
   ].join('\n'),
 });
+
+// ── Human-trained aesthetic knowledge (ai-training/) ─────────────────────────
+// The training loop's distilled outputs live in the repo next to this server.
+// Read at call time (not startup) so ongoing training flows through without a
+// server restart. Gracefully degrade if the files are absent (e.g. deployed
+// standalone without the repo).
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const TRAINING_DIR = join(__dirname, '..', 'ai-training');
+
+function readTrainingFile(name) {
+  try {
+    return readFileSync(join(TRAINING_DIR, name), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+server.tool(
+  'plot_style_guide',
+  'The HUMAN-TRAINED aesthetic for this plotter — distilled from 31+ ranked art-training ' +
+  'rounds with the machine\'s owner. Call this BEFORE composing/generating any art: it says ' +
+  'what wins (organic, irregular, asymmetric, dense-but-open, hand-drawn, multi-mass), what ' +
+  'gets rejected (crisp/geometric/symmetric, sparse gestures, mud, over-used engines), the ' +
+  'per-genre rules, and hard media limits (paper-rip density cap). ' +
+  'section: "learnings" = the ranked-round lessons (default); "klee" = Paul Klee\'s method ' +
+  '(how to make a line live); "both" = everything.',
+  {
+    section: z.enum(['learnings', 'klee', 'both']).default('learnings')
+      .describe('Which knowledge file(s) to return'),
+  },
+  async ({ section }) => {
+    const parts = [];
+    if (section === 'learnings' || section === 'both') {
+      const t = readTrainingFile('LEARNINGS.md');
+      parts.push(t ?? '⚠ LEARNINGS.md not found (ai-training/ not present next to this server).');
+    }
+    if (section === 'klee' || section === 'both') {
+      const t = readTrainingFile('klee_principles.md');
+      parts.push(t ?? '⚠ klee_principles.md not found (ai-training/ not present next to this server).');
+    }
+    return { content: [{ type: 'text', text: parts.join('\n\n---\n\n') }] };
+  },
+);
+
+// Same knowledge as browsable MCP resources, for clients that surface resources.
+server.registerResource(
+  'style-learnings',
+  'polar-plotter://style/learnings',
+  { title: 'Plotter style guide — ranked-round learnings',
+    description: 'Human-ranked training outcomes: the aesthetic that wins on this machine.',
+    mimeType: 'text/markdown' },
+  async (uri) => ({
+    contents: [{ uri: uri.href, mimeType: 'text/markdown',
+                 text: readTrainingFile('LEARNINGS.md') ?? 'LEARNINGS.md not found' }],
+  }),
+);
+server.registerResource(
+  'style-klee',
+  'polar-plotter://style/klee',
+  { title: 'Plotter style guide — Klee method',
+    description: 'Paul Klee\'s creative method: how to make a plotted line live.',
+    mimeType: 'text/markdown' },
+  async (uri) => ({
+    contents: [{ uri: uri.href, mimeType: 'text/markdown',
+                 text: readTrainingFile('klee_principles.md') ?? 'klee_principles.md not found' }],
+  }),
+);
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
