@@ -40,7 +40,14 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     composition must have SUBSTANCE and FILL the wall with movement. The reliable winner is a **full
     field of flowing swirling currents (R25/R11)** — reuse that engine for swirl/flow instructions;
     do not scatter sparse gestures on empty white.
+  - **⛔ The flow-current field is now OVER-USED / "repeated" (R29).** After R25/R27/R29 the user
+    called another flow field "repeated work — do something new." A winning engine goes stale fast:
+    **bring a genuinely NEW visual language every round; never run the same engine 3+ rounds.** (Same
+    "don't get stuck in one style" note as the located-figures rut.) Flow is not banned, just spent
+    for now — rotate to a different genre. Reliable non-flow direction that has WON: R23 continuous
+    "shade" scribble of a volumetric FORM.
   - **⛔ Mark/stroke FIELDS are now "not worthy" — use the flowing CURRENT field instead (R28).**
+    (Note: superseded in spirit by the R29 rule — vary the genre; flow itself is now over-used too.)
     A field of separate small marks (R28 commas; R22 scattered) is rejected; the early strokeField
     hit (R11) no longer represents the taste. The reliable winner is a **full-field of continuous
     flowing STREAMLINE currents** (R25/R27) with organic swirl. Render any new concept (even "growth

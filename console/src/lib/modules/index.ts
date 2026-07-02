@@ -14,6 +14,7 @@ import "./curvyDivide";
 import "./whirls";
 import "./flowWhirls";
 import "./growthField";
+import "./branching";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

@@ -1,6 +1,9 @@
 {
   "round": 29,
   "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "notes": {
+    "1": "(chat) repeated work (another flow field) \u2014 skipped; do something new"
+  },
+  "scoredAt": "2026-07-02",
+  "skipped": true
 }
