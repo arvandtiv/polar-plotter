@@ -1,0 +1,16 @@
+{
+  "round": 30,
+  "title": "Splat (LeWitt #958, 2000) — an organic explosive mass via the new `branching` growth language",
+  "rule": {
+    "lewittId": 958,
+    "instruction": "Splat.",
+    "year": 2000
+  },
+  "kleeStance": "Klee #2: 'a point set in motion becomes a line' — a splat is a POINT charged with energy that discharges radially into living lines. Klee #10 (centric vs. spinal): single-centre splats are centric; the multi-centre compositions stack centres into an asymmetric constellation.",
+  "concept": "A splat = ink flung at the wall: an organic explosive mass radiating from a point into irregular, hand-drawn, dendritic tendrils. Executed on the NEW `branching` generator (fresh visual language after the flow-field rut of R25/R27/R29). Radial mode = the burst; off-centre placement + directional 'throws' (tropism) keep it asymmetric; a few multi-centre pieces add a big splat + flung satellites. Governing taste: organic/irregular/asymmetric, FILLS the wall with movement, dense-but-OPEN (never a solid mud core; never sparse floating gestures). Monochrome.",
+  "allowedModules": ["branching"],
+  "maxLayers": 5,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "palette": ["#101216"],
+  "createdAt": "2026-07-02"
+}

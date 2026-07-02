@@ -1,0 +1,56 @@
+{
+  "round": 30,
+  "bounds": { "left": 150, "right": 150, "up": 150, "down": 150 },
+  "designs": [
+    { "id": 1, "title": "classic splat", "intent": "Klee #2: a point discharges radially into living lines. Scattered core (coreR) = a dense messy centre spraying tendrils out; fills the wall, dense but open.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 11, "depth": 7, "initLen": 55, "decay": 0.72, "spread": 0.75, "curve": 0.3, "jitter": 2.0, "coreR": 32, "seed": 5, "size": 300 } } ] },
+    { "id": 2, "title": "explosive burst", "intent": "More arms, wider throw, bigger core — maximal explosive energy from the impact point.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 14, "depth": 7, "initLen": 62, "decay": 0.74, "spread": 0.9, "curve": 0.25, "jitter": 2.5, "coreR": 40, "seed": 12, "size": 300 } } ] },
+    { "id": 3, "title": "off-centre throw", "intent": "Klee #8 equilibrium not symmetry: the mass sits off-centre, weight balanced by open space.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 10, "depth": 7, "initLen": 58, "decay": 0.73, "spread": 0.7, "curve": 0.35, "jitter": 2.5, "coreR": 30, "seed": 8, "cx": -45, "cy": 40, "size": 240 } } ] },
+    { "id": 4, "title": "long tendrils", "intent": "Reaching arms (Klee #3 the line for a walk) from a modest core — open, wandering, negative space between.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 9, "depth": 8, "initLen": 78, "decay": 0.79, "spread": 0.5, "curve": 0.45, "jitter": 3, "coreR": 26, "seed": 3, "size": 300 } } ] },
+    { "id": 5, "title": "dense core thinning", "intent": "Heavy near the impact point (large core), thinning outward — Klee #9 weight relative to ground.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 12, "depth": 6, "initLen": 50, "decay": 0.68, "spread": 0.8, "curve": 0.3, "jitter": 2, "coreR": 45, "seed": 21, "size": 300 } } ] },
+    { "id": 6, "title": "curly splat", "intent": "Swirling curved arms — the straight-vs-circle struggle (Klee #14) resolved toward the curve.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 10, "depth": 7, "initLen": 58, "decay": 0.73, "spread": 0.7, "curve": 0.6, "jitter": 2, "coreR": 30, "seed": 17, "size": 300 } } ] },
+    { "id": 7, "title": "whippy fine", "intent": "Narrow, whip-like tendrils, fine and many, from a tight core — energetic hand.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 11, "depth": 8, "initLen": 66, "decay": 0.8, "spread": 0.35, "curve": 0.5, "jitter": 3.5, "coreR": 26, "seed": 44, "size": 300 } } ] },
+    { "id": 8, "title": "starfish arms", "intent": "Few bold reaching arms (Klee #6 companion lines) off a small core — a splat with strong limbs.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 6, "depth": 8, "initLen": 88, "decay": 0.8, "spread": 0.45, "curve": 0.3, "jitter": 2.5, "coreR": 22, "seed": 9, "size": 300 } } ] },
+    { "id": 9, "title": "flung from left", "intent": "Klee #7 counter-movement: thrown across the wall, tendrils streaming rightward — tamed so the head sprays, not muds.",
+      "layers": [ { "module": "branching", "params": { "origin": "left", "roots": 4, "depth": 6, "initLen": 72, "decay": 0.74, "spread": 0.7, "tropism": 0.32, "curve": 0.45, "jitter": 3, "seed": 11, "size": 300 } } ] },
+    { "id": 10, "title": "flung upward", "intent": "A splat thrown up the wall, streaming with a directional pull — asymmetric energy, spray not mud.",
+      "layers": [ { "module": "branching", "params": { "origin": "bottom", "roots": 5, "depth": 6, "initLen": 70, "decay": 0.74, "spread": 0.75, "tropism": 0.3, "curve": 0.4, "jitter": 3, "seed": 6, "size": 300 } } ] },
+    { "id": 11, "title": "two splats", "intent": "Klee #10 stacked centres: a big splat + a smaller satellite, weights balanced.",
+      "layers": [
+        { "module": "branching", "params": { "origin": "center", "roots": 10, "depth": 7, "initLen": 52, "decay": 0.72, "spread": 0.75, "curve": 0.3, "jitter": 2.5, "coreR": 28, "seed": 5, "cx": -45, "cy": -25, "size": 220 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 8, "depth": 6, "initLen": 40, "decay": 0.7, "spread": 0.8, "curve": 0.35, "jitter": 2.5, "coreR": 18, "seed": 30, "cx": 78, "cy": 68, "size": 130 } }
+      ] },
+    { "id": 12, "title": "splat + spray", "intent": "One dominant impact + a spray of flung droplets (small satellites) — the moment after impact.",
+      "layers": [
+        { "module": "branching", "params": { "origin": "center", "roots": 11, "depth": 7, "initLen": 50, "decay": 0.72, "spread": 0.75, "curve": 0.3, "jitter": 2.5, "coreR": 26, "seed": 7, "cx": -30, "cy": 20, "size": 220 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 6, "depth": 5, "initLen": 26, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 12, "seed": 41, "cx": 85, "cy": -75, "size": 70 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 5, "depth": 5, "initLen": 22, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 10, "seed": 52, "cx": 100, "cy": 40, "size": 60 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 5, "depth": 4, "initLen": 20, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 9, "seed": 63, "cx": 40, "cy": 95, "size": 52 } }
+      ] },
+    { "id": 13, "title": "three-cluster", "intent": "Three splats in an asymmetric knot with open space between (Klee #8 the scale).",
+      "layers": [
+        { "module": "branching", "params": { "origin": "center", "roots": 9, "depth": 7, "initLen": 48, "decay": 0.72, "spread": 0.8, "curve": 0.35, "jitter": 2.5, "coreR": 22, "seed": 5, "cx": -55, "cy": -35, "size": 165 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 8, "depth": 6, "initLen": 42, "decay": 0.7, "spread": 0.8, "curve": 0.35, "jitter": 2.5, "coreR": 20, "seed": 22, "cx": 55, "cy": -10, "size": 140 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 8, "depth": 6, "initLen": 40, "decay": 0.7, "spread": 0.8, "curve": 0.35, "jitter": 2.5, "coreR": 20, "seed": 38, "cx": -5, "cy": 70, "size": 135 } }
+      ] },
+    { "id": 14, "title": "constellation", "intent": "One medium splat + four flung droplets scattered asymmetrically — a constellation of impacts.",
+      "layers": [
+        { "module": "branching", "params": { "origin": "center", "roots": 9, "depth": 7, "initLen": 48, "decay": 0.72, "spread": 0.75, "curve": 0.35, "jitter": 2.5, "coreR": 24, "seed": 14, "cx": -20, "cy": -10, "size": 170 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 5, "depth": 5, "initLen": 24, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 10, "seed": 45, "cx": 95, "cy": -85, "size": 60 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 5, "depth": 4, "initLen": 18, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 8, "seed": 56, "cx": -100, "cy": 80, "size": 48 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 4, "depth": 4, "initLen": 16, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 7, "seed": 67, "cx": 70, "cy": 100, "size": 44 } },
+        { "module": "branching", "params": { "origin": "center", "roots": 4, "depth": 4, "initLen": 20, "decay": 0.7, "spread": 0.9, "curve": 0.4, "jitter": 2, "coreR": 8, "seed": 78, "cx": 110, "cy": 55, "size": 46 } }
+      ] },
+    { "id": 15, "title": "raw ink hand", "intent": "The rawest hand (high jitter) + big core — a real thrown-ink feel, never crisp.",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 12, "depth": 7, "initLen": 55, "decay": 0.72, "spread": 0.8, "curve": 0.35, "jitter": 5, "coreR": 38, "seed": 33, "size": 300 } } ] },
+    { "id": 16, "title": "sparse elegant", "intent": "Testing the open end: fewer arms, slow decay, small core, more negative space (watch for too-sparse).",
+      "layers": [ { "module": "branching", "params": { "origin": "center", "roots": 7, "depth": 8, "initLen": 72, "decay": 0.82, "spread": 0.55, "curve": 0.5, "jitter": 2.5, "coreR": 20, "seed": 50, "size": 300 } } ] }
+  ]
+}

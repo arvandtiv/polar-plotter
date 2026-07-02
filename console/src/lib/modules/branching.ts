@@ -32,6 +32,7 @@ export const branchingModule: Module = {
       { key: "spread", label: "Branch spread", type: "range", min: 0.1, max: 1.4, step: 0.05, unit: "rad", default: 0.6 },
       { key: "tropism", label: "Grow-direction pull", type: "range", min: 0, max: 0.6, step: 0.05, default: 0.15 },
       { key: "curve", label: "Branch curve", type: "range", min: 0, max: 0.8, step: 0.05, default: 0.25 },
+      { key: "coreR", label: "Core scatter (radial)", type: "range", min: 0, max: 80, step: 1, unit: "mm", default: 0 },
     ]},
     { title: "Hand", fields: [
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 6, step: 0.5, unit: "mm", default: 1.2 },
@@ -52,6 +53,7 @@ export const branchingModule: Module = {
     const initLen = num(params, "initLen", 66), decay = num(params, "decay", 0.72);
     const spread = num(params, "spread", 0.6), tropism = num(params, "tropism", 0.15);
     const curve = num(params, "curve", 0.25), jitter = num(params, "jitter", 1.2);
+    const coreR = num(params, "coreR", 0);
     const rng = seededRandom(Math.round(num(params, "seed", 7)));
 
     // a curved hand-drawn branch segment; returns its polyline + end point/heading
@@ -78,7 +80,15 @@ export const branchingModule: Module = {
       if (origin === "bottom") { x = cx - h + f * 2 * h; y = cy + h; }
       else if (origin === "top") { x = cx - h + f * 2 * h; y = cy - h; }
       else if (origin === "left") { x = cx - h; y = cy - h + f * 2 * h; }
-      else { x = cx; y = cy; ang = f * 2 * Math.PI; }  // radial
+      else {
+        // radial: scatter roots across a small core disc, each heading outward → a dense messy
+        // core with arms spraying out (a real splat), instead of a hollow hub of even spokes.
+        const rr = Math.sqrt(rng()) * coreR;
+        const th = rng() * 2 * Math.PI;
+        x = cx + Math.cos(th) * rr;
+        y = cy + Math.sin(th) * rr;
+        ang = coreR > 0.001 ? th + (rng() * 2 - 1) * 0.5 : f * 2 * Math.PI;
+      }
       stack.push({ x, y, ang: ang + (rng() * 2 - 1) * 0.2, len: initLen, gen: 0 });
     }
     const gd = growDir[origin] ?? -Math.PI / 2;
