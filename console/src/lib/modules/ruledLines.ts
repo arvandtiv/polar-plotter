@@ -10,10 +10,71 @@ import type { Frame, Path } from "../frame";
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
+/** Drop offsets closer than `minGap` to the previously kept one (a paper-rip guard so dense
+ *  density peaks can't saturate to a solid). `minGap <= 0` disables it. */
+function clampGap(offs: number[], minGap: number): number[] {
+  if (minGap <= 0) return offs;
+  const out: number[] = [];
+  let last = -Infinity;
+  for (const o of offs) {
+    if (o - last >= minGap) { out.push(o); last = o; }
+  }
+  return out;
+}
+
+/** Build the line offsets across a band [omin, omax].
+ *  - `stops` (≥2) = a MULTI-POINT density profile d(u), u∈[0,1] at evenly-spaced control points,
+ *    piecewise-linear interpolated. Lines are placed by the inverse-CDF of d, so local spacing
+ *    ∝ 1/density and `s` sets the overall scale. u=0 is the omin (+normal) end. A 0 stop = a gap.
+ *  - else `gradient` > 0 = the single-ended power ramp (packs toward omin).
+ *  - else uniform. */
+function bandOffsets(omin: number, omax: number, s: number, gradient: number, stops: number[], minGap: number): number[] {
+  const span = omax - omin;
+  if (span <= 0) return [omin];
+
+  if (stops.length >= 2) {
+    const dens = (u: number): number => {
+      const x = u * (stops.length - 1);
+      const i = Math.min(stops.length - 2, Math.floor(x));
+      const f = x - i;
+      return Math.max(0, stops[i] * (1 - f) + stops[i + 1] * f);
+    };
+    // sample the density fine, integrate to a CDF (trapezoid), then invert to equal-ink offsets
+    const M = 400;
+    const cdf = new Array<number>(M + 1);
+    cdf[0] = 0;
+    for (let i = 1; i <= M; i++) cdf[i] = cdf[i - 1] + 0.5 * (dens((i - 1) / M) + dens(i / M)) / M;
+    const total = cdf[M];
+    if (total > 1e-9) {
+      const N = Math.max(1, Math.round(span / s));
+      const offs: number[] = [];
+      let j = 0;
+      for (let k = 0; k <= N; k++) {
+        const target = (k / N) * total;
+        while (j < M && cdf[j + 1] < target) j++;
+        const segLen = cdf[j + 1] - cdf[j];
+        const f = segLen > 1e-12 ? (target - cdf[j]) / segLen : 0;
+        offs.push(omin + span * ((j + f) / M));
+      }
+      return clampGap(offs, minGap);
+    }
+    // total density 0 → fall through to uniform
+  }
+
+  const offs: number[] = [];
+  if (gradient > 0) {
+    const N = Math.max(1, Math.round(span / s)), p = 1 + 2 * gradient;
+    for (let k = 0; k <= N; k++) offs.push(omin + span * Math.pow(k / N, p));
+  } else {
+    for (let o = Math.ceil(omin / s) * s; o <= omax + 1e-9; o += s) offs.push(o);
+  }
+  return clampGap(offs, minGap);
+}
+
 /** Parallel lines through `rect` at angle `theta` (screen coords, y-down), spaced `spacing`.
  *  `jitter` > 0 makes them NOT straight: each line is resampled and pushed sideways by smooth
  *  seeded noise (a hand-drawn / Klee "living line" quality). `rng` is shared for determinism. */
-function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rng: () => number, gradient = 0): Path[] {
+function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rng: () => number, gradient = 0, stops: number[] = [], minGap = 0): Path[] {
   const s = Math.max(0.5, spacing);
   const cx = (rect.x0 + rect.x1) / 2, cy = (rect.y0 + rect.y1) / 2;
   const dx = Math.cos(theta), dy = Math.sin(theta);     // line direction
@@ -25,17 +86,10 @@ function ruledDir(rect: Rect, theta: number, spacing: number, jitter: number, rn
     if (o < omin) omin = o;
     if (o > omax) omax = o;
   }
-  // Line offsets across the band. gradient=0 → uniform (unchanged). gradient>0 → a DENSITY RAMP:
-  // ~span/s lines redistributed by o = omin + span·t^(1+2g), which packs them toward omin (the
-  // rect's + normal end). For │ that end is the RIGHT edge and for ─ it's the TOP edge, so one
-  // positive gradient thickens both toward the top-right corner (LeWitt #142's accumulation).
-  const offsets: number[] = [];
-  if (gradient > 0) {
-    const span = omax - omin, N = Math.max(1, Math.round(span / s)), p = 1 + 2 * gradient;
-    for (let k = 0; k <= N; k++) offsets.push(omin + span * Math.pow(k / N, p));
-  } else {
-    for (let o = Math.ceil(omin / s) * s; o <= omax + 1e-9; o += s) offsets.push(o);
-  }
+  // Line offsets across the band: multi-point density profile (`stops`) > single ramp (`gradient`)
+  // > uniform. omin is the rect's +normal end (RIGHT for │, TOP for ─), so a positive gradient or a
+  // front-loaded stops list thickens toward the top-right (LeWitt #142's accumulation).
+  const offsets = bandOffsets(omin, omax, s, gradient, stops, minGap);
   const L = (rect.x1 - rect.x0) + (rect.y1 - rect.y0) + 10;   // long enough to span, then clip
   const out: Path[] = [];
   for (const o of offsets) {
@@ -87,6 +141,8 @@ export const ruledLinesModule: Module = {
     ]},
     { title: "Density ramp", fields: [
       { key: "gradient", label: "Gradient", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
+      { key: "densityStops", label: "Density stops", type: "text", placeholder: "e.g. 1,0.2,1  (overrides gradient)", default: "" },
+      { key: "minGap", label: "Min line gap", type: "range", min: 0, max: 20, step: 0.5, unit: "mm", default: 0 },
     ]},
     { title: "Position", fields: [
       { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
@@ -99,13 +155,16 @@ export const ruledLinesModule: Module = {
     const spacing = num(params, "spacing", 12);
     const jitter = num(params, "jitter", 0);
     const gradient = num(params, "gradient", 0);
+    const minGap = num(params, "minGap", 0);
+    // multi-point density profile: comma/space-separated non-negative weights (≥2 to take effect)
+    const stops = String(params.densityStops ?? "").split(/[,\s]+/).map(Number).filter((x) => Number.isFinite(x) && x >= 0);
     const rng = seededRandom(Math.round(num(params, "jitterSeed", 7)));
     const rect: Rect = { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
     const paths: Path[] = [];
-    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient));            // ─
-    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient));     // │
-    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient));             // ╱
-    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient));               // ╲
+    if (params.horizontal !== false) paths.push(...ruledDir(rect, 0, spacing, jitter, rng, gradient, stops, minGap));            // ─
+    if (params.vertical !== false) paths.push(...ruledDir(rect, Math.PI / 2, spacing, jitter, rng, gradient, stops, minGap));     // │
+    if (params.diagRight) paths.push(...ruledDir(rect, -Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));             // ╱
+    if (params.diagLeft) paths.push(...ruledDir(rect, Math.PI / 4, spacing, jitter, rng, gradient, stops, minGap));               // ╲
     return { widthMm: w, heightMm: h, paths, meta: { title: "Ruled lines" } };
   },
 };

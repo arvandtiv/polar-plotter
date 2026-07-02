@@ -101,6 +101,12 @@ All are pure, registered, and host-rendered. All support a `jitter` (hand-drawn 
   pulls centres inward so edge-midpoint circles close into FULL rings (moire) instead of half-arcs.
 - **`ruledLines` `gradient`** (added R15) — a density ramp: packs verticals right + horizontals top
   (top-right accumulation). ⚠️ fine spacing + steep gradient saturates the edge → paper-rip; keep coarse.
+  - **`densityStops` + `minGap`** (added post-R30) — MULTI-POINT density control: `densityStops` is a
+    comma-separated list of density weights at evenly-spaced positions across the band (piecewise-linear,
+    inverse-CDF placement), overriding `gradient` when ≥2 values. e.g. `1,0.12,1` = dense edges/sparse
+    middle (valley), `0.15,1,0.15` = dense centre band, `1,0.2,1,0.2,1` = three bands, a `0` = a gap.
+    Position 0 = the +normal end (right for │, top for ─). `minGap` (mm) drops lines closer than the gap
+    — a built-in paper-rip clamp on dense peaks. Empty stops = old `gradient` behaviour (backward-compatible).
 - **`locatedFigures`** (added R16, extended R17/R18) — figures placed + a hand-drawn location web
   to the nearest architectural anchors; density-capped so no corner saturates. Figure types:
   `trapezoid` (R16), `parallelogram` + `shear`/`rotMax` (R17), `irregular` angular polygon (R18);
