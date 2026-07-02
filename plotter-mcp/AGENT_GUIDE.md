@@ -440,6 +440,18 @@ Set `x1=x2, y1=y2` for a single origin point; a long start line creates sparser 
 | `x2,y2`     | 0,0  | Start line endpoint 2. |
 | `cycles`    | 1    | Retrace. |
 | `seed`      | 42   | Random seed. |
+| `mode`      | walk | `walk` = classic line; **`pipe`** = the walk becomes an INVISIBLE spine and a series of circles is drawn along it, radius lerping `rMin`→`rMax` from path start to end (tapered tube). |
+| `rMin` / `rMax` | 1 / 8 | Pipe start/end radius (mm). `rMin > rMax` tapers down. |
+| `pipeSpacing` | 6  | Distance between circle centres along the spine (mm); ≤2 with big radii = solid tube (mind the paper-rip limit). |
+| `pipeJitter`  | 0.8 | Hand-wobble per circle (mm). 0 = true circles → each ring becomes a single firmware arc job. |
+
+**ruledLines** (the LeWitt workhorse — trained module): parallel lines in any mix of
+the four directions (`vertical`/`horizontal`/`diagRight`/`diagLeft`), `spacing` down
+to 0.5 mm. `jitter` makes them not-straight; `jitterStyle` **`arc`** (default) bends
+each line as tangent-continuous circular bows — smooth deviations that compile into
+firmware arc jobs — while `wave` is the old hand wobble. Density control: `gradient`
+(single ramp) or `densityStops` (multi-point profile, e.g. `"1,0.15,1"` = dense edges
+/ sparse valley; a `0` stop = a gap) with `minGap` as the paper-rip clamp.
 
 Examples:
 ```

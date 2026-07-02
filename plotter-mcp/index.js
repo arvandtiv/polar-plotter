@@ -214,7 +214,7 @@ async function batchSend(queries, { timeoutMs = 600_000 } = {}) {
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.6.0',
+  version: '1.6.1',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
@@ -1211,15 +1211,28 @@ calling). Out-of-bounds paths are clipped automatically.
 After generation, you can also apply a warp displacement to the paths by setting
 warp_mode to "water" (sinusoidal) or "droplet" (radial ripples) with warp_params.
 
-Available generators (call plot_list_generators for descriptions):
+Available generators (call plot_list_generators for the full, live list with
+descriptions — it includes every module below plus basic shapes):
+  HUMAN-TRAINED favourites (see plot_style_guide for the taste they serve):
+  branching    — organic dendritic growth: tree/coral/delta/splat (coreR/flow/edgeAvoid)
+  flowWhirls   — full-field streamlines through a vortex field (the winning swirl engine)
+  ruledLines   — parallel lines in the 4 LeWitt directions; jitter bends them as SMOOTH
+                 ARC bows (jitterStyle=arc, default) or waves; densityStops multi-point
+                 density profile ("1,0.15,1" = valley); minGap paper-rip clamp
+  connectDots / strokeField / arcs / locatedFigures / scribble / curvyDivide /
+  whirls / growthField — the rest of the trained set
+  STOCK:
   spirograph   — hypotrochoid / epitrochoid roulette curves (gear toy)
   orbitalWeave — continuous orbiting trace that folds into woven knots
   noiseOrbit   — concentric rings distorted by 3D noise + Chaikin smoothing
-  randomWalker — agents drifting with accumulating velocity
+  randomWalker — agents drifting with accumulating velocity; mode="pipe" draws growing
+                 circles (rMin→rMax) along the invisible walk instead of the line
   noisedHatches — grid of hatch cells shaped by a noise blob
-  sheets       — randomly displaced column grid, interpolated into curtain lines
   moireCurtain — two line gratings at slightly different angles (moiré interference)
-  patternMaker — base shape tiled across a grid with per-cell rotation`,
+  patternMaker — base shape tiled across a grid with per-cell rotation
+  text         — box text with built-in stroke fonts
+  (image* modules need an uploaded image — web console only; sheets is BANNED by the
+  style guide.)`,
   {
     generator: z.string().describe(
       'Generator module key — use plot_list_generators to see all options with descriptions',
