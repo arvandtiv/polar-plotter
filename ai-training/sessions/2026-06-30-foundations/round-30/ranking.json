@@ -1,6 +1,6 @@
 {
   "round": 30,
-  "ranking": [],
-  "notes": {},
-  "scoredAt": ""
+  "ranking": [13,11,14,5,1,2,3,15],
+  "notes": {"13":"This is nice round please avoid using the end of the edges being cut off and maybe add a more organic direction to effect the groth directions"},
+  "scoredAt": "2026-07-02"
 }

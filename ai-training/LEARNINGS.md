@@ -46,6 +46,23 @@ hand-drawn ones at the top (#15, irregular + living line = "very interesting").
     "don't get stuck in one style" note as the located-figures rut.) Flow is not banned, just spent
     for now — rotate to a different genre. Reliable non-flow direction that has WON: R23 continuous
     "shade" scribble of a volumetric FORM.
+  - **✅ NEW genre landed: dendritic `branching` "Splat" = "a nice round" (R30).** First round on the
+    new `branching` growth generator (a fresh visual language after the flow rut) got a positive
+    verdict. What WON, best→worst: 13 three-cluster, 11 two-splats, 14 constellation, then the fuller
+    single bursts (5 dense-core, 1 classic, 2 explosive, 3 off-centre, 15 raw-ink). What LOST:
+    **sparse** takes (4/8/16 — bare spokes = worthless, the standing rule again), **directional
+    "flung" throws** (9/10 — tropism smears to one side, reads as a smear not a splat), and
+    **big-blob + confetti** (12 — tiny satellites read as scattered clutter, a marks-field in disguise).
+    - **Multi-mass beats single centred burst.** Several irregular masses of *comparable* weight with
+      open space between (Klee #10 stacked centres) > one dead-centre radial burst (too symmetric).
+      Density with a filled core beats openness; keep masses balanced, not blob-plus-dust.
+    - **Two user asks on the winner, now built into the generator as levers:** (1) *"avoid the ends
+      of the edges being cut off"* → `edgeAvoid` param steers growth back inward near the frame box
+      (use with `size` < wall for margin); tuned for FULL-WALL frames — keep it LOW on small satellite
+      masses or they over-curl into a dense clump. (2) *"more organic direction to the growth"* →
+      `flow` param, a position-based curl field that makes arms meander organically instead of straight
+      radial spokes. Validated combo for a full-wall splat: `flow ~0.4` + `edgeAvoid ~0.8` + `size ~285`.
+      (Radial mode also has `coreR` = scatter roots over a core disc → dense messy core, not a hollow hub.)
   - **⛔ Mark/stroke FIELDS are now "not worthy" — use the flowing CURRENT field instead (R28).**
     (Note: superseded in spirit by the R29 rule — vary the genre; flow itself is now over-used too.)
     A field of separate small marks (R28 commas; R22 scattered) is rejected; the early strokeField

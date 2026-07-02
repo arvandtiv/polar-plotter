@@ -33,6 +33,7 @@ export const branchingModule: Module = {
       { key: "tropism", label: "Grow-direction pull", type: "range", min: 0, max: 0.6, step: 0.05, default: 0.15 },
       { key: "curve", label: "Branch curve", type: "range", min: 0, max: 0.8, step: 0.05, default: 0.25 },
       { key: "coreR", label: "Core scatter (radial)", type: "range", min: 0, max: 80, step: 1, unit: "mm", default: 0 },
+      { key: "flow", label: "Organic flow", type: "range", min: 0, max: 0.8, step: 0.05, default: 0 },
     ]},
     { title: "Hand", fields: [
       { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 6, step: 0.5, unit: "mm", default: 1.2 },
@@ -42,6 +43,7 @@ export const branchingModule: Module = {
       { key: "size", label: "Size", type: "range", min: 20, max: 300, step: 1, unit: "mm", default: 300 },
       { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
       { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "edgeAvoid", label: "Keep inside frame", type: "range", min: 0, max: 1, step: 0.05, default: 0 },
     ]},
   ],
   generate(params): Frame {
@@ -54,7 +56,27 @@ export const branchingModule: Module = {
     const spread = num(params, "spread", 0.6), tropism = num(params, "tropism", 0.15);
     const curve = num(params, "curve", 0.25), jitter = num(params, "jitter", 1.2);
     const coreR = num(params, "coreR", 0);
+    const flow = num(params, "flow", 0);
+    const edgeAvoid = num(params, "edgeAvoid", 0);
     const rng = seededRandom(Math.round(num(params, "seed", 7)));
+
+    // a smooth position-based curl field: bends growth organically so arms meander instead of
+    // shooting in straight radial spokes (user R30: "more organic direction to the growth").
+    const curl = (x: number, y: number): number =>
+      flow * (Math.sin((x - cx) * 0.02 + (y - cy) * 0.013 + 1.3)
+            + 0.6 * Math.sin((y - cy) * 0.028 - (x - cx) * 0.021 + 4.1));
+
+    // steer a heading back toward centre near the frame edge so the mass curls to stay inside the
+    // page instead of being sliced off (user R30: "avoid the ends of the edges being cut off").
+    const margin = h * 0.4;
+    const steerInward = (x: number, y: number, ang: number): number => {
+      if (edgeAvoid <= 0) return ang;
+      const md = Math.min(x - (cx - h), (cx + h) - x, y - (cy - h), (cy + h) - y);
+      if (md >= margin) return ang;
+      const toC = Math.atan2(cy - y, cx - x);
+      const w = Math.min(0.95, edgeAvoid * Math.max(0, Math.min(1.4, 1 - md / margin)));
+      return ang + w * Math.atan2(Math.sin(toC - ang), Math.cos(toC - ang));
+    };
 
     // a curved hand-drawn branch segment; returns its polyline + end point/heading
     const segment = (x: number, y: number, ang: number, len: number): { pts: Pt[]; ex: number; ey: number; ea: number } => {
@@ -63,7 +85,7 @@ export const branchingModule: Module = {
       let a = ang, px = x, py = y;
       const pts: Pt[] = [{ x, y }];
       for (let i = 1; i <= steps; i++) {
-        a += drift / steps;
+        a += drift / steps + curl(px, py) / steps;
         px += Math.cos(a) * (len / steps) + (rng() * 2 - 1) * jitter * 0.25;
         py += Math.sin(a) * (len / steps) + (rng() * 2 - 1) * jitter * 0.25;
         pts.push({ x: px, y: py });
@@ -105,7 +127,8 @@ export const branchingModule: Module = {
         const base = seg.ea + spread * ((k + 0.5) / nch * 2 - 1) + (rng() * 2 - 1) * 0.28;
         // gentle pull toward the global growth direction (radial: skip)
         const pulled = origin === "center" ? base : base + tropism * Math.atan2(Math.sin(gd - base), Math.cos(gd - base));
-        stack.push({ x: seg.ex, y: seg.ey, ang: pulled, len: nd.len * decay * (0.8 + 0.4 * rng()), gen: nd.gen + 1 });
+        const steered = steerInward(seg.ex, seg.ey, pulled);
+        stack.push({ x: seg.ex, y: seg.ey, ang: steered, len: nd.len * decay * (0.8 + 0.4 * rng()), gen: nd.gen + 1 });
       }
     }
     return { widthMm: size, heightMm: size, paths, meta: { title: "Branching" } };
