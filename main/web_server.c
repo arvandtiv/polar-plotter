@@ -472,6 +472,21 @@ static void handle_accel(int sock, const char *qs)
     resp_enqueue(sock, "accel queued", &c);
 }
 
+/* Ramp SHAPE tuning (line-crispness experiments — docs/motion_native_tmc5072.md
+ * §5.2): a1r/dmaxr/d1r are ratios of AMAX, v1/vstop/tzw absolutes. Queued like
+ * speed/accel so it applies in order within a script. Defaults = current shape. */
+static void handle_ramp(int sock, const char *qs)
+{
+    wcmd_t c = { .type = WCMD_RAMP };
+    c.p[0] = qf(qs, "a1r",   2.0f);
+    c.p[1] = qf(qs, "v1",    50000.0f);
+    c.p[2] = qf(qs, "dmaxr", 1.0f);
+    c.p[3] = qf(qs, "d1r",   2.8f);
+    c.p[4] = qf(qs, "vstop", 10.0f);
+    c.p[5] = qf(qs, "tzw",   0.0f);
+    resp_enqueue(sock, "ramp queued", &c);
+}
+
 static void handle_cur(int sock, const char *qs)
 {
     wcmd_t c = { .type = WCMD_CURRENT };
@@ -798,6 +813,7 @@ static const route_t s_routes[] = {
     { "/api/matrix",     handle_matrix     },
     { "/api/speed",      handle_speed      },
     { "/api/accel",      handle_accel      },
+    { "/api/ramp",       handle_ramp       },
     { "/api/cur",        handle_cur        },
     { "/api/status",     handle_status     },
     { "/api/abort",      handle_abort      },

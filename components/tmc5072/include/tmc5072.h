@@ -98,6 +98,14 @@ typedef struct {
     uint32_t chopconf[2];
     uint32_t ihold_irun[2];
     tmc5072_ramp_t base_ramp;
+    /* Ramp SHAPE: how set_accel derives the sixPoint profile from AMAX. Live-tunable
+     * (tmc5072_set_ramp_shape) so launch softness / stop hardness / the A1-vs-AMAX
+     * crossover (V1) can be tuned on paper without reflashing. Defaults reproduce the
+     * historical behaviour exactly (a1=2×, d1=2.8×, dmax=1×, v1=50000, vstop=10). */
+    float    a1_ratio;        /* A1   = a1_ratio   × AMAX (accel below V1 — launch kick) */
+    float    d1_ratio;        /* D1   = d1_ratio   × AMAX (decel below V1 — landing)     */
+    float    dmax_ratio;      /* DMAX = dmax_ratio × AMAX (main decel; >1 = brisker stops) */
+    uint32_t tzerowait;       /* pause at zero crossing on reversals (reduces jerk)      */
     float    applied_scale[2];
     SemaphoreHandle_t lock;
     volatile bool hard_off;   /* hardware E-STOP latch: when set, enable() is forced off */
@@ -119,6 +127,12 @@ uint32_t  tmc5072_get_ihold_irun(tmc5072_t *dev, int motor);
 
 void      tmc5072_set_vmax(tmc5072_t *dev, int motor, uint32_t vmax);
 void      tmc5072_set_accel(tmc5072_t *dev, int motor, uint32_t amax_dmax);
+/* Set the sixPoint ramp SHAPE (both motors): a1/d1/dmax as ratios of AMAX, plus V1,
+ * VSTOP and TZEROWAIT absolutes. Re-derives + re-applies the profile at the current
+ * AMAX immediately. Values are floored so D1/VSTOP can never be 0 (datasheet §6.2.1). */
+void      tmc5072_set_ramp_shape(tmc5072_t *dev, float a1_ratio, uint32_t v1,
+                                  float dmax_ratio, float d1_ratio,
+                                  uint32_t vstop, uint32_t tzerowait);
 void      tmc5072_set_ramp_scale(tmc5072_t *dev, int motor, float scale);
 
 void      tmc5072_move_coordinated(tmc5072_t *dev, int32_t target0, int32_t target1);

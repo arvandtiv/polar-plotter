@@ -412,6 +412,28 @@ server.tool(
   }),
 );
 
+// plot_set_ramp ──────────────────────────────────────────────────────────────
+server.tool(
+  'plot_set_ramp',
+  'Tune the sixPoint ramp SHAPE for line crispness (session-only). a1_ratio/dmax_ratio/' +
+  'd1_ratio are multiples of AMAX; v1 is the crossover velocity between the A1 (launch) ' +
+  'and AMAX regions. Soft-start recipe (crisper stroke starts, brisker stops): ' +
+  'a1_ratio=0.5, v1=12000, dmax_ratio=1.4, d1_ratio=2.0. Defaults restore the stock shape.',
+  {
+    a1_ratio:   z.number().min(0.05).max(5).default(2.0).describe('A1 = ratio × AMAX (accel below v1 — launch kick; <1 = soft start)'),
+    v1:         z.number().int().min(1).max(200000).default(50000).describe('crossover velocity between A1 and AMAX regions (µsteps/s)'),
+    dmax_ratio: z.number().min(0.05).max(5).default(1.0).describe('DMAX = ratio × AMAX (main decel; >1 = brisker stops, datasheet-endorsed)'),
+    d1_ratio:   z.number().min(0.05).max(5).default(2.8).describe('D1 = ratio × AMAX (decel below v1 — landing)'),
+    vstop:      z.number().int().min(1).max(1000).default(10).describe('arrival velocity at the target (never 0)'),
+    tzerowait:  z.number().int().min(0).max(65535).default(0).describe('pause at zero crossing on reversals (reduces reversal jerk)'),
+  },
+  async ({ a1_ratio, v1, dmax_ratio, d1_ratio, vstop, tzerowait }) => ({
+    content: [{ type: 'text', text: ok(await drawAndWait(
+      `ramp?a1r=${a1_ratio}&v1=${v1}&dmaxr=${dmax_ratio}&d1r=${d1_ratio}&vstop=${vstop}&tzw=${tzerowait}`
+    )) }],
+  }),
+);
+
 // plot_set_current ───────────────────────────────────────────────────────────
 server.tool(
   'plot_set_current',

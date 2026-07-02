@@ -424,6 +424,29 @@ static void apply_accel(uint32_t accel)
     ESP_LOGI(TAG, "accel: AMAX=DMAX=%lu", (unsigned long)accel);
 }
 
+/* Ramp SHAPE (session-only, like speed/accel): how the sixPoint profile derives from
+ * AMAX. Tunable live over serial (`ramp`), HTTP (/api/ramp) and MCP (plot_set_ramp)
+ * for line-crispness experiments — soft launch (a1r < 1), brisk stops (dmaxr > 1),
+ * shorter slow-approach (lower v1) — without reflashing. Defaults reproduce the
+ * historical profile exactly. See docs/motion_native_tmc5072.md §5.2 for recipes. */
+static float    g_ramp_a1r   = 2.0f;
+static float    g_ramp_v1    = 50000.0f;
+static float    g_ramp_dmaxr = 1.0f;
+static float    g_ramp_d1r   = 2.8f;
+static float    g_ramp_vstop = 10.0f;
+static float    g_ramp_tzw   = 0.0f;
+
+static void apply_ramp(void)
+{
+    tmc5072_set_ramp_shape(&tmc, g_ramp_a1r, (uint32_t)g_ramp_v1,
+                           g_ramp_dmaxr, g_ramp_d1r,
+                           (uint32_t)g_ramp_vstop, (uint32_t)g_ramp_tzw);
+    ESP_LOGI(TAG, "ramp: a1r=%.2f v1=%lu dmaxr=%.2f d1r=%.2f vstop=%lu tzw=%lu",
+             (double)g_ramp_a1r, (unsigned long)g_ramp_v1,
+             (double)g_ramp_dmaxr, (double)g_ramp_d1r,
+             (unsigned long)g_ramp_vstop, (unsigned long)g_ramp_tzw);
+}
+
 static void print_global_status(void)
 {
     uint8_t  st = 0;
@@ -515,6 +538,7 @@ static void reconfigure_drivers(void)
     apply_current(g_run_ma, g_hold_ma);
     apply_speed(g_vmax);
     apply_accel(g_accel);
+    apply_ramp();   /* config_motor reset the shape ratios — restore the live tuning */
 }
 
 /* Self-heal: if the TMC was reset (CHOPCONF back to 0 / TOFF=0 = output
@@ -1523,6 +1547,7 @@ static const char *wcmd_name(wcmd_type_t t)
     case WCMD_BOUNDS:   return "bounds";
     case WCMD_SPEED:    return "speed";
     case WCMD_ACCEL:    return "accel";
+    case WCMD_RAMP:     return "ramp";
     case WCMD_CURRENT:  return "current";
     case WCMD_WOBBLY:   return "wobbly";
     case WCMD_TRUCHET:  return "truchet";
@@ -1675,6 +1700,13 @@ static void web_draw_task(void *arg)
         case WCMD_ACCEL:
             g_accel=(uint32_t)cmd.p[0]; apply_accel(g_accel);
             web_log("accel amax=%lu",(unsigned long)g_accel); break;
+        case WCMD_RAMP:
+            g_ramp_a1r=cmd.p[0]; g_ramp_v1=cmd.p[1]; g_ramp_dmaxr=cmd.p[2];
+            g_ramp_d1r=cmd.p[3]; g_ramp_vstop=cmd.p[4]; g_ramp_tzw=cmd.p[5];
+            apply_ramp();
+            web_log("ramp a1r=%.2f v1=%.0f dmaxr=%.2f d1r=%.2f vstop=%.0f tzw=%.0f",
+                    (double)g_ramp_a1r,(double)g_ramp_v1,(double)g_ramp_dmaxr,
+                    (double)g_ramp_d1r,(double)g_ramp_vstop,(double)g_ramp_tzw); break;
         case WCMD_CURRENT:
             g_run_ma=cmd.p[0];
             if(cmd.p[1]>=0.0f) g_hold_ma=cmd.p[1];
@@ -1754,6 +1786,27 @@ static int cmd_accel(int argc, char **argv)
 {
     if (argc < 2) { printf("usage: accel <amax>\n"); return 0; }
     g_accel = strtoul(argv[1], NULL, 0); apply_accel(g_accel); return 0;
+}
+static int cmd_ramp(int argc, char **argv)
+{
+    if (argc < 5) {
+        printf("ramp shape: a1r=%.2f v1=%.0f dmaxr=%.2f d1r=%.2f vstop=%.0f tzw=%.0f (amax=%lu)\n",
+               (double)g_ramp_a1r,(double)g_ramp_v1,(double)g_ramp_dmaxr,
+               (double)g_ramp_d1r,(double)g_ramp_vstop,(double)g_ramp_tzw,
+               (unsigned long)g_accel);
+        printf("usage: ramp <a1_ratio> <v1> <dmax_ratio> <d1_ratio> [vstop] [tzerowait]\n");
+        printf("  A1=a1r*AMAX below V1 (launch), DMAX=dmaxr*AMAX (stop), D1=d1r*AMAX below V1\n");
+        printf("  defaults 2.0 50000 1.0 2.8 10 0; soft-start recipe: ramp 0.5 12000 1.4 2.0\n");
+        return 0;
+    }
+    g_ramp_a1r   = atof(argv[1]);
+    g_ramp_v1    = atof(argv[2]);
+    g_ramp_dmaxr = atof(argv[3]);
+    g_ramp_d1r   = atof(argv[4]);
+    if (argc > 5) g_ramp_vstop = atof(argv[5]);
+    if (argc > 6) g_ramp_tzw   = atof(argv[6]);
+    apply_ramp();
+    return 0;
 }
 static int cmd_setsteps(int argc, char **argv)
 {
@@ -2016,6 +2069,7 @@ static const cmd_entry_t s_cmds[] = {
     { "cur",       "Set current: cur <run_mA> [hold_mA]",               cmd_cur       },
     { "speed",     "Set speed: speed <vmax>",                           cmd_speed     },
     { "accel",     "Set acceleration: accel <amax>",                    cmd_accel     },
+    { "ramp",      "Ramp shape: ramp <a1r> <v1> <dmaxr> <d1r> [vstop] [tzw] (bare = show)", cmd_ramp },
     { "setbelt",   "Set home belt length (mm)",                         cmd_setbelt   },
     { "setspan",   "Set motor span (mm)",                               cmd_setspan   },
     { "setsteps",  "Set steps/mm",                                      cmd_setsteps  },

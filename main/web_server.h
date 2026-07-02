@@ -27,6 +27,7 @@ typedef enum {
     WCMD_WOBBLY,
     WCMD_TRUCHET,
     WCMD_ARC,
+    WCMD_RAMP,
 } wcmd_type_t;
 
 typedef struct {

@@ -122,4 +122,35 @@ per-axis `VMAX`; `applied_scale = -1` marks "accels full, VMAX custom" so subseq
 joints keep the lean 4-write path. The final segment still returns to a scaled profile
 (`move_scaled_from`) so both axes decelerate into the stop together.
 
-Not yet done: B and C tuning constants, D anchor-arc primitive, F coolStep.
+### 5.2 Ideas B & C are now LIVE-TUNABLE (2026-07-02): the `ramp` shape command
+
+The sixPoint shape is no longer hard-coded in `tmc5072_set_accel` — it derives from
+tunable ratios (`tmc5072_set_ramp_shape`), exposed as serial **`ramp`**, HTTP
+**`/api/ramp`** and MCP **`plot_set_ramp`**. Session-only (like `speed`/`accel`);
+defaults reproduce the historical profile exactly (`a1r=2.0 v1=50000 dmaxr=1.0 d1r=2.8
+vstop=10 tzw=0`). E-STOP clear / driver self-heal re-applies the live tuning.
+
+`A1 = a1r×AMAX` (accel below `v1` — the launch), `DMAX = dmaxr×AMAX` (the stop),
+`D1 = d1r×AMAX` (landing below `v1`). What each lever does to the LINE:
+
+- **`a1r < 1` = soft launch** (idea B): the stock `a1r=2.0` kicks the gondola hardest at
+  pen-down → pendulum swing → wavy first centimetres of every stroke. Lowering `a1r`
+  with a LOW `v1` softens only the first instants, so the time cost is negligible.
+- **low `v1`** shortens both the soft-launch zone AND the slow `D1` final approach
+  (stock `v1=50000` ≈ 30 mm/s means a long crawl into every stop → ink pooling).
+- **`dmaxr > 1` = brisker stops** (idea C, datasheet-endorsed): less dwell at stroke
+  ends, slightly faster overall.
+- **`tzw`** inserts a pause at zero crossing on pen-down reversals (`cycles` retraces)
+  — kills the `VSTART+VSTOP` reversal jerk.
+
+**Recipe to try first (crisper starts + ends, no speed loss):**
+```
+ramp 0.5 12000 1.4 2.0
+```
+Then A/B against stock (`ramp 2.0 50000 1.0 2.8`) on the same test: a row of short
+strokes + one big circle. Second experiment: RAISE `accel` (e.g. `accel 700`–`800`) —
+strokes are accel-dominated, so higher AMAX = more uniform speed = more uniform ink
+width AND faster; back off if pendulum swing appears. The desync fix (§5.1) made
+higher accel safe to explore.
+
+Not yet done: D anchor-arc primitive, F coolStep.

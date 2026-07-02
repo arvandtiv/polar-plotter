@@ -114,12 +114,19 @@ void tmc5072_config_motor(tmc5072_t *dev, int m)
 
     tmc5072_set_current_cs(dev, m, 10, 4, 6);
 
+    /* Shape defaults = the live-proven profile (boot always ran set_accel, which
+     * flattened DMAX to AMAX — so 1.0, not this struct literal's 1.4). Tune with
+     * tmc5072_set_ramp_shape; see docs/motion_native_tmc5072.md §5.2 recipes. */
+    dev->a1_ratio   = 2.0f;
+    dev->d1_ratio   = 2.8f;
+    dev->dmax_ratio = 1.0f;
+    dev->tzerowait  = 0;
     dev->base_ramp = (tmc5072_ramp_t){
         .vstart = 0,    .a1   = 1000,   .v1   = 50000, .amax  = 500,
         .vmax   = 200000, .dmax = 700,  .d1   = 1400,  .vstop = 10,
     };
     tmc5072_set_ramp_scale(dev, m, 1.0f);
-    tmc5072_write(dev, TMC5072_TZEROWAIT(m), 0);
+    tmc5072_write(dev, TMC5072_TZEROWAIT(m), dev->tzerowait);
     tmc5072_write(dev, TMC5072_RAMPMODE(m),  0);
 }
 
@@ -166,13 +173,35 @@ void tmc5072_set_vmax(tmc5072_t *dev, int m, uint32_t vmax)
     tmc5072_set_ramp_scale(dev, m, 1.0f);
 }
 
+static uint32_t ratio_of(uint32_t base, float ratio)
+{
+    long x = lroundf((float)base * ratio);
+    return (x < 1) ? 1u : (uint32_t)x;   /* D1 (and friends) must never be 0 */
+}
+
 void tmc5072_set_accel(tmc5072_t *dev, int m, uint32_t amax_dmax)
 {
     dev->base_ramp.amax = amax_dmax;
-    dev->base_ramp.dmax = amax_dmax;
-    dev->base_ramp.a1   = amax_dmax * 2;
-    dev->base_ramp.d1   = amax_dmax * 14 / 5;
+    dev->base_ramp.dmax = ratio_of(amax_dmax, dev->dmax_ratio);
+    dev->base_ramp.a1   = ratio_of(amax_dmax, dev->a1_ratio);
+    dev->base_ramp.d1   = ratio_of(amax_dmax, dev->d1_ratio);
     tmc5072_set_ramp_scale(dev, m, 1.0f);
+}
+
+void tmc5072_set_ramp_shape(tmc5072_t *dev, float a1_ratio, uint32_t v1,
+                             float dmax_ratio, float d1_ratio,
+                             uint32_t vstop, uint32_t tzerowait)
+{
+    dev->a1_ratio       = (a1_ratio   > 0.01f) ? a1_ratio   : 0.01f;
+    dev->dmax_ratio     = (dmax_ratio > 0.01f) ? dmax_ratio : 0.01f;
+    dev->d1_ratio       = (d1_ratio   > 0.01f) ? d1_ratio   : 0.01f;
+    dev->base_ramp.v1   = (v1 > 0) ? v1 : 1;
+    dev->base_ramp.vstop = (vstop > 0) ? vstop : 1;   /* never 0 in positioning mode */
+    dev->tzerowait      = tzerowait;
+    for (int m = 0; m < 2; m++) {
+        tmc5072_set_accel(dev, m, dev->base_ramp.amax);   /* re-derive + re-apply */
+        tmc5072_write(dev, TMC5072_TZEROWAIT(m), dev->tzerowait);
+    }
 }
 
 static uint32_t ramp_scl(uint32_t base, float scale, uint32_t floor_val)
