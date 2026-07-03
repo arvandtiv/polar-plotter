@@ -253,7 +253,7 @@ void tmc5072_move_coordinated(tmc5072_t *dev, int32_t t0, int32_t t1)
 }
 
 void tmc5072_move_rate_matched(tmc5072_t *dev, int32_t t0, int32_t t1,
-                                int32_t from0, int32_t from1, uint32_t vmax_cap)
+                                int32_t from0, int32_t from1)
 {
     int32_t d0 = t0 - from0; if (d0 < 0) d0 = -d0;
     int32_t d1 = t1 - from1; if (d1 < 0) d1 = -d1;
@@ -275,16 +275,8 @@ void tmc5072_move_rate_matched(tmc5072_t *dev, int32_t t0, int32_t t1,
                 tmc5072_set_ramp_scale(dev, m, 1.0f);   /* also rewrites VMAX; overridden below */
             }
         }
-        /* Cruise cap (Phase 2.5): clamp the FASTER motor to vmax_cap and scale the
-         * other by the SAME factor — the velocity ratio (= path direction) is
-         * preserved exactly. The cap is chosen by the caller so the ramp can still
-         * stop within the hand-off look-ahead, i.e. it never enters its decel phase
-         * mid-segment (which is what wobbled large fast shapes: equal-absolute-rate
-         * decel from unequal velocities distorts the ratio). 0 = uncapped. */
-        uint32_t vbase = dev->base_ramp.vmax;
-        if (vmax_cap > 0 && vbase > vmax_cap) vbase = vmax_cap;
-        uint32_t v0 = ramp_scl(vbase, (float)d0 / (float)dlong, 1);
-        uint32_t v1 = ramp_scl(vbase, (float)d1 / (float)dlong, 1);
+        uint32_t v0 = ramp_scl(dev->base_ramp.vmax, (float)d0 / (float)dlong, 1);
+        uint32_t v1 = ramp_scl(dev->base_ramp.vmax, (float)d1 / (float)dlong, 1);
         tmc5072_write(dev, TMC5072_VMAX(0), v0);
         tmc5072_write(dev, TMC5072_VMAX(1), v1);
         dev->applied_scale[0] = -1.0f;

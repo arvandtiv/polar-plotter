@@ -180,22 +180,6 @@ int main(void)
         chk("warp forward->inverse recovers logical (mm)", worst, 0.0, 0.05);
     }
 
-    /* ---- Phase 2.5: curvature-aware hand-off look-ahead ---- */
-    {
-        /* straight run: collinear vectors → the max cap governs */
-        chk("lookahead straight = max", plt_flow_lookahead_mm(5, 0, 5, 0, 0.3f, 2.0f, 8.0f), 8.0, 1e-4);
-        /* 90-degree turn, 5 mm segment: D = sqrt(8*0.3*5/(pi/2)) = 2.76 mm */
-        chk("lookahead 90deg turn", plt_flow_lookahead_mm(5, 0, 0, 5, 0.3f, 2.0f, 8.0f), 2.7639, 0.01);
-        /* gentle arc (r=100mm, 5mm chords, theta=0.05 rad): raw 15.5 mm → clamped to max */
-        chk("lookahead gentle arc clamps to max",
-            plt_flow_lookahead_mm(5, 0, 5.0f * cosf(0.05f), 5.0f * sinf(0.05f), 0.3f, 2.0f, 8.0f), 8.0, 1e-3);
-        /* full reversal (180 deg): D = sqrt(12/pi) = 1.95 < min → clamped to min */
-        chk("lookahead reversal = min",
-            plt_flow_lookahead_mm(5, 0, -5, 0, 0.3f, 2.0f, 8.0f), 2.0, 1e-3);
-        /* degenerate zero-length vector → min */
-        chk("lookahead degenerate = min", plt_flow_lookahead_mm(0, 0, 5, 0, 0.3f, 2.0f, 8.0f), 2.0, 1e-4);
-    }
-
     printf("\n%s (%d failure%s)\n", g_fail ? "TESTS FAILED" : "ALL TESTS PASSED",
            g_fail, g_fail == 1 ? "" : "s");
     return g_fail ? 1 : 0;

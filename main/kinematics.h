@@ -125,35 +125,6 @@ static inline int plt_arc_segments(float radius_mm, float max_chord_err_mm)
     return n;
 }
 
-/* Curvature-aware hand-off look-ahead for streamed paths (Phase 2.5).
- * While streaming, the ramp generator plans a STOP at every interior waypoint; at
- * cruise speed its decel distance far exceeds a small fixed look-ahead, so each
- * segment becomes decel→retarget→re-accel — and since both motors decelerate at the
- * same ABSOLUTE rate from DIFFERENT velocities, their ratio distorts and the pen
- * wobbles (visible on LARGE, fast shapes; small ones never reach the speed).
- * Releasing the next target D early lets the ramp cruise through the joint — the
- * price is the pen rubber-banding the curve over D, deviating by ≈ D²/(8·r_local).
- * Solving D²/(8r) ≤ tol with r ≈ seg/θ gives the largest safe release distance:
- *   D = √(8 · tol · seg_mm / θ)
- * (a,b) = the incoming and outgoing segment vectors at the waypoint (mm). Straight
- * runs return `max_mm` (bounded by the caller's kinematic-bow budget); sharp turns
- * fall to `min_mm`, which also throttles cruise speed into corners. */
-static inline float plt_flow_lookahead_mm(float ax, float ay, float bx, float by,
-                                          float tol_mm, float min_mm, float max_mm)
-{
-    float la2 = ax * ax + ay * ay, lb2 = bx * bx + by * by;
-    if (la2 < 1e-12f || lb2 < 1e-12f) return min_mm;
-    float c = (ax * bx + ay * by) / sqrtf(la2 * lb2);
-    if (c >  1.0f) c =  1.0f;
-    if (c < -1.0f) c = -1.0f;
-    float th = acosf(c);
-    if (th < 1e-4f) return max_mm;                    /* straight: the cap governs */
-    float d = sqrtf(8.0f * tol_mm * sqrtf(lb2) / th); /* D²/(8r) ≤ tol, r ≈ seg/θ */
-    if (d < min_mm) d = min_mm;
-    if (d > max_mm) d = max_mm;
-    return d;
-}
-
 /* Number of sub-segments to split a straight Cartesian line of `len_mm` into so
  * each piece is at most `max_seg_mm` long. A single coordinated move draws a line
  * that is straight in STEP space, which bows in Cartesian space on a polargraph;
