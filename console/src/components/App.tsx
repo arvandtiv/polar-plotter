@@ -1892,7 +1892,7 @@ function GcodeTab({ sendRaw, sendBatch, getPending, getHealth, runCancelRef, pus
 
 // ================================================================
 
-type Tab = 'area' | 'ai';
+type Tab = 'area' | 'ai' | 'log';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
@@ -1943,6 +1943,8 @@ export default function App() {
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
+  // Central Log tab filter: which kinds are shown ('all' = everything).
+  const [logFilter, setLogFilter] = useState<'all' | 'sent' | 'board' | 'results' | 'system'>('all');
   const [view, setView]     = useState<'console' | 'studio'>('console');
   const [showHwInfo, setShowHwInfo] = useState(false);
   const [paperModal, setPaperModal] = useState<{ mode: 'save' | 'rename'; initial: string; target?: string } | null>(null);
@@ -2301,7 +2303,7 @@ export default function App() {
           <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
             {/* Tab bar */}
             <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
-              {([['area','Calibration'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
+              {([['area','Calibration'],['ai','Autonomous'],['log','Log']] as [Tab,string][]).map(([id, lbl]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors ${tab === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
               ))}
@@ -2398,6 +2400,50 @@ export default function App() {
                 </LogCard>
               </>
             )}
+
+            {/* ---- Central Log tab: EVERY transmission webapp→board + every board
+                 output line, one unified stream (the per-tab log cards stay put). ---- */}
+            {tab === 'log' && (() => {
+              const KINDS: Record<typeof logFilter, LogEntry['kind'][] | null> = {
+                all: null,
+                sent: ['cmd'],                 // webapp → board (commands, batch chunks, scripts)
+                board: ['fw', 'warn'],         // board → webapp (SSE firmware log)
+                results: ['ok', 'err'],        // outcomes
+                system: ['sys'],               // console housekeeping
+              };
+              const active = KINDS[logFilter];
+              const shown = active ? log.filter((l) => active.includes(l.kind)) : log;
+              const count = (k: typeof logFilter) => {
+                const ks = KINDS[k];
+                return ks ? log.filter((l) => ks.includes(l.kind)).length : log.length;
+              };
+              return (
+                <div className="flex flex-col gap-3 h-[calc(100vh-230px)] min-h-[360px]">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {([['all','All'],['sent','Sent → board'],['board','Board output'],['results','Results'],['system','System']] as [typeof logFilter, string][]).map(([id, lbl]) => (
+                      <button key={id} onClick={() => setLogFilter(id)}
+                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                          logFilter === id ? 'border-cyanx/40 bg-cyanx/10 text-cyanx' : 'border-ink-700 text-ink-500 hover:text-ink-300'}`}>
+                        {lbl} <span className="font-mono text-[10px] opacity-70">{count(id)}</span>
+                      </button>
+                    ))}
+                    <button onClick={P.clearLog}
+                      className="ml-auto rounded-lg border border-ink-700 px-3 py-1.5 text-[12px] text-ink-500 hover:text-stop hover:border-stop/40 transition-colors">
+                      ✕ Clear
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <LogView log={shown} />
+                  </div>
+                  <p className="shrink-0 text-[11px] text-ink-600">
+                    Unified stream: <span className="text-cyanx">sent commands / batch chunks</span> ·{' '}
+                    <span className="text-ink-400">board SSE output</span> ·{' '}
+                    <span className="text-go">results</span> — last 1000 entries. The per-tab log
+                    cards elsewhere keep working unchanged.
+                  </p>
+                </div>
+              );
+            })()}
 
             </div>{/* end tab panels */}
             </div>{/* end methods scroll region */}

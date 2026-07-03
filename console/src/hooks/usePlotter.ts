@@ -767,7 +767,11 @@ export function usePlotter() {
   useEffect(() => { saveBounds(bounds); }, [bounds]);
 
   const pushLog = useCallback((kind: LogEntry['kind'], text: string) => {
-    setLog((l) => [...l.slice(-199), mkLog(kind, text)]);
+    setLog((l) => [...l.slice(-999), mkLog(kind, text)]);   // 1000-entry ring (central Log tab)
+  }, []);
+
+  const clearLog = useCallback(() => {
+    setLog([mkLog('sys', '— log cleared —')]);
   }, []);
 
   const setIp = useCallback((val: string) => {
@@ -1032,6 +1036,11 @@ export function usePlotter() {
   const sendBatch = useCallback(async (queries: string[]): Promise<{ accepted: number; rejected: number } | 'error'> => {
     if (!ipRef.current) return 'error';
     try {
+      // One compact transmission line per chunk so the central Log tab shows every
+      // webapp→board hand-off without flooding (a 5000-op stream = ~80 lines).
+      const mix: Record<string, number> = {};
+      for (const q of queries) { const op = q.split('?')[0]; mix[op] = (mix[op] ?? 0) + 1; }
+      pushLog('cmd', `> batch ×${queries.length} → board (${Object.entries(mix).map(([k, n]) => `${n} ${k}`).join(' · ')})`);
       const d = await apiBatch(ipRef.current, queries.join('\n'));
       // Firmware-side errors (e.g. body too large) must trigger a retry, not a silent
       // {accepted:0,rejected:0} which would advance i past all n ops without queuing them.
@@ -1213,7 +1222,7 @@ export function usePlotter() {
     applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,
-    enqueue, sendRaw, sendAndWait, sendBatch, getPending, getHealth, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog,
+    enqueue, sendRaw, sendAndWait, sendBatch, getPending, getHealth, runCancelRef, stop, pause, resume, clearQueue, clearFault, pushLog, clearLog,
     DEFAULTS,
   };
 }
