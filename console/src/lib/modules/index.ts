@@ -15,6 +15,7 @@ import "./whirls";
 import "./flowWhirls";
 import "./growthField";
 import "./branching";
+import "./pipe";
 import "./spirograph";
 import "./orbital-weave";
 import "./random-walker";

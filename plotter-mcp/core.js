@@ -1712,6 +1712,131 @@ var branchingModule = {
 };
 register(branchingModule);
 
+// src/lib/pipe.ts
+function parseSizeStops(raw) {
+  const v = String(raw ?? "").split(/[,\s]+/).map(Number).filter((x) => Number.isFinite(x) && x > 0);
+  return v.length >= 2 ? v : [];
+}
+function radiusAt(t, stops, rMin, rMax) {
+  if (stops.length >= 2) {
+    const x = Math.min(1, Math.max(0, t)) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(x));
+    const f = x - i;
+    return stops[i] * (1 - f) + stops[i + 1] * f;
+  }
+  return rMin + (rMax - rMin) * t;
+}
+function wobblyRing(cx, cy, r2, jitter, rng) {
+  const n = Math.min(96, Math.max(12, Math.round(2 * Math.PI * r2 / 1.5)));
+  const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
+  const k1 = 2 + Math.floor(rng() * 2), k2 = 3 + Math.floor(rng() * 3);
+  const amp = jitter * (0.7 + 0.6 * rng());
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = i / n * 2 * Math.PI;
+    const rr = r2 + amp * (0.6 * Math.sin(a * k1 + p1) + 0.4 * Math.sin(a * k2 + p2));
+    pts.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a) });
+  }
+  return pts;
+}
+function pipeAlongSpine(spine, o, out, cycles = 1) {
+  let total = 0;
+  for (let i = 1; i < spine.length; i++)
+    total += Math.hypot(spine[i].x - spine[i - 1].x, spine[i].y - spine[i - 1].y);
+  if (total < 1e-6) return;
+  const spacing = Math.max(0.5, o.spacing);
+  let seg = 0;
+  let segStart = 0;
+  let segLen = Math.hypot(spine[1].x - spine[0].x, spine[1].y - spine[0].y);
+  for (let d = 0; d <= total; d += spacing) {
+    while (d > segStart + segLen && seg < spine.length - 2) {
+      segStart += segLen;
+      seg++;
+      segLen = Math.hypot(spine[seg + 1].x - spine[seg].x, spine[seg + 1].y - spine[seg].y);
+    }
+    const f = segLen > 1e-9 ? (d - segStart) / segLen : 0;
+    const cx = spine[seg].x + (spine[seg + 1].x - spine[seg].x) * f;
+    const cy = spine[seg].y + (spine[seg + 1].y - spine[seg].y) * f;
+    const r2 = radiusAt(d / total, o.sizeStops, o.rMin, o.rMax);
+    if (r2 > 0.05) out.push({ points: wobblyRing(cx, cy, r2, o.jitter, o.rng), closed: true, cycles });
+  }
+}
+
+// src/lib/modules/pipe.ts
+var pipeModule = {
+  key: "pipe",
+  label: "Pipe",
+  kind: "make",
+  group: "Shapes",
+  description: 'Growing circles along an invisible arc or line spine \u2014 a tapered tube. Multi-point size stops ("1,8,2,10") make the tube swell and shrink.',
+  sections: [
+    { title: "Spine", fields: [
+      { key: "spine", label: "Spine", type: "select", default: "arc", options: [
+        { value: "arc", label: "Arc (up to full ring)" },
+        { value: "line", label: "Straight line" }
+      ] },
+      { key: "cx", label: "Arc centre X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Arc centre Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "spineR", label: "Arc radius", type: "range", min: 5, max: 300, step: 1, unit: "mm", default: 80 },
+      { key: "a0", label: "Start angle", type: "range", min: -360, max: 360, step: 5, unit: "\xB0", default: 0 },
+      { key: "a1", label: "End angle", type: "range", min: -360, max: 360, step: 5, unit: "\xB0", default: 360 },
+      { key: "x0", label: "Line X0", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: -100 },
+      { key: "y0", label: "Line Y0", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "x1", label: "Line X1", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 100 },
+      { key: "y1", label: "Line Y1", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] },
+    { title: "Circles", fields: [
+      { key: "rMin", label: "Start radius (min r)", type: "range", min: 0.5, max: 60, step: 0.5, unit: "mm", default: 2 },
+      { key: "rMax", label: "End radius (max r)", type: "range", min: 0.5, max: 60, step: 0.5, unit: "mm", default: 12 },
+      { key: "sizeStops", label: "Size stops", type: "text", placeholder: "e.g. 1,8,2,10  (overrides min/max)", default: "" },
+      { key: "spacing", label: "Circle spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 6 },
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 4, step: 0.1, unit: "mm", default: 0.8 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 42 }
+    ] },
+    { title: "Ink", fields: [
+      { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
+    ] }
+  ],
+  generate(params) {
+    const spineKind = String(params.spine ?? "arc");
+    const cycles = Math.max(1, Math.round(num(params, "cycles", 1)));
+    const o = {
+      rMin: Math.max(0.1, num(params, "rMin", 2)),
+      rMax: Math.max(0.1, num(params, "rMax", 12)),
+      sizeStops: parseSizeStops(params.sizeStops),
+      spacing: Math.max(0.5, num(params, "spacing", 6)),
+      jitter: Math.max(0, num(params, "jitter", 0.8)),
+      rng: seededRandom(Math.round(num(params, "seed", 42)))
+    };
+    const spine = [];
+    let w = 200, h = 200;
+    if (spineKind === "line") {
+      const x0 = num(params, "x0", -100), y0 = num(params, "y0", 0);
+      const x1 = num(params, "x1", 100), y1 = num(params, "y1", 0);
+      spine.push({ x: x0, y: y0 }, { x: x1, y: y1 });
+      w = Math.abs(x1 - x0) + 2 * o.rMax;
+      h = Math.abs(y1 - y0) + 2 * o.rMax;
+    } else {
+      const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+      const R = Math.max(1, num(params, "spineR", 80));
+      const a0 = num(params, "a0", 0) * Math.PI / 180;
+      const a1 = num(params, "a1", 360) * Math.PI / 180;
+      const span = a1 - a0;
+      const len = Math.abs(span) * R;
+      const n = Math.max(8, Math.ceil(len / 2));
+      for (let i = 0; i <= n; i++) {
+        const a = a0 + span * (i / n);
+        spine.push({ x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) });
+      }
+      w = h = 2 * (R + Math.max(o.rMax, ...o.sizeStops.length ? o.sizeStops : [0]));
+    }
+    const paths = [];
+    pipeAlongSpine(spine, o, paths, cycles);
+    return { widthMm: w, heightMm: h, paths, meta: { title: "Pipe" } };
+  }
+};
+register(pipeModule);
+
 // src/lib/modules/spirograph.ts
 function gcd(a, b) {
   a = Math.abs(Math.round(a));
@@ -1842,6 +1967,7 @@ var randomWalkerModule = {
       ] },
       { key: "rMin", label: "Start radius (min r)", type: "range", min: 0.5, max: 30, step: 0.5, unit: "mm", default: 1 },
       { key: "rMax", label: "End radius (max r)", type: "range", min: 0.5, max: 60, step: 0.5, unit: "mm", default: 8 },
+      { key: "sizeStops", label: "Size stops", type: "text", placeholder: "e.g. 1,8,2,10  (overrides min/max)", default: "" },
       { key: "pipeSpacing", label: "Circle spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 6 },
       { key: "pipeJitter", label: "Hand jitter", type: "range", min: 0, max: 4, step: 0.1, unit: "mm", default: 0.8 }
     ] },
@@ -1881,39 +2007,13 @@ var randomWalkerModule = {
     const pipeSpacing = Math.max(0.5, num(params, "pipeSpacing", 6));
     const pipeJitter = Math.max(0, num(params, "pipeJitter", 0.8));
     const rng = seededRandom(seed);
-    const wobblyCircle = (cx, cy, r2) => {
-      const n = Math.min(96, Math.max(12, Math.round(2 * Math.PI * r2 / 1.5)));
-      const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
-      const k1 = 2 + Math.floor(rng() * 2), k2 = 3 + Math.floor(rng() * 3);
-      const amp = pipeJitter * (0.7 + 0.6 * rng());
-      const pts = [];
-      for (let i = 0; i < n; i++) {
-        const a = i / n * 2 * Math.PI;
-        const rr = r2 + amp * (0.6 * Math.sin(a * k1 + p1) + 0.4 * Math.sin(a * k2 + p2));
-        pts.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a) });
-      }
-      return pts;
-    };
-    const emitPipe = (spine, out) => {
-      let total = 0;
-      for (let i = 1; i < spine.length; i++)
-        total += Math.hypot(spine[i].x - spine[i - 1].x, spine[i].y - spine[i - 1].y);
-      if (total < 1e-6) return;
-      let seg = 0;
-      let segStart = 0;
-      let segLen = Math.hypot(spine[1].x - spine[0].x, spine[1].y - spine[0].y);
-      for (let d = 0; d <= total; d += pipeSpacing) {
-        while (d > segStart + segLen && seg < spine.length - 2) {
-          segStart += segLen;
-          seg++;
-          segLen = Math.hypot(spine[seg + 1].x - spine[seg].x, spine[seg + 1].y - spine[seg].y);
-        }
-        const f = segLen > 1e-9 ? (d - segStart) / segLen : 0;
-        const cx = spine[seg].x + (spine[seg + 1].x - spine[seg].x) * f;
-        const cy = spine[seg].y + (spine[seg + 1].y - spine[seg].y) * f;
-        const r2 = rMin + (rMax - rMin) * (d / total);
-        out.push({ points: wobblyCircle(cx, cy, r2), closed: true, cycles });
-      }
+    const pipeOpts = {
+      rMin,
+      rMax,
+      sizeStops: parseSizeStops(params.sizeStops),
+      spacing: pipeSpacing,
+      jitter: pipeJitter,
+      rng
     };
     const vx0 = maxVel * Math.cos(flowAngle);
     const vy0 = maxVel * Math.sin(flowAngle);
@@ -1938,7 +2038,7 @@ var randomWalkerModule = {
         pts.push({ x, y });
       }
       if (pts.length > 1) {
-        if (mode === "pipe") emitPipe(pts, paths);
+        if (mode === "pipe") pipeAlongSpine(pts, pipeOpts, paths, cycles);
         else paths.push({ points: pts, closed: false, cycles });
       }
     }
