@@ -1837,6 +1837,674 @@ var pipeModule = {
 };
 register(pipeModule);
 
+// src/lib/iso.ts
+function makeView(yawDeg, pitchDeg, persp = 0) {
+  const yw = yawDeg * Math.PI / 180;
+  const p = pitchDeg * Math.PI / 180;
+  return { cosYaw: Math.cos(yw), sinYaw: Math.sin(yw), cosP: Math.cos(p), sinP: Math.sin(p), persp };
+}
+function project(v, p) {
+  const x1 = p.x * v.cosYaw - p.y * v.sinYaw;
+  const y1 = p.x * v.sinYaw + p.y * v.cosYaw;
+  const depth = y1 * v.cosP - p.z * v.sinP;
+  let sx = x1;
+  let sy = -(y1 * v.sinP) - p.z * v.cosP;
+  if (v.persp > 0) {
+    const s = v.persp / Math.max(v.persp * 0.2, v.persp + depth);
+    sx *= s;
+    sy *= s;
+  }
+  return { x: sx, y: sy, depth };
+}
+function facingDepth(v, n) {
+  const y1 = n.x * v.sinYaw + n.y * v.cosYaw;
+  return y1 * v.cosP - n.z * v.sinP;
+}
+var sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+var cross = (a, b) => ({
+  x: a.y * b.z - a.z * b.y,
+  y: a.z * b.x - a.x * b.z,
+  z: a.x * b.y - a.y * b.x
+});
+var dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+function norm(a) {
+  const l = Math.hypot(a.x, a.y, a.z);
+  return l < 1e-12 ? { x: 0, y: 0, z: 1 } : { x: a.x / l, y: a.y / l, z: a.z / l };
+}
+function ringFrame(T) {
+  const t = norm(T);
+  const up = Math.abs(t.z) > 0.95 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 0, z: 1 };
+  const N = norm(cross(t, up));
+  const B = norm(cross(t, N));
+  return { N, B };
+}
+function makeValueNoise(seed, cells = 16) {
+  let st = seed >>> 0 || 1;
+  const rnd = () => {
+    st ^= st << 13;
+    st >>>= 0;
+    st ^= st >> 17;
+    st ^= st << 5;
+    st >>>= 0;
+    return st / 4294967296;
+  };
+  const n = cells + 2;
+  const g = [];
+  for (let i = 0; i < n * n; i++) g.push(rnd() * 2 - 1);
+  const lat = (ix, iy) => g[(iy % n + n) % n * n + (ix % n + n) % n];
+  const smooth = (t) => t * t * (3 - 2 * t);
+  const sample = (u, vv) => {
+    const ix = Math.floor(u), iy = Math.floor(vv);
+    const fu = smooth(u - ix), fv = smooth(vv - iy);
+    const a = lat(ix, iy), b = lat(ix + 1, iy), c = lat(ix, iy + 1), d = lat(ix + 1, iy + 1);
+    return (a * (1 - fu) + b * fu) * (1 - fv) + (c * (1 - fu) + d * fu) * fv;
+  };
+  return (u, vv) => 0.7 * sample(u, vv) + 0.3 * sample(u * 2.7 + 11.3, vv * 2.7 + 7.9);
+}
+
+// src/lib/modules/tube3d.ts
+var tube3dModule = {
+  key: "tube3d",
+  label: "Tube 3D",
+  kind: "make",
+  group: "3D Wireframe",
+  description: "Rings along a 3D spine (dive / helix / arc / 3D walk), projected isometrically \u2014 a wireframe tube with depth-cued ring density and multi-point size stops.",
+  sections: [
+    { title: "Spine", fields: [
+      { key: "spine", label: "Spine", type: "select", default: "dive", options: [
+        { value: "dive", label: "Dive (straight, into the page)" },
+        { value: "helix", label: "Helix" },
+        { value: "arc3d", label: "Tilted arc" },
+        { value: "walk3d", label: "3D random walk" }
+      ] },
+      { key: "length", label: "Length / height", type: "range", min: 20, max: 500, step: 5, unit: "mm", default: 220 },
+      { key: "spineR", label: "Helix / arc radius", type: "range", min: 5, max: 200, step: 1, unit: "mm", default: 70 },
+      { key: "turns", label: "Helix turns", type: "range", min: 0.25, max: 8, step: 0.25, default: 2 },
+      { key: "tiltDeg", label: "Arc tilt", type: "range", min: 0, max: 90, step: 5, unit: "\xB0", default: 60 },
+      { key: "wander", label: "Walk wander", type: "range", min: 0, max: 3, step: 0.1, default: 1.2 }
+    ] },
+    { title: "Rings", fields: [
+      { key: "rMin", label: "Start radius (min r)", type: "range", min: 0.5, max: 80, step: 0.5, unit: "mm", default: 6 },
+      { key: "rMax", label: "End radius (max r)", type: "range", min: 0.5, max: 80, step: 0.5, unit: "mm", default: 22 },
+      { key: "sizeStops", label: "Size stops", type: "text", placeholder: "e.g. 4,18,6,24  (overrides min/max)", default: "" },
+      { key: "spacing", label: "Ring spacing", type: "range", min: 0.5, max: 40, step: 0.5, unit: "mm", default: 5 },
+      { key: "depthCue", label: "Depth fade (spacing)", type: "range", min: 0, max: 1, step: 0.05, default: 0.5 },
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 4, step: 0.1, unit: "mm", default: 0.6 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 42 }
+    ] },
+    { title: "View", fields: [
+      { key: "yawDeg", label: "View yaw", type: "range", min: -180, max: 180, step: 5, unit: "\xB0", default: 45 },
+      { key: "pitchDeg", label: "View pitch", type: "range", min: 0, max: 90, step: 1, unit: "\xB0", default: 35 },
+      { key: "persp", label: "Perspective", type: "range", min: 0, max: 800, step: 10, default: 300 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] },
+    { title: "Ink", fields: [
+      { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
+    ] }
+  ],
+  generate(params) {
+    const spineKind = String(params.spine ?? "dive");
+    const L = num(params, "length", 220);
+    const SR = num(params, "spineR", 70);
+    const rng = seededRandom(Math.round(num(params, "seed", 42)));
+    const cycles = Math.max(1, Math.round(num(params, "cycles", 1)));
+    const jitter = Math.max(0, num(params, "jitter", 0.6));
+    const stops = parseSizeStops(params.sizeStops);
+    const rMin = Math.max(0.1, num(params, "rMin", 6));
+    const rMax = Math.max(0.1, num(params, "rMax", 22));
+    const baseSpacing = Math.max(0.5, num(params, "spacing", 5));
+    const depthCue = Math.max(0, Math.min(1, num(params, "depthCue", 0.5)));
+    const view = makeView(num(params, "yawDeg", 45), num(params, "pitchDeg", 35), num(params, "persp", 300));
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const spine = [];
+    if (spineKind === "helix") {
+      const n = Math.max(24, Math.ceil(L / 2));
+      const turns = num(params, "turns", 2);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        const a = t * turns * 2 * Math.PI;
+        spine.push({ x: SR * Math.cos(a), y: SR * Math.sin(a), z: L * (t - 0.5) });
+      }
+    } else if (spineKind === "arc3d") {
+      const tilt = num(params, "tiltDeg", 60) * Math.PI / 180;
+      const R = Math.max(10, L / 2);
+      const n = Math.max(24, Math.ceil(Math.PI * R / 2));
+      for (let i = 0; i <= n; i++) {
+        const a = Math.PI * (i / n);
+        const px = R * Math.cos(a), pz = R * Math.sin(a);
+        spine.push({ x: px, y: pz * Math.sin(tilt), z: pz * Math.cos(tilt) - R / 2 });
+      }
+    } else if (spineKind === "walk3d") {
+      const wander = num(params, "wander", 1.2);
+      const stepLen = 3;
+      const n = Math.max(10, Math.ceil(L / stepLen));
+      let p = { x: 0, y: -L / 2, z: 0 };
+      let d = { x: 0, y: 1, z: 0 };
+      for (let i = 0; i <= n; i++) {
+        spine.push({ ...p });
+        d = norm({
+          x: d.x + (rng() - 0.5) * 0.4 * wander,
+          y: d.y + (rng() - 0.5) * 0.2 * wander,
+          z: d.z + (rng() - 0.5) * 0.4 * wander
+        });
+        p = { x: p.x + d.x * stepLen, y: p.y + d.y * stepLen, z: p.z + d.z * stepLen };
+      }
+    } else {
+      spine.push({ x: -L * 0.18, y: -L / 2, z: L * 0.12 });
+      spine.push({ x: L * 0.18, y: L / 2, z: -L * 0.12 });
+    }
+    const seglen = (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    let total = 0;
+    for (let i = 1; i < spine.length; i++) total += seglen(spine[i - 1], spine[i]);
+    if (total < 1e-6) return { widthMm: 10, heightMm: 10, paths: [], meta: { title: "Tube 3D" } };
+    let dMin = Infinity, dMax = -Infinity;
+    for (const p of spine) {
+      const d = project(view, p).depth;
+      if (d < dMin) dMin = d;
+      if (d > dMax) dMax = d;
+    }
+    const dSpan = Math.max(1e-6, dMax - dMin);
+    const paths = [];
+    let seg = 0, segStart = 0, segLen = seglen(spine[0], spine[1]);
+    for (let d = 0; d <= total; ) {
+      while (d > segStart + segLen && seg < spine.length - 2) {
+        segStart += segLen;
+        seg++;
+        segLen = seglen(spine[seg], spine[seg + 1]);
+      }
+      const f = segLen > 1e-9 ? (d - segStart) / segLen : 0;
+      const C = {
+        x: spine[seg].x + (spine[seg + 1].x - spine[seg].x) * f,
+        y: spine[seg].y + (spine[seg + 1].y - spine[seg].y) * f,
+        z: spine[seg].z + (spine[seg + 1].z - spine[seg].z) * f
+      };
+      const T = sub(spine[seg + 1], spine[seg]);
+      const { N, B } = ringFrame(T);
+      const r2 = radiusAt(d / total, stops, rMin, rMax);
+      const depthN = (project(view, C).depth - dMin) / dSpan;
+      if (r2 > 0.05) {
+        const npts = Math.min(96, Math.max(12, Math.round(2 * Math.PI * r2 / 1.5)));
+        const p1 = rng() * 2 * Math.PI, p2 = rng() * 2 * Math.PI;
+        const k1 = 2 + Math.floor(rng() * 2), k2 = 3 + Math.floor(rng() * 3);
+        const amp = jitter * (0.7 + 0.6 * rng());
+        const ring = [];
+        for (let i = 0; i < npts; i++) {
+          const a = i / npts * 2 * Math.PI;
+          const rr = r2 + amp * (0.6 * Math.sin(a * k1 + p1) + 0.4 * Math.sin(a * k2 + p2));
+          const w = {
+            x: C.x + rr * (N.x * Math.cos(a) + B.x * Math.sin(a)),
+            y: C.y + rr * (N.y * Math.cos(a) + B.y * Math.sin(a)),
+            z: C.z + rr * (N.z * Math.cos(a) + B.z * Math.sin(a))
+          };
+          const s = project(view, w);
+          ring.push({ x: cx + s.x, y: cy + s.y });
+        }
+        paths.push({ points: ring, closed: true, cycles });
+      }
+      d += baseSpacing * (1 + depthCue * 2 * depthN);
+    }
+    const ext = L + 2 * Math.max(rMax, ...stops.length ? stops : [0]);
+    return { widthMm: ext, heightMm: ext, paths, meta: { title: "Tube 3D" } };
+  }
+};
+register(tube3dModule);
+
+// src/lib/modules/surface3d.ts
+var surface3dModule = {
+  key: "surface3d",
+  label: "Surface 3D",
+  kind: "make",
+  group: "3D Wireframe",
+  description: "z = f(x,y) heightfield as an isometric wireframe mesh, or front-view ridgelines with occlusion (Unknown Pleasures). Noise terrain, radial waves, or peaks.",
+  sections: [
+    { title: "Surface", fields: [
+      { key: "mode", label: "Render", type: "select", default: "mesh", options: [
+        { value: "mesh", label: "Wireframe mesh (isometric)" },
+        { value: "ridge", label: "Ridgelines (front view + occlusion)" }
+      ] },
+      { key: "relief", label: "Height source", type: "select", default: "noise", options: [
+        { value: "noise", label: "Noise terrain" },
+        { value: "waves", label: "Radial waves (sombrero)" },
+        { value: "peaks", label: "Gaussian peaks" }
+      ] },
+      { key: "size", label: "Ground size", type: "range", min: 40, max: 500, step: 5, unit: "mm", default: 260 },
+      { key: "amp", label: "Height", type: "range", min: 2, max: 150, step: 1, unit: "mm", default: 45 },
+      { key: "freq", label: "Detail / frequency", type: "range", min: 0.5, max: 8, step: 0.25, default: 2 },
+      { key: "rows", label: "Lines", type: "range", min: 6, max: 120, step: 1, default: 36 },
+      { key: "bothDirs", label: "Mesh: both directions", type: "toggle", default: true },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 42 }
+    ] },
+    { title: "View", fields: [
+      { key: "yawDeg", label: "View yaw (mesh)", type: "range", min: -180, max: 180, step: 5, unit: "\xB0", default: 45 },
+      { key: "pitchDeg", label: "View pitch", type: "range", min: 5, max: 90, step: 1, unit: "\xB0", default: 40 },
+      { key: "persp", label: "Perspective", type: "range", min: 0, max: 800, step: 10, default: 0 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params) {
+    const mode = String(params.mode ?? "mesh");
+    const relief = String(params.relief ?? "noise");
+    const size = num(params, "size", 260), half = size / 2;
+    const amp = num(params, "amp", 45);
+    const freq = num(params, "freq", 2);
+    const rows = Math.max(4, Math.round(num(params, "rows", 36)));
+    const seed = Math.round(num(params, "seed", 42));
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const cols = Math.max(24, rows * 2);
+    const noise = makeValueNoise(seed, 12);
+    const rng = seededRandom(seed);
+    const peaks = [];
+    for (let i = 0; i < 5; i++) {
+      peaks.push({
+        px: (rng() * 2 - 1) * 0.6,
+        py: (rng() * 2 - 1) * 0.6,
+        s: 0.12 + rng() * 0.2,
+        a: 0.4 + rng() * 0.6
+      });
+    }
+    const height = (u, vv) => {
+      if (relief === "waves") {
+        const r2 = Math.hypot(u, vv) * freq * Math.PI;
+        return amp * Math.cos(r2) / (1 + r2 * 0.6);
+      }
+      if (relief === "peaks") {
+        let z = 0;
+        for (const p of peaks) {
+          const d2 = ((u - p.px) ** 2 + (vv - p.py) ** 2) / (2 * p.s * p.s);
+          z += p.a * Math.exp(-d2);
+        }
+        return amp * z;
+      }
+      return amp * noise(u * freq + 3.1, vv * freq + 5.7);
+    };
+    const paths = [];
+    if (mode === "ridge") {
+      const view = makeView(0, num(params, "pitchDeg", 40), num(params, "persp", 0));
+      const minY = new Array(cols + 1).fill(Infinity);
+      for (let ri = 0; ri <= rows; ri++) {
+        const vv = -1 + 2 * ri / rows;
+        let run = [];
+        for (let ci = 0; ci <= cols; ci++) {
+          const u = -1 + 2 * ci / cols;
+          const w = { x: u * half, y: vv * half, z: height(u, vv) };
+          const s = project(view, w);
+          const visible = s.y < minY[ci] - 0.05;
+          if (visible) {
+            run.push({ x: cx + s.x, y: cy + s.y });
+            minY[ci] = Math.min(minY[ci], s.y);
+          } else if (run.length > 1) {
+            paths.push({ points: run });
+            run = [];
+          } else run = [];
+        }
+        if (run.length > 1) paths.push({ points: run });
+      }
+    } else {
+      const view = makeView(num(params, "yawDeg", 45), num(params, "pitchDeg", 40), num(params, "persp", 0));
+      const line = (fixedV, t) => {
+        const pts = [];
+        for (let ci = 0; ci <= cols; ci++) {
+          const s = -1 + 2 * ci / cols;
+          const u = fixedV ? s : t;
+          const vv = fixedV ? t : s;
+          const w = { x: u * half, y: vv * half, z: height(u, vv) };
+          const p = project(view, w);
+          pts.push({ x: cx + p.x, y: cy + p.y });
+        }
+        return pts;
+      };
+      for (let ri = 0; ri <= rows; ri++) {
+        const t = -1 + 2 * ri / rows;
+        paths.push({ points: line(true, t) });
+        if (params.bothDirs !== false) paths.push({ points: line(false, t) });
+      }
+    }
+    return { widthMm: size, heightMm: size, paths, meta: { title: "Surface 3D" } };
+  }
+};
+register(surface3dModule);
+
+// src/lib/modules/isoForms.ts
+function cubeMesh(px, py, s) {
+  const h = s / 2;
+  const v = [
+    { x: px - h, y: py - h, z: 0 },
+    { x: px + h, y: py - h, z: 0 },
+    { x: px + h, y: py + h, z: 0 },
+    { x: px - h, y: py + h, z: 0 },
+    { x: px - h, y: py - h, z: s },
+    { x: px + h, y: py - h, z: s },
+    { x: px + h, y: py + h, z: s },
+    { x: px - h, y: py + h, z: s }
+  ];
+  const f = [
+    [0, 1, 5, 4],
+    // front  (−y)
+    [1, 2, 6, 5],
+    // right  (+x)
+    [2, 3, 7, 6],
+    // back   (+y)
+    [3, 0, 4, 7],
+    // left   (−x)
+    [4, 5, 6, 7],
+    // top    (+z)
+    [3, 2, 1, 0]
+    // bottom (−z)
+  ];
+  return { verts: v, faces: f };
+}
+function pyramidMesh(s) {
+  const h = s / 2;
+  const v = [
+    { x: -h, y: -h, z: 0 },
+    { x: h, y: -h, z: 0 },
+    { x: h, y: h, z: 0 },
+    { x: -h, y: h, z: 0 },
+    { x: 0, y: 0, z: s * 1.1 }
+  ];
+  return { verts: v, faces: [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4], [3, 2, 1, 0]] };
+}
+function icosaMesh(s) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const raw = [
+    [-1, t, 0],
+    [1, t, 0],
+    [-1, -t, 0],
+    [1, -t, 0],
+    [0, -1, t],
+    [0, 1, t],
+    [0, -1, -t],
+    [0, 1, -t],
+    [t, 0, -1],
+    [t, 0, 1],
+    [-t, 0, -1],
+    [-t, 0, 1]
+  ];
+  const k = s / (2 * Math.hypot(1, t));
+  const verts = raw.map(([x, y, z]) => ({ x: x * k, y: y * k, z: z * k + s * 0.55 }));
+  const faces = [
+    [0, 11, 5],
+    [0, 5, 1],
+    [0, 1, 7],
+    [0, 7, 10],
+    [0, 10, 11],
+    [1, 5, 9],
+    [5, 11, 4],
+    [11, 10, 2],
+    [10, 7, 6],
+    [7, 1, 8],
+    [3, 9, 4],
+    [3, 4, 2],
+    [3, 2, 6],
+    [3, 6, 8],
+    [3, 8, 9],
+    [4, 9, 5],
+    [2, 4, 11],
+    [6, 2, 10],
+    [8, 6, 7],
+    [9, 8, 1]
+  ];
+  return { verts, faces };
+}
+function handPoly(pts, jitter, rng) {
+  if (jitter <= 0) return pts;
+  const out = [];
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(1, Math.round(len / 8));
+    for (let k = 0; k < steps; k++) {
+      const t = k / steps;
+      const wob = k === 0 ? 0.4 : 1;
+      out.push({
+        x: a.x + (b.x - a.x) * t + (rng() - 0.5) * 2 * jitter * wob,
+        y: a.y + (b.y - a.y) * t + (rng() - 0.5) * 2 * jitter * wob
+      });
+    }
+  }
+  return out;
+}
+function drawMesh(mesh, view, cx, cy, o, out) {
+  if (o.xray) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const f of mesh.faces) {
+      for (let i = 0; i < f.length; i++) {
+        const a = f[i], b = f[(i + 1) % f.length];
+        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const pa = project(view, mesh.verts[a]), pb = project(view, mesh.verts[b]);
+        const seg = handPoly([{ x: cx + pa.x, y: cy + pa.y }, { x: cx + pb.x, y: cy + pb.y }], o.jitter, o.rng);
+        out.push({ points: seg.length > 2 ? seg : [{ x: cx + pa.x, y: cy + pa.y }, { x: cx + pb.x, y: cy + pb.y }], cycles: o.cycles });
+      }
+    }
+    return;
+  }
+  for (const f of mesh.faces) {
+    const a = mesh.verts[f[0]], b = mesh.verts[f[1]], c = mesh.verts[f[2]];
+    const n = norm(cross(sub(b, a), sub(c, a)));
+    if (facingDepth(view, n) >= 0) continue;
+    const poly = f.map((vi) => {
+      const p = project(view, mesh.verts[vi]);
+      return { x: cx + p.x, y: cy + p.y };
+    });
+    const drawn = handPoly(poly, o.jitter, o.rng);
+    out.push({ points: drawn, closed: true, cycles: o.cycles });
+    if (o.shade) {
+      const bright = Math.max(0, dot(n, o.light));
+      if (bright < 0.85) {
+        const spacing = o.shadeSpacing * (0.6 + 3 * bright);
+        for (const h of hatchPolygon(poly, spacing, 45)) {
+          out.push({ points: handPoly(h.points, o.jitter * 0.5, o.rng).length > 2 && o.jitter > 0 ? handPoly(h.points, o.jitter * 0.5, o.rng) : h.points });
+        }
+      }
+    }
+  }
+}
+var isoFormsModule = {
+  key: "isoForms",
+  label: "Iso Forms",
+  kind: "make",
+  group: "3D Wireframe",
+  description: "Isometric solids: cube / LeWitt cube stack / pyramid / icosahedron / lathe vase. Backface-culled with light-density face shading, or X-ray wireframe. Hand jitter optional.",
+  sections: [
+    { title: "Form", fields: [
+      { key: "form", label: "Form", type: "select", default: "stack", options: [
+        { value: "cube", label: "Cube" },
+        { value: "stack", label: "Cube stack (LeWitt #766)" },
+        { value: "pyramid", label: "Pyramid" },
+        { value: "icosa", label: "Icosahedron" },
+        { value: "lathe", label: "Lathe (vase of revolution)" }
+      ] },
+      { key: "size", label: "Size", type: "range", min: 10, max: 250, step: 1, unit: "mm", default: 90 },
+      { key: "count", label: "Stack: cubes", type: "range", min: 2, max: 24, step: 1, default: 7 },
+      { key: "spread", label: "Stack: spread", type: "range", min: 20, max: 300, step: 5, unit: "mm", default: 150 },
+      { key: "detail", label: "Lathe: detail", type: "range", min: 6, max: 32, step: 1, default: 14 },
+      { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 42 }
+    ] },
+    { title: "Render", fields: [
+      { key: "xray", label: "X-ray (all edges)", type: "toggle", default: false },
+      { key: "shade", label: "Shade faces by light", type: "toggle", default: true },
+      { key: "lightDeg", label: "Light direction", type: "range", min: -180, max: 180, step: 5, unit: "\xB0", default: -60 },
+      { key: "shadeSpacing", label: "Shade spacing", type: "range", min: 0.5, max: 12, step: 0.5, unit: "mm", default: 2.5 },
+      { key: "jitter", label: "Hand jitter", type: "range", min: 0, max: 3, step: 0.1, unit: "mm", default: 0.5 }
+    ] },
+    { title: "View", fields: [
+      { key: "yawDeg", label: "View yaw", type: "range", min: -180, max: 180, step: 5, unit: "\xB0", default: 45 },
+      { key: "pitchDeg", label: "View pitch", type: "range", min: 5, max: 90, step: 1, unit: "\xB0", default: 35 },
+      { key: "persp", label: "Perspective", type: "range", min: 0, max: 800, step: 10, default: 0 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 20 }
+    ] },
+    { title: "Ink", fields: [
+      { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
+    ] }
+  ],
+  generate(params) {
+    const form = String(params.form ?? "stack");
+    const size = num(params, "size", 90);
+    const seed = Math.round(num(params, "seed", 42));
+    const rng = seededRandom(seed);
+    const view = makeView(num(params, "yawDeg", 45), num(params, "pitchDeg", 35), num(params, "persp", 0));
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 20);
+    const az = num(params, "lightDeg", -60) * Math.PI / 180;
+    const alt = Math.PI / 4;
+    const o = {
+      xray: params.xray === true,
+      shade: params.shade !== false,
+      light: norm({ x: Math.cos(alt) * Math.cos(az), y: Math.cos(alt) * Math.sin(az), z: Math.sin(alt) }),
+      shadeSpacing: Math.max(0.5, num(params, "shadeSpacing", 2.5)),
+      jitter: Math.max(0, num(params, "jitter", 0.5)),
+      rng,
+      cycles: Math.max(1, Math.round(num(params, "cycles", 1)))
+    };
+    const paths = [];
+    if (form === "lathe") {
+      const det = Math.max(6, Math.round(num(params, "detail", 14)));
+      const H = size * 1.6;
+      const ph1 = rng() * Math.PI * 2, ph2 = rng() * Math.PI * 2;
+      const prof = (t) => size / 2 * (0.55 + 0.3 * Math.sin(Math.PI * (0.15 + 0.7 * t)) + 0.18 * Math.sin(2 * Math.PI * t + ph1) + 0.08 * Math.sin(4 * Math.PI * t + ph2));
+      const meridians = det, parallels = Math.max(4, Math.round(det * 0.8)), tSteps = det * 3;
+      for (let m = 0; m < meridians; m++) {
+        const a = m / meridians * 2 * Math.PI;
+        const pts = [];
+        for (let i = 0; i <= tSteps; i++) {
+          const t = i / tSteps;
+          const r2 = Math.max(1, prof(t));
+          const p = project(view, { x: r2 * Math.cos(a), y: r2 * Math.sin(a), z: t * H });
+          pts.push({ x: cx + p.x, y: cy + p.y + H / 2 * view.cosP });
+        }
+        paths.push({ points: handPoly(pts, o.jitter * 0.4, rng).length > 2 && o.jitter > 0 ? handPoly(pts, o.jitter * 0.4, rng) : pts, cycles: o.cycles });
+      }
+      for (let k = 0; k <= parallels; k++) {
+        const t = k / parallels;
+        const r2 = Math.max(1, prof(t));
+        const n = Math.max(24, Math.round(r2));
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+          const a = i / n * 2 * Math.PI;
+          const p = project(view, { x: r2 * Math.cos(a), y: r2 * Math.sin(a), z: t * H });
+          pts.push({ x: cx + p.x, y: cy + p.y + H / 2 * view.cosP });
+        }
+        paths.push({ points: pts, cycles: o.cycles });
+      }
+    } else if (form === "stack") {
+      const count = Math.max(2, Math.round(num(params, "count", 7)));
+      const spread = num(params, "spread", 150);
+      const cubes = [];
+      for (let i = 0; i < count; i++) {
+        cubes.push({
+          px: (rng() * 2 - 1) * spread / 2,
+          py: (rng() * 2 - 1) * spread / 2,
+          s: size * (0.25 + rng() * 0.75)
+        });
+      }
+      cubes.sort((a, b) => project(view, { x: b.px, y: b.py, z: 0 }).depth - project(view, { x: a.px, y: a.py, z: 0 }).depth);
+      for (const c of cubes) drawMesh(cubeMesh(c.px, c.py, c.s), view, cx, cy, o, paths);
+    } else {
+      const mesh = form === "pyramid" ? pyramidMesh(size) : form === "icosa" ? icosaMesh(size) : cubeMesh(0, 0, size);
+      drawMesh(mesh, view, cx, cy, o, paths);
+    }
+    const ext = form === "stack" ? num(params, "spread", 150) + size * 2 : size * 2.2;
+    return { widthMm: ext, heightMm: ext, paths, meta: { title: "Iso Forms" } };
+  }
+};
+register(isoFormsModule);
+
+// src/lib/modules/wrap3d.ts
+var wrap3dModule = {
+  key: "wrap3d",
+  label: "Wrap 3D",
+  kind: "modify",
+  group: "3D Wireframe",
+  description: "Bend the layers below onto a cylinder / sphere / wave surface and project isometrically \u2014 any 2D pattern becomes a texture on a 3D body.",
+  sections: [
+    { title: "Surface", fields: [
+      { key: "surface", label: "Surface", type: "select", default: "cylinder", options: [
+        { value: "cylinder", label: "Cylinder (X wraps around)" },
+        { value: "sphere", label: "Sphere (equirectangular)" },
+        { value: "wave", label: "Wave drape (heightfield)" }
+      ] },
+      { key: "radius", label: "Body radius", type: "range", min: 10, max: 250, step: 1, unit: "mm", default: 70 },
+      { key: "waveAmp", label: "Wave height", type: "range", min: 1, max: 100, step: 1, unit: "mm", default: 28 },
+      { key: "waveLen", label: "Wavelength", type: "range", min: 10, max: 300, step: 5, unit: "mm", default: 90 },
+      { key: "hideBack", label: "Hide far side", type: "toggle", default: true }
+    ] },
+    { title: "View", fields: [
+      { key: "yawDeg", label: "View yaw", type: "range", min: -180, max: 180, step: 5, unit: "\xB0", default: 25 },
+      { key: "pitchDeg", label: "View pitch", type: "range", min: 0, max: 90, step: 1, unit: "\xB0", default: 20 },
+      { key: "persp", label: "Perspective", type: "range", min: 0, max: 800, step: 10, default: 250 },
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] }
+  ],
+  generate(params, ctx) {
+    const lower = ctx.lowerFrame ?? { widthMm: 0, heightMm: 0, paths: [] };
+    const surface = String(params.surface ?? "cylinder");
+    const R = Math.max(5, num(params, "radius", 70));
+    const wAmp = num(params, "waveAmp", 28);
+    const wLen = Math.max(5, num(params, "waveLen", 90));
+    const hideBack = params.hideBack !== false && surface !== "wave";
+    const view = makeView(num(params, "yawDeg", 25), num(params, "pitchDeg", 20), num(params, "persp", 250));
+    const cx = num(params, "cx", 0), cy = num(params, "cy", 0);
+    const map = (p) => {
+      if (surface === "sphere") {
+        const lon = p.x / R;
+        const lat = Math.max(-1.45, Math.min(1.45, -p.y / R));
+        const n2 = {
+          x: Math.cos(lat) * Math.sin(lon),
+          y: -Math.cos(lat) * Math.cos(lon),
+          z: Math.sin(lat)
+        };
+        return { w: { x: n2.x * R, y: n2.y * R, z: n2.z * R }, n: n2 };
+      }
+      if (surface === "wave") {
+        const k = 2 * Math.PI / wLen;
+        const z = wAmp * Math.sin(p.x * k) * Math.cos(p.y * k * 0.8);
+        return { w: { x: p.x, y: p.y * 0.9, z }, n: { x: 0, y: 0, z: 1 } };
+      }
+      const a = p.x / R;
+      const n = { x: Math.sin(a), y: -Math.cos(a), z: 0 };
+      return { w: { x: n.x * R, y: n.y * R, z: -p.y }, n };
+    };
+    const paths = [];
+    for (const path of lower.paths) {
+      const src = path.closed && path.points.length > 2 ? [...path.points, path.points[0]] : path.points;
+      const fine = [];
+      for (let i = 0; i < src.length; i++) {
+        const a = src[i];
+        if (i === 0) {
+          fine.push(a);
+          continue;
+        }
+        const b = src[i - 1];
+        const len = Math.hypot(a.x - b.x, a.y - b.y);
+        const steps = Math.max(1, Math.ceil(len / 2));
+        for (let k = 1; k <= steps; k++)
+          fine.push({ x: b.x + (a.x - b.x) * (k / steps), y: b.y + (a.y - b.y) * (k / steps) });
+      }
+      let run = [];
+      for (const p of fine) {
+        const { w, n } = map(p);
+        const visible = !hideBack || facingDepth(view, n) < 0.05;
+        if (visible) {
+          const s = project(view, w);
+          run.push({ x: cx + s.x, y: cy + s.y });
+        } else if (run.length > 1) {
+          paths.push({ points: run, cycles: path.cycles });
+          run = [];
+        } else run = [];
+      }
+      if (run.length > 1) paths.push({ points: run, cycles: path.cycles });
+    }
+    return { widthMm: lower.widthMm, heightMm: lower.heightMm, paths, meta: { title: "Wrap 3D" } };
+  }
+};
+register(wrap3dModule);
+
 // src/lib/modules/spirograph.ts
 function gcd(a, b) {
   a = Math.abs(Math.round(a));
@@ -3120,7 +3788,7 @@ function circleFrom3(a, b, c) {
   const cy = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
   return { cx, cy, r: Math.hypot(a.x - cx, a.y - cy) };
 }
-var cross = (ox, oy, p, q) => (p.x - ox) * (q.y - oy) - (p.y - oy) * (q.x - ox);
+var cross2 = (ox, oy, p, q) => (p.x - ox) * (q.y - oy) - (p.y - oy) * (q.x - ox);
 function fitArcs(points, tol) {
   const n = points.length;
   if (n < MIN_ARC_PTS || tol <= 0) return [{ kind: "line", points: points.slice() }];
@@ -3144,7 +3812,7 @@ function fitArcs(points, tol) {
       if (ok) {
         let sign = 0;
         for (let k = i + 1; k <= j && ok; k++) {
-          const s = Math.sign(cross(c.cx, c.cy, points[k - 1], points[k]));
+          const s = Math.sign(cross2(c.cx, c.cy, points[k - 1], points[k]));
           if (s !== 0) {
             if (sign === 0) sign = s;
             else if (s !== sign) ok = false;
@@ -3158,7 +3826,7 @@ function fitArcs(points, tol) {
     if (best >= 0 && bestC && best - i >= MIN_ARC_PTS - 1) {
       flushLine(i);
       let turn = 0;
-      for (let k = i + 1; k <= best; k++) turn += cross(bestC.cx, bestC.cy, points[k - 1], points[k]);
+      for (let k = i + 1; k <= best; k++) turn += cross2(bestC.cx, bestC.cy, points[k - 1], points[k]);
       prims.push({
         kind: "arc",
         cx: bestC.cx,
@@ -3194,8 +3862,8 @@ function vertexFlow(pts, maxTurnRad) {
       f[i] = true;
       continue;
     }
-    const dot = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
-    f[i] = Math.acos(dot) <= maxTurnRad;
+    const dot2 = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+    f[i] = Math.acos(dot2) <= maxTurnRad;
   }
   return f;
 }
