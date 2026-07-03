@@ -75,51 +75,6 @@ var boxModule = {
 };
 register(boxModule);
 
-// src/lib/modules/circle.ts
-var CHORD_ERR_MM = 0.2;
-function arcSegments(radiusMm, maxErrMm) {
-  if (radiusMm <= 0 || maxErrMm <= 0) return 32;
-  let ratio = 1 - maxErrMm / radiusMm;
-  ratio = Math.max(-1, Math.min(1, ratio));
-  const a = 2 * Math.acos(ratio);
-  const n = a > 1e-6 ? Math.ceil(2 * Math.PI / a) : 720;
-  return Math.max(32, Math.min(720, n));
-}
-var circleModule = {
-  key: "circle",
-  label: "Circle",
-  kind: "make",
-  group: "Shapes",
-  description: "A circle approximated by an adaptive polygon.",
-  sections: [
-    { title: "Size", fields: [
-      { key: "r", label: "Radius", type: "range", min: 1, max: 300, step: 1, unit: "mm", default: 50 }
-    ] },
-    { title: "Position", fields: [
-      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
-      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
-    ] },
-    { title: "Ink", fields: [
-      { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
-    ] }
-  ],
-  generate(params) {
-    const r2 = num(params, "r", 50);
-    const cx = num(params, "cx", 0);
-    const cy = num(params, "cy", 0);
-    const cycles = Math.max(1, Math.round(num(params, "cycles", 1)));
-    const n = arcSegments(r2, CHORD_ERR_MM);
-    const points = [];
-    for (let i = 0; i < n; i++) {
-      const a = 2 * Math.PI * i / n;
-      points.push({ x: cx + r2 * Math.cos(a), y: cy + r2 * Math.sin(a) });
-    }
-    const path = { points, closed: true, cycles };
-    return { widthMm: 2 * r2, heightMm: 2 * r2, paths: [path], meta: { title: "Circle", noSimplify: true } };
-  }
-};
-register(circleModule);
-
 // src/lib/geom.ts
 var dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 function bounds(points) {
@@ -235,6 +190,200 @@ function seededRandom(seed) {
   };
 }
 
+// src/lib/clip.ts
+function pointInPolygon(p, poly) {
+  let inside2 = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if (a.y > p.y !== b.y > p.y && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) {
+      inside2 = !inside2;
+    }
+  }
+  return inside2;
+}
+function segCrossT(p, q, a, b) {
+  const rx = q.x - p.x, ry = q.y - p.y;
+  const sx = b.x - a.x, sy = b.y - a.y;
+  const denom = rx * sy - ry * sx;
+  if (Math.abs(denom) < 1e-12) return null;
+  const t = ((a.x - p.x) * sy - (a.y - p.y) * sx) / denom;
+  const u = ((a.x - p.x) * ry - (a.y - p.y) * rx) / denom;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null;
+}
+function clipPolylineToPolygon(points, poly, keepInside) {
+  if (points.length < 2 || poly.length < 3) return [];
+  const out = [];
+  let cur = [];
+  const at = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    const ts = [];
+    for (let j = 0, k = poly.length - 1; j < poly.length; k = j++) {
+      const t = segCrossT(a, b, poly[k], poly[j]);
+      if (t !== null && t > 1e-9 && t < 1 - 1e-9) ts.push(t);
+    }
+    ts.sort((x, y) => x - y);
+    const cuts = [0, ...ts, 1];
+    for (let c = 0; c < cuts.length - 1; c++) {
+      const t0 = cuts[c], t1 = cuts[c + 1];
+      const keep = pointInPolygon(at(a, b, (t0 + t1) / 2), poly) === keepInside;
+      if (keep) {
+        if (cur.length === 0) cur.push(at(a, b, t0));
+        cur.push(at(a, b, t1));
+      } else if (cur.length >= 2) {
+        out.push(cur);
+        cur = [];
+      } else {
+        cur = [];
+      }
+    }
+  }
+  if (cur.length >= 2) out.push(cur);
+  return out;
+}
+
+// src/lib/modules/fill.ts
+function hatchPolygon(poly, spacing, angleDeg) {
+  const b = bounds(poly);
+  if (!b) return [];
+  const th = angleDeg * Math.PI / 180;
+  const dir = { x: Math.cos(th), y: Math.sin(th) };
+  const nrm = { x: -Math.sin(th), y: Math.cos(th) };
+  const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+  const diag = Math.hypot(b.x1 - b.x0, b.y1 - b.y0);
+  const K = Math.ceil(diag / 2 / spacing) + 1;
+  const out = [];
+  for (let k = -K; k <= K; k++) {
+    const o = k * spacing;
+    const px = cx + nrm.x * o, py = cy + nrm.y * o;
+    const a = { x: px - dir.x * diag, y: py - dir.y * diag };
+    const c = { x: px + dir.x * diag, y: py + dir.y * diag };
+    for (const piece of clipPolylineToPolygon([a, c], poly, true)) out.push({ points: piece });
+  }
+  return out;
+}
+function concentricRings(poly, spacing) {
+  const b = bounds(poly);
+  if (!b) return [];
+  const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+  const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+  const radius = Math.hypot(b.x1 - b.x0, b.y1 - b.y0) / 2;
+  const step = Math.min(0.5, Math.max(0.02, spacing / Math.max(1, radius)));
+  const out = [];
+  for (let s = 1 - step; s > 0.02; s -= step) {
+    out.push({ points: poly.map((p) => ({ x: cx + (p.x - cx) * s, y: cy + (p.y - cy) * s })), closed: true });
+  }
+  return out;
+}
+function shapeFillSection() {
+  return { title: "Fill", fields: [
+    { key: "fill", label: "Fill", type: "select", default: "none", options: [
+      { value: "none", label: "None (outline only)" },
+      { value: "hatch", label: "Hatch" },
+      { value: "concentric", label: "Concentric" }
+    ] },
+    { key: "hatchAngle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 45 },
+    { key: "hatchSpacing", label: "Fill spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
+    { key: "outline", label: "Outline", type: "toggle", default: true }
+  ] };
+}
+function applyShapeFill(poly, params, cycles) {
+  const mode = String(params.fill ?? "none");
+  const outline = params.outline !== false;
+  const spacing = Math.max(0.5, num(params, "hatchSpacing", 3));
+  const angle = num(params, "hatchAngle", 45);
+  const paths = [];
+  if (outline || mode === "none") paths.push({ points: poly, closed: true, cycles });
+  if (mode === "hatch") paths.push(...hatchPolygon(poly, spacing, angle));
+  else if (mode === "concentric") paths.push(...concentricRings(poly, spacing));
+  return paths;
+}
+var fillModule = {
+  key: "fill",
+  label: "Fill",
+  kind: "modify",
+  group: "Modifiers",
+  description: "Hatches or concentrically fills every closed shape in the layers below.",
+  sections: [
+    { title: "Fill", fields: [
+      {
+        key: "mode",
+        label: "Mode",
+        type: "select",
+        default: "hatch",
+        options: [{ value: "hatch", label: "Hatch" }, { value: "concentric", label: "Concentric" }]
+      },
+      { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
+      { key: "angle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 45 },
+      { key: "keepOutline", label: "Keep outlines", type: "toggle", default: true }
+    ] }
+  ],
+  generate(params, ctx) {
+    const lower = ctx.lowerFrame ?? { widthMm: 0, heightMm: 0, paths: [] };
+    const mode = String(params.mode ?? "hatch");
+    const spacing = Math.max(0.5, num(params, "spacing", 3));
+    const angle = num(params, "angle", 45);
+    const keepOutline = params.keepOutline !== false;
+    const out = keepOutline ? [...lower.paths] : lower.paths.filter((p) => !p.closed);
+    for (const path of lower.paths) {
+      if (!path.closed || path.points.length < 3) continue;
+      out.push(...mode === "concentric" ? concentricRings(path.points, spacing) : hatchPolygon(path.points, spacing, angle));
+    }
+    return { ...lower, paths: out, meta: { title: "Fill" } };
+  }
+};
+register(fillModule);
+
+// src/lib/modules/circle.ts
+var CHORD_ERR_MM = 0.2;
+function arcSegments(radiusMm, maxErrMm) {
+  if (radiusMm <= 0 || maxErrMm <= 0) return 32;
+  let ratio = 1 - maxErrMm / radiusMm;
+  ratio = Math.max(-1, Math.min(1, ratio));
+  const a = 2 * Math.acos(ratio);
+  const n = a > 1e-6 ? Math.ceil(2 * Math.PI / a) : 720;
+  return Math.max(32, Math.min(720, n));
+}
+var circleModule = {
+  key: "circle",
+  label: "Circle",
+  kind: "make",
+  group: "Shapes",
+  description: "A circle approximated by an adaptive polygon.",
+  sections: [
+    { title: "Size", fields: [
+      { key: "r", label: "Radius", type: "range", min: 1, max: 300, step: 1, unit: "mm", default: 50 }
+    ] },
+    { title: "Position", fields: [
+      { key: "cx", label: "Center X", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "cy", label: "Center Y", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 }
+    ] },
+    { title: "Ink", fields: [
+      { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
+    ] },
+    shapeFillSection()
+  ],
+  generate(params) {
+    const r2 = num(params, "r", 50);
+    const cx = num(params, "cx", 0);
+    const cy = num(params, "cy", 0);
+    const cycles = Math.max(1, Math.round(num(params, "cycles", 1)));
+    const n = arcSegments(r2, CHORD_ERR_MM);
+    const points = [];
+    for (let i = 0; i < n; i++) {
+      const a = 2 * Math.PI * i / n;
+      points.push({ x: cx + r2 * Math.cos(a), y: cy + r2 * Math.sin(a) });
+    }
+    return {
+      widthMm: 2 * r2,
+      heightMm: 2 * r2,
+      paths: applyShapeFill(points, params, cycles),
+      meta: { title: "Circle", noSimplify: true }
+    };
+  }
+};
+register(circleModule);
+
 // src/lib/modules/square.ts
 var squareModule = {
   key: "square",
@@ -253,7 +402,8 @@ var squareModule = {
     ] },
     { title: "Ink", fields: [
       { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
-    ] }
+    ] },
+    shapeFillSection()
   ],
   generate(params) {
     const s = num(params, "size", 100);
@@ -269,8 +419,12 @@ var squareModule = {
       { x: cx - h, y: cy + h }
     ];
     if (rot) pts = rotate(pts, rot, cx, cy);
-    const path = { points: pts, closed: true, cycles };
-    return { widthMm: s, heightMm: s, paths: [path], meta: { title: "Square" } };
+    return {
+      widthMm: s,
+      heightMm: s,
+      paths: applyShapeFill(pts, params, cycles),
+      meta: { title: "Square" }
+    };
   }
 };
 register(squareModule);
@@ -286,6 +440,7 @@ var wobblyModule = {
     { title: "Shape", fields: [
       { key: "r", label: "Radius", type: "range", min: 5, max: 300, step: 1, unit: "mm", default: 60 },
       { key: "wobble", label: "Wobble", type: "range", min: 0, max: 1, step: 0.01, default: 0.4 },
+      { key: "boundR", label: "Bound radius", type: "range", min: 0, max: 300, step: 1, unit: "mm", default: 0 },
       { key: "harmonics", label: "Harmonics", type: "range", min: 1, max: 8, step: 1, default: 3 },
       { key: "seed", label: "Seed", type: "range", min: 0, max: 9999, step: 1, default: 42 }
     ] },
@@ -295,7 +450,8 @@ var wobblyModule = {
     ] },
     { title: "Ink", fields: [
       { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "\xD7", default: 1 }
-    ] }
+    ] },
+    shapeFillSection()
   ],
   generate(params) {
     const r2 = num(params, "r", 60);
@@ -305,6 +461,7 @@ var wobblyModule = {
     const cx = num(params, "cx", 0);
     const cy = num(params, "cy", 0);
     const cycles = Math.max(1, Math.round(num(params, "cycles", 1)));
+    const boundR = num(params, "boundR", 0);
     const rng = seededRandom(seed);
     const amp = [];
     const phase = [];
@@ -320,10 +477,15 @@ var wobblyModule = {
       let rr = r2;
       for (let h = 0; h < harmonics; h++) rr += amp[h] * Math.sin((h + 1) * theta + phase[h]);
       if (rr < minR) rr = minR;
+      if (boundR > 0 && rr > boundR) rr = boundR;
       points.push({ x: cx + rr * Math.cos(theta), y: cy + rr * Math.sin(theta) });
     }
-    const path = { points, closed: true, cycles };
-    return { widthMm: 2 * r2, heightMm: 2 * r2, paths: [path], meta: { title: "Wobbly" } };
+    return {
+      widthMm: 2 * r2,
+      heightMm: 2 * r2,
+      paths: applyShapeFill(points, params, cycles),
+      meta: { title: "Wobbly" }
+    };
   }
 };
 register(wobblyModule);
@@ -2185,58 +2347,6 @@ var patternMakerModule = {
 };
 register(patternMakerModule);
 
-// src/lib/clip.ts
-function pointInPolygon(p, poly) {
-  let inside2 = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i], b = poly[j];
-    if (a.y > p.y !== b.y > p.y && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) {
-      inside2 = !inside2;
-    }
-  }
-  return inside2;
-}
-function segCrossT(p, q, a, b) {
-  const rx = q.x - p.x, ry = q.y - p.y;
-  const sx = b.x - a.x, sy = b.y - a.y;
-  const denom = rx * sy - ry * sx;
-  if (Math.abs(denom) < 1e-12) return null;
-  const t = ((a.x - p.x) * sy - (a.y - p.y) * sx) / denom;
-  const u = ((a.x - p.x) * ry - (a.y - p.y) * rx) / denom;
-  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null;
-}
-function clipPolylineToPolygon(points, poly, keepInside) {
-  if (points.length < 2 || poly.length < 3) return [];
-  const out = [];
-  let cur = [];
-  const at = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i], b = points[i + 1];
-    const ts = [];
-    for (let j = 0, k = poly.length - 1; j < poly.length; k = j++) {
-      const t = segCrossT(a, b, poly[k], poly[j]);
-      if (t !== null && t > 1e-9 && t < 1 - 1e-9) ts.push(t);
-    }
-    ts.sort((x, y) => x - y);
-    const cuts = [0, ...ts, 1];
-    for (let c = 0; c < cuts.length - 1; c++) {
-      const t0 = cuts[c], t1 = cuts[c + 1];
-      const keep = pointInPolygon(at(a, b, (t0 + t1) / 2), poly) === keepInside;
-      if (keep) {
-        if (cur.length === 0) cur.push(at(a, b, t0));
-        cur.push(at(a, b, t1));
-      } else if (cur.length >= 2) {
-        out.push(cur);
-        cur = [];
-      } else {
-        cur = [];
-      }
-    }
-  }
-  if (cur.length >= 2) out.push(cur);
-  return out;
-}
-
 // src/lib/modules/mask.ts
 function maskPolygon(shape, size, sides, rotDeg, cx, cy) {
   let pts;
@@ -2309,75 +2419,6 @@ var maskModule = {
   }
 };
 register(maskModule);
-
-// src/lib/modules/fill.ts
-function hatchPolygon(poly, spacing, angleDeg) {
-  const b = bounds(poly);
-  if (!b) return [];
-  const th = angleDeg * Math.PI / 180;
-  const dir = { x: Math.cos(th), y: Math.sin(th) };
-  const nrm = { x: -Math.sin(th), y: Math.cos(th) };
-  const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
-  const diag = Math.hypot(b.x1 - b.x0, b.y1 - b.y0);
-  const K = Math.ceil(diag / 2 / spacing) + 1;
-  const out = [];
-  for (let k = -K; k <= K; k++) {
-    const o = k * spacing;
-    const px = cx + nrm.x * o, py = cy + nrm.y * o;
-    const a = { x: px - dir.x * diag, y: py - dir.y * diag };
-    const c = { x: px + dir.x * diag, y: py + dir.y * diag };
-    for (const piece of clipPolylineToPolygon([a, c], poly, true)) out.push({ points: piece });
-  }
-  return out;
-}
-function concentricRings(poly, spacing) {
-  const b = bounds(poly);
-  if (!b) return [];
-  const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
-  const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
-  const radius = Math.hypot(b.x1 - b.x0, b.y1 - b.y0) / 2;
-  const step = Math.min(0.5, Math.max(0.02, spacing / Math.max(1, radius)));
-  const out = [];
-  for (let s = 1 - step; s > 0.02; s -= step) {
-    out.push({ points: poly.map((p) => ({ x: cx + (p.x - cx) * s, y: cy + (p.y - cy) * s })), closed: true });
-  }
-  return out;
-}
-var fillModule = {
-  key: "fill",
-  label: "Fill",
-  kind: "modify",
-  group: "Modifiers",
-  description: "Hatches or concentrically fills every closed shape in the layers below.",
-  sections: [
-    { title: "Fill", fields: [
-      {
-        key: "mode",
-        label: "Mode",
-        type: "select",
-        default: "hatch",
-        options: [{ value: "hatch", label: "Hatch" }, { value: "concentric", label: "Concentric" }]
-      },
-      { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
-      { key: "angle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 45 },
-      { key: "keepOutline", label: "Keep outlines", type: "toggle", default: true }
-    ] }
-  ],
-  generate(params, ctx) {
-    const lower = ctx.lowerFrame ?? { widthMm: 0, heightMm: 0, paths: [] };
-    const mode = String(params.mode ?? "hatch");
-    const spacing = Math.max(0.5, num(params, "spacing", 3));
-    const angle = num(params, "angle", 45);
-    const keepOutline = params.keepOutline !== false;
-    const out = keepOutline ? [...lower.paths] : lower.paths.filter((p) => !p.closed);
-    for (const path of lower.paths) {
-      if (!path.closed || path.points.length < 3) continue;
-      out.push(...mode === "concentric" ? concentricRings(path.points, spacing) : hatchPolygon(path.points, spacing, angle));
-    }
-    return { ...lower, paths: out, meta: { title: "Fill" } };
-  }
-};
-register(fillModule);
 
 // src/lib/modules/warp.ts
 var warpModule = {

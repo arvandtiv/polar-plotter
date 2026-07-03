@@ -9,15 +9,12 @@ import {
   type GeneratorSpec,
   type PlotterBounds,
   type MotionParams,
-  type FillMode,
   type PlotCmd,
   type PenState,
   type LogEntry,
   type PlotterStatus,
   type JobEntry,
   DEFAULTS,
-  TRUCHET_MOTIF_NAMES,
-  TRUCHET_DEFAULT_MASK,
   matrixToQuery,
   boundsToQuery,
   IDENTITY_PARAMS,
@@ -59,18 +56,6 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-// "Queue this drawing" — icon-only play button with a soft green tint.
-function DrawBtn({ onClick, title }: { onClick: () => void; title?: string }) {
-  return (
-    <button onClick={onClick} title={title ?? 'Queue this drawing'} aria-label="Draw"
-      className="inline-flex items-center justify-center rounded-lg border border-go/25 bg-go/10 px-2.5 py-1.5
-        text-go/90 transition-colors hover:bg-go/20 hover:text-go active:scale-[.97]">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M7 4.5v15l13-7.5z" />
-      </svg>
-    </button>
-  );
-}
 
 function Card({ title, icon, accent = '#0284c7', right, children, className = '',
   collapsible = true, defaultCollapsed = true, collapsed: collapsedProp, onToggle }: {
@@ -350,38 +335,6 @@ function FieldInline({ label, value, onChange, unit, step = 1, min = -100000, ma
   );
 }
 
-function FillPicker({ value, onChange }: { value: FillMode; onChange: (v: FillMode) => void }) {
-  const opts: [FillMode, string][] = [[0, 'None'], [1, 'Hatch'], [2, 'Concentric']];
-  return (
-    <div>
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 mb-1 block">Fill</span>
-      <div className="flex rounded-lg border border-ink-700 bg-ink-900 p-0.5 gap-0.5">
-        {opts.map(([v, lbl]) => (
-          <button key={v} onClick={() => onChange(v)}
-            className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${value === v ? 'bg-ink-700 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>
-            {lbl}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function OutlineToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div>
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 mb-1 block">Outline</span>
-      <div className="flex rounded-lg border border-ink-700 bg-ink-900 p-0.5 gap-0.5">
-        {([true, false] as const).map((v) => (
-          <button key={String(v)} onClick={() => onChange(v)}
-            className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${value === v ? 'bg-ink-700 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>
-            {v ? 'On' : 'Off'}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function Readout({ label, value, unit }: { label: string; value: string | number; unit: string }) {
   return (
@@ -792,27 +745,6 @@ function ErrorsPanel({ log }: { log: LogEntry[] }) {
   );
 }
 
-// Hover help for the Truchet motif chips, indexed like TRUCHET_MOTIF_NAMES.
-// Each motif is one tile design from Carlson's winged-tile family: a white
-// ribbon (strip of width cell/3) routed through the cell, ending exactly at
-// the 1/3 and 2/3 points of each edge so neighbouring cells join seamlessly.
-const TRUCHET_MOTIF_HELP = [
-  '\\  Diagonal ribbon: two arc strips hugging the top-right and bottom-left corners. The classic Truchet curve.',
-  '/  Diagonal ribbon, mirrored: arc strips on the top-left and bottom-right corners.',
-  '-  Horizontal ribbon straight across, plus a dot on the top and bottom edges.',
-  '|  Vertical ribbon straight down, plus a dot on the left and right edges.',
-  '+.  No ribbons — just a dot on all four edges. Calm filler tile.',
-  'x.  Centre blob: the square with all four corners bitten off, touching all four edges.',
-  '+  Two ribbons crossing in the middle: connects all four edges.',
-  'fne  "Frown north-east": one arc ribbon joining the top and right edges, dots on the other two.',
-  'fsw  "Frown south-west": arc ribbon joining the bottom and left edges, dots on the other two.',
-  'fnw  "Frown north-west": arc ribbon joining the top and left edges, dots on the other two.',
-  'fse  "Frown south-east": arc ribbon joining the bottom and right edges, dots on the other two.',
-  'tn  "T north": ribbon across left↔right with a stem up to the top edge; dot on the bottom.',
-  'ts  "T south": ribbon across left↔right with a stem down to the bottom edge; dot on the top.',
-  'te  "T east": ribbon down top↔bottom with a stem to the right edge; dot on the left.',
-  'tw  "T west": ribbon down top↔bottom with a stem to the left edge; dot on the right.',
-];
 
 // ================================================================
 //  Hardware / chip reference data
@@ -1960,7 +1892,7 @@ function GcodeTab({ sendRaw, sendBatch, getPending, getHealth, runCancelRef, pus
 
 // ================================================================
 
-type Tab = 'area' | 'draw' | 'ai';
+type Tab = 'area' | 'ai';
 const f = <T extends object>(obj: T, set: React.Dispatch<React.SetStateAction<T>>) =>
   (k: keyof T) => (v: T[keyof T]) => set({ ...obj, [k]: v });
 
@@ -2009,11 +1941,6 @@ export default function App() {
   const { pen, moving, connected, motion, bounds, log, status, jobs, papers, matrix, matrices } = P;
 
   const [gotoF, setGoto]   = useState({ x: 0, y: 0 });
-  const [circle, setCircle] = useState({ cx: 0, cy: 0, r: 50, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
-  const [square, setSquare] = useState({ cx: 0, cy: 0, size: 100, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
-  const [lineF, setLine]    = useState({ x0: 0, y0: 0, x1: 100, y1: 0, cycles: 1 });
-  const [wobbly, setWobbly]     = useState({ cx: 0, cy: 0, r: 60, boundR: 90, wobble: 0.4, harmonics: 3, seed: 42, cycles: 1, fillMode: 0 as FillMode, angle: 0, spacing: 3, outline: true });
-  const [truchet, setTruchet]   = useState({ n: 4, spacing: 3, angle: 45, seed: 42, motifs: TRUCHET_DEFAULT_MASK });
   const [calib, setCalib]       = useState({ cx: 0, cy: 0 });
   const [tab, setTab]       = useState<Tab>('area');
   const [view, setView]     = useState<'console' | 'studio'>('console');
@@ -2062,11 +1989,6 @@ export default function App() {
   }, [grid.fullBounds, bounds, P.ip, P.sendRaw, P.sendAndWait]);
 
   const fg = f(gotoF, setGoto);
-  const fc = f(circle, setCircle);
-  const fs = f(square, setSquare);
-  const fl = f(lineF, setLine);
-  const fw = f(wobbly, setWobbly);
-  const ft = f(truchet, setTruchet);
   const fca = f(calib, setCalib);
 
   return (
@@ -2379,7 +2301,7 @@ export default function App() {
           <div className="flex flex-col gap-4 lg:h-full lg:min-h-0">
             {/* Tab bar */}
             <div className="shrink-0 flex gap-1 rounded-xl border border-ink-750 bg-ink-900 shadow-card p-1">
-              {([['area','Calibration'],['draw','Draw'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
+              {([['area','Calibration'],['ai','Autonomous']] as [Tab,string][]).map(([id, lbl]) => (
                 <button key={id} onClick={() => setTab(id)}
                   className={`flex-1 rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors ${tab === id ? 'bg-ink-800 text-cyanx' : 'text-ink-500 hover:text-ink-300'}`}>{lbl}</button>
               ))}
@@ -2390,128 +2312,6 @@ export default function App() {
             {/* Tab panels */}
             <div className="space-y-4">
             {/* ---- Draw tab ---- */}
-            {tab === 'draw' && (
-              <>
-                <Card title="Circle" icon="○" accent="#0284c7" collapsible
-                  right={<DrawBtn onClick={() => P.enqueue({ type: 'circle', ...circle })} />}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <FieldInline label="Center X" unit="mm" value={circle.cx} onChange={fc('cx') as (v: number) => void} />
-                    <FieldInline label="Center Y" unit="mm" value={circle.cy} onChange={fc('cy') as (v: number) => void} />
-                    <FieldInline label="Radius" unit="mm" value={circle.r} min={1} onChange={fc('r') as (v: number) => void} />
-                    <FieldInline label="Cycles" value={circle.cycles} min={1} onChange={fc('cycles') as (v: number) => void} />
-                    <FieldInline label="Angle" unit="°" value={circle.angle} onChange={fc('angle') as (v: number) => void} />
-                    <FieldInline label="Spacing" unit="mm" value={circle.spacing} min={0.5} step={0.5} onChange={fc('spacing') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3 flex gap-3">
-                    <div className="flex-1"><FillPicker value={circle.fillMode} onChange={(v) => setCircle({ ...circle, fillMode: v })} /></div>
-                    <div className="w-28"><OutlineToggle value={circle.outline} onChange={(v) => setCircle({ ...circle, outline: v })} /></div>
-                  </div>
-                </Card>
-
-                <Card title="Square" icon="□" accent="#059669" collapsible
-                  right={<DrawBtn onClick={() => P.enqueue({ type: 'square', ...square })} />}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <FieldInline label="Center X" unit="mm" value={square.cx} onChange={fs('cx') as (v: number) => void} />
-                    <FieldInline label="Center Y" unit="mm" value={square.cy} onChange={fs('cy') as (v: number) => void} />
-                    <FieldInline label="Side length" unit="mm" value={square.size} min={1} onChange={fs('size') as (v: number) => void} />
-                    <FieldInline label="Cycles" value={square.cycles} min={1} onChange={fs('cycles') as (v: number) => void} />
-                    <FieldInline label="Angle" unit="°" value={square.angle} onChange={fs('angle') as (v: number) => void} />
-                    <FieldInline label="Spacing" unit="mm" value={square.spacing} min={0.5} step={0.5} onChange={fs('spacing') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3 flex gap-3">
-                    <div className="flex-1"><FillPicker value={square.fillMode} onChange={(v) => setSquare({ ...square, fillMode: v })} /></div>
-                    <div className="w-28"><OutlineToggle value={square.outline} onChange={(v) => setSquare({ ...square, outline: v })} /></div>
-                  </div>
-                </Card>
-
-                <Card title="Line" icon="／" accent="#d97706" collapsible
-                  right={<DrawBtn onClick={() => P.enqueue({ type: 'line', ...lineF })} />}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <FieldInline label="X0" unit="mm" value={lineF.x0} onChange={fl('x0') as (v: number) => void} />
-                    <FieldInline label="Y0" unit="mm" value={lineF.y0} onChange={fl('y0') as (v: number) => void} />
-                    <FieldInline label="X1" unit="mm" value={lineF.x1} onChange={fl('x1') as (v: number) => void} />
-                    <FieldInline label="Y1" unit="mm" value={lineF.y1} onChange={fl('y1') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3 w-28">
-                    <FieldInline label="Cycles" value={lineF.cycles} min={1} onChange={fl('cycles') as (v: number) => void} />
-                  </div>
-                </Card>
-
-                <Card title="Wobbly" icon="∿" accent="#7c3aed" collapsible
-                  right={<DrawBtn onClick={() => P.enqueue({ type: 'wobbly', ...wobbly })} />}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <FieldInline label="Center X" unit="mm" value={wobbly.cx} onChange={fw('cx') as (v: number) => void} />
-                    <FieldInline label="Center Y" unit="mm" value={wobbly.cy} onChange={fw('cy') as (v: number) => void} />
-                    <FieldInline label="Base radius" unit="mm" value={wobbly.r} min={1} onChange={fw('r') as (v: number) => void} />
-                    <FieldInline label="Bound radius" unit="mm" value={wobbly.boundR} min={1}
-                      onChange={fw('boundR') as (v: number) => void} />
-                    <FieldInline label="Wobble" value={wobbly.wobble} min={0} max={1} step={0.05}
-                      onChange={fw('wobble') as (v: number) => void} />
-                    <FieldInline label="Harmonics" value={wobbly.harmonics} min={1} max={8} step={1}
-                      onChange={fw('harmonics') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <FieldInline label="Seed" value={wobbly.seed} min={0} max={99999} step={1}
-                      onChange={fw('seed') as (v: number) => void} />
-                    <FieldInline label="Cycles" value={wobbly.cycles} min={1}
-                      onChange={fw('cycles') as (v: number) => void} />
-                    <FieldInline label="Angle" unit="°" value={wobbly.angle} onChange={fw('angle') as (v: number) => void} />
-                    <FieldInline label="Spacing" unit="mm" value={wobbly.spacing} min={0.5} step={0.5} onChange={fw('spacing') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3 flex gap-3">
-                    <div className="flex-1"><FillPicker value={wobbly.fillMode} onChange={(v) => setWobbly({ ...wobbly, fillMode: v })} /></div>
-                    <div className="w-28"><OutlineToggle value={wobbly.outline} onChange={(v) => setWobbly({ ...wobbly, outline: v })} /></div>
-                  </div>
-                </Card>
-
-                {/* Truchet */}
-                <Card title="Truchet" icon="◔" accent="#0891b2" collapsible
-                  right={<DrawBtn
-                    title={'Queue the full Truchet plot. The work area is split into a grid of square cells; each cell gets a random motif (from the enabled chips below). The white ribbons connect cell-to-cell because every motif meets the cell edges at the same 1/3 and 2/3 points; everything that is NOT ribbon gets hatched. Slow job — try Hatch spacing 0 first for a quick outlines-only proof on paper.'}
-                    onClick={() => P.enqueue({
-                      type: 'truchet', ...truchet,
-                      left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down, shape: bounds.shape,
-                    })} />}>
-                  <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
-                    Carlson winged-motif tiling over the whole work area: the motif ribbons stay
-                    white, the background is hatched. Hatching is slow — wider spacing plots faster;
-                    spacing 0 = outlines only. Hover any control for details.
-                  </p>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <FieldInline label="Columns" value={truchet.n} min={1} max={64} step={1}
-                      title={'How many cells across the work area. Cell size = work-area width ÷ columns, clamped to a 40 mm minimum (the pen can\'t draw the cell/3-wide ribbons cleanly below that). Rows are derived from the height, so the grid is always square cells, centred — a thin unhatched margin can remain top/bottom.'}
-                      onChange={ft('n') as (v: number) => void} />
-                    <FieldInline label="Hatch spacing" unit="mm" value={truchet.spacing} min={0} max={20} step={0.5}
-                      title={'Distance between hatch lines filling the background (negative space). Smaller = darker ground and much longer plot time; 3–4 mm is a good balance. 0 disables hatching entirely — only the ribbon outlines are drawn (fast, good for a positioning proof).'}
-                      onChange={ft('spacing') as (v: number) => void} />
-                    <FieldInline label="Hatch angle" unit="°" value={truchet.angle} min={0} max={180} step={5}
-                      title={'Direction of the hatch lines, in degrees (0 = horizontal, 45 = diagonal). All cells share one global line lattice, so the texture runs continuously across cell boundaries instead of restarting in every cell.'}
-                      onChange={ft('angle') as (v: number) => void} />
-                    <FieldInline label="Seed" value={truchet.seed} min={0} max={99999} step={1}
-                      title={'Random seed for the motif placed in each cell. The same seed + same settings always reproduces the identical pattern (the preview and the plotter use the same generator). Change it to reshuffle the design without changing its character.'}
-                      onChange={ft('seed') as (v: number) => void} />
-                  </div>
-                  <div className="mt-3">
-                    <p className="mb-1 text-[11px] text-ink-500"
-                      title={'Each chip is one tile design from Carlson\'s set (Bridges 2018). Enabled chips form the pool the random picker draws from — mixing 2–3 different shapes gives the richest patterns. All motifs share the same edge connection points, so any mix still joins seamlessly.'}>
-                      Motifs (cell size = width / columns, min 40 mm)</p>
-                    <div className="flex flex-wrap gap-1">
-                      {TRUCHET_MOTIF_NAMES.map((name, i) => (
-                        <button key={name} title={TRUCHET_MOTIF_HELP[i]}
-                          onClick={() => setTruchet(t => ({ ...t, motifs: t.motifs ^ (1 << i) }))}
-                          className={`rounded px-2 py-1 text-xs font-mono transition-colors ${
-                            truchet.motifs & (1 << i)
-                              ? 'bg-cyan-600 text-white'
-                              : 'bg-ink-800 text-ink-400 hover:bg-ink-700'}`}>
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              </>
-            )}
-
             {/* ---- Work area tab (work area + calibration) ---- */}
             {tab === 'area' && (
               <>

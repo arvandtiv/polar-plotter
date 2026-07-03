@@ -123,38 +123,6 @@ cycles       1–20 (default 1)
 fill_mode, hatch_angle, spacing, outline  — same fill options as circle
 ```
 
-#### `plot_truchet`
-Full-canvas Carlson Truchet tiling — white ribbon motifs through a hatched field.
-```
-n            2–13 cells per axis (firmware auto-clamps: minimum cell size = 40 mm;
-             for a ~520 mm canvas the hard max is ~13)
-spacing      0.5–10 mm — hatch line spacing within ribbons (default 3)
-angle        0–360° — hatch field angle (default 45)
-seed         any int — random layout seed (default 42)
-motifs       15-bit bitmask of enabled motif types (default 1955 = 0x7A3)
-```
-
-**Truchet motif bitmask** — OR the bit values you want:
-```
-Bit  Value  Symbol  Description
- 0      1    \      Diagonal slash (↘)
- 1      2    /      Diagonal backslash (↗)
- 2      4    -      Horizontal bar
- 3      8    |      Vertical bar
- 4     16    +.     Plus with rounded dots
- 5     32    x.     X-cross with rounded dots
- 6     64    +      Plain plus cross
- 7    128    fne    Fan arc — NE quadrant
- 8    256    fsw    Fan arc — SW quadrant
- 9    512    fnw    Fan arc — NW quadrant
-10   1024    fse    Fan arc — SE quadrant
-11   2048    tn     Diagonal tile, north bias
-12   4096    ts     Diagonal tile, south bias
-13   8192    te     Diagonal tile, east bias
-14  16384    tw     Diagonal tile, west bias
-```
-Default 0x7A3 = 1955 = `\`, `/`, `x.`, `fne`, `fsw`, `fnw`, `fse`.
-Presets: diagonals only = 3; fans only = 1920; all straights = 92; all motifs = 32767.
 
 #### `plot_bullseye`
 Calibration crosshair + concentric rings centred at `(cx, cy)`.
@@ -403,7 +371,7 @@ Restores full work area. Pass the same `full_xn/xp/yn/yp` you used for `plot_gri
 #### `plot_script`
 Runs an ordered list of commands. Draw commands wait until physically complete before the next begins. Config commands (bounds, speed, matrix, grid_select) execute immediately.
 
-Supported types in `plot_script`: `goto, pen, home, sethome, stop, line, arc, circle, square, wobbly, truchet, bullseye, grid, border, bounds, matrix, speed, accel, current, grid_select, grid_clear`.
+Supported types in `plot_script`: `goto, pen, home, sethome, stop, line, arc, circle, square, wobbly, bullseye, grid, border, bounds, matrix, speed, accel, current, grid_select, grid_clear`.
 
 Note: `"type": "generate"` is **not** supported in `plot_script` — use `plot_generate` as a separate tool call.
 
@@ -455,7 +423,6 @@ plot_grid_select(..., col=1, row=0, ...)
 plot_circle(cx=0, cy=0, r=<cellW/2 - 10>)
 
 plot_grid_select(..., col=0, row=1, ...)
-plot_truchet(n=3, seed=7)
 
 plot_grid_select(..., col=1, row=1, ...)
 plot_wobbly(cx=0, cy=0, r=50, wobble=0.5, harmonics=4, seed=13)
@@ -511,6 +478,5 @@ cw=true means clockwise on the wall (natural direction since Y+↓)
 - Drawing tools handle pen-up/down internally. Don't sandwich them in extra `plot_pen` calls.
 - `plot_home` returns to the physical zero set by the last `sethome`. If origin was never set, home is wherever the gondola was at boot.
 - Firmware resets all settings (bounds, matrix, speed) on reboot. The console re-pushes bounds on connect; you must re-apply matrix/speed each session.
-- A `truchet` with `n=8` on a 520 mm canvas gives 520/8 = 65 mm cells — well above the 40 mm minimum. `n=13` gives 40 mm cells (the limit). Asking for `n=20` will be silently reduced to `n=13`.
 - `plot_pause` preserves the pending queue; `plot_stop` destroys it. Use `pause` when you might want to resume; use `stop` when something is wrong.
 - `plot_generate` and the console's `"type":"generate"` both clip paths to bounds automatically — no need to pre-filter coordinates in your math.

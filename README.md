@@ -23,7 +23,7 @@ Drive it three ways, all feeding the same draw queue:
 
 **Drawing**
 - Primitives: `goto`, `line`, `circle`, `square`, `wobbly` (random closed curve),
-  `truchet` (Carlson winged‑tile tiling), plus `bullseye`/`grid`/`border` calibration aids.
+  plus `bullseye`/`grid`/`border` calibration aids.
 - **Fills:** none · hatch (angled lines) · concentric — with optional outline and multi‑pass darkening (`cycles`).
 - **Coordinated moves:** both motors reach target at the same instant (geometrically‑similar ramps), so belts never desync.
 - **Streaming interpolation:** straight edges are sub‑segmented and issued with look‑ahead, so the gondola flows through a path and only truly stops at corners.
@@ -46,7 +46,7 @@ Drive it three ways, all feeding the same draw queue:
   - **G20/G21** (inch/mm) units are honoured; coordinates converted to mm before fitting.
   - **Binary `.bgcode`** is decoded in‑browser — Prusa container + deflate, heatshrink (11/4 & 12/4), and MeatPack (a faithful port of libbgcode `unbinarize`).
 - 📋 **JSON Script** — paste or upload a JSON command list (`[…]`, `{"commands":[…]}`, or `{"script":[…]}`). Supports:
-  - All firmware primitives: `goto`, `pen`, `home`, `sethome`, `stop`, `line`, `arc` (chainable with `lift=0`), `circle`, `square`, `wobbly`, `truchet`, `bullseye`, `grid`, `border`
+  - All firmware primitives: `goto`, `pen`, `home`, `sethome`, `stop`, `line`, `arc` (chainable with `lift=0`), `circle`, `square`, `wobbly`, `bullseye`, `grid`, `border`
   - Mid‑script config: `bounds` (work area), `matrix` (affine warp), `speed`/`set_speed`, `accel`, `current`/`set_current`
   - `generate` — run any Studio generator with an optional `warp` modifier (`{"type":"generate","generator":"noiseOrbit","params":{…},"warp":{"mode":"water","params":{…}}}`)
   - `grid_select`/`grid_clear` — tiled grid compositions; inline `full_xn/xp/yn/yp` or a `{"metadata":{"work_area":{…},"grid":{…}},"commands":[…]}` wrapper (generate indices cell bounds automatically)
@@ -181,7 +181,7 @@ Paper presets (work‑area sizes) and affine‑matrix presets are saved in the b
 `plotter-mcp/` exposes the HTTP API as MCP tools so Claude can paint on its own.
 Set `PLOTTER_IP` / `PLOTTER_PORT` and register it in `.mcp.json`.
 
-- **Drawing:** `plot_goto/line/circle/square/wobbly/truchet/bullseye/grid/border/arc`
+- **Drawing:** `plot_goto/line/circle/square/wobbly/bullseye/grid/border/arc`
 - **Control:** `plot_pen/home/sethome/stop/abort`, `plot_pause/plot_resume`, `plot_set_speed/accel/current`, `plot_set_matrix` (affine warp), `plot_set_bounds`, `plot_clear_fault`
 - **Orchestration:** `plot_script` runs an ordered list, waiting for each job to *physically* finish (and pausing on a driver fault) before the next
 - **Studio pipeline (v1.2):** `plot_generate` runs any built‑in generator; `plot_list_generators` lists them with descriptions; `plot_polylines` sends raw polyline geometry (with optional `clip_to_bounds`)
@@ -202,7 +202,7 @@ stay inside them. Agent playbook → [`plotter-mcp/AGENT_GUIDE.md`](plotter-mcp/
 | `reinit` | Re‑apply TMC config after a driver power‑cycle |
 | `belt <x> <y>` | **Dry run** — print belt lengths + motor targets, no motion |
 | `goto <x> <y>` | Move gondola to (x, y) mm |
-| `line` / `circle` / `square` / `wobbly` / `truchet` | Draw primitives (see web/MCP for full params) |
+| `line` / `circle` / `square` / `wobbly` | Draw primitives (see web/MCP for full params) |
 | `bullseye` / `grid` / `border` | Calibration aids |
 | `where` | Read XACTUAL back as (x, y) mm |
 | `jog <1\|2> <vel>` / `stop [1\|2]` | Velocity jog for sign‑checking / decelerate |

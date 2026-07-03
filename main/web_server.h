@@ -25,7 +25,6 @@ typedef enum {
     WCMD_ACCEL,
     WCMD_CURRENT,
     WCMD_WOBBLY,
-    WCMD_TRUCHET,
     WCMD_ARC,
     WCMD_RAMP,
 } wcmd_type_t;

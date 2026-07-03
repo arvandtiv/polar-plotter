@@ -2,7 +2,8 @@
 // plt_arc_segments so console and on-device output match. Registers on import.
 
 import { register, num, type Module } from "../registry";
-import type { Frame, Path, Pt } from "../frame";
+import { shapeFillSection, applyShapeFill } from "./fill";
+import type { Frame, Pt } from "../frame";
 
 const CHORD_ERR_MM = 0.2;
 
@@ -34,6 +35,7 @@ export const circleModule: Module = {
     { title: "Ink", fields: [
       { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "×", default: 1 },
     ]},
+    shapeFillSection(),
   ],
   generate(params): Frame {
     const r = num(params, "r", 50);
@@ -46,8 +48,9 @@ export const circleModule: Module = {
       const a = (2 * Math.PI * i) / n;
       points.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
     }
-    const path: Path = { points, closed: true, cycles };
-    return { widthMm: 2 * r, heightMm: 2 * r, paths: [path], meta: { title: "Circle", noSimplify: true } };
+    return { widthMm: 2 * r, heightMm: 2 * r,
+             paths: applyShapeFill(points, params, cycles),
+             meta: { title: "Circle", noSimplify: true } };
   },
 };
 

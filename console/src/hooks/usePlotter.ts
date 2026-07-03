@@ -30,12 +30,7 @@ export interface BorderCmd   { type: 'border';   left: number; right: number; up
 export interface WobblyCmd   { type: 'wobbly';   cx: number; cy: number; r: number; boundR: number;
                                wobble: number; harmonics: number; seed: number; cycles: number;
                                fillMode: FillMode; angle: number; spacing: number; outline: boolean; }
-// Truchet (Carlson 2018 winged motifs, single scale): white ribbons + hatched ground.
-// Carries the current bounds (like BorderCmd) so the preview can mirror the firmware's
-// work-area grid + clipping; the firmware itself uses its own stored bounds.
-export interface TruchetCmd  { type: 'truchet';  n: number; spacing: number; angle: number; seed: number; motifs: number;
-                               left: number; right: number; up: number; down: number; shape: BoundsShape; }
-export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | BorderCmd | WobblyCmd | TruchetCmd;
+export type PlotCmd = CircleCmd | SquareCmd | LineCmd | GotoCmd | HomeCmd | SetHomeCmd | PenCmd | BullseyeCmd | GridCmd | BorderCmd | WobblyCmd;
 
 export interface LogEntry { id: number; kind: 'cmd' | 'ok' | 'err' | 'warn' | 'sys' | 'fw'; text: string; t: number; }
 export interface PenState  { x: number; y: number; down: boolean; }
@@ -107,7 +102,6 @@ export function cmdToQuery(cmd: PlotCmd): string {
     case 'wobbly':   return `wobbly?cx=${cmd.cx}&cy=${cmd.cy}&r=${cmd.r}&bound_r=${cmd.boundR}` +
                             `&wobble=${cmd.wobble}&harmonics=${cmd.harmonics}&seed=${cmd.seed}&cycles=${cmd.cycles}` +
                             `&fill=${cmd.fillMode}&angle=${cmd.angle}&spacing=${cmd.spacing}&outline=${cmd.outline ? 1 : 0}`;
-    case 'truchet':  return `truchet?n=${cmd.n}&spacing=${cmd.spacing}&angle=${cmd.angle}&seed=${cmd.seed}&motifs=${cmd.motifs}`;
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
     case 'pen':      return `pen?pos=${cmd.pos}`;
@@ -125,7 +119,6 @@ export function cmdToJson(cmd: PlotCmd): string {
     case 'circle':   return JSON.stringify({ type: 'circle', cx: cmd.cx, cy: cmd.cy, r: cmd.r, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
     case 'square':   return JSON.stringify({ type: 'square', cx: cmd.cx, cy: cmd.cy, size: cmd.size, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
     case 'wobbly':   return JSON.stringify({ type: 'wobbly', cx: cmd.cx, cy: cmd.cy, r: cmd.r, bound_r: cmd.boundR, wobble: cmd.wobble, harmonics: cmd.harmonics, seed: cmd.seed, cycles: cmd.cycles, fill_mode: cmd.fillMode, hatch_angle: cmd.angle, spacing: cmd.spacing, outline: cmd.outline ? 1 : 0 });
-    case 'truchet':  return JSON.stringify({ type: 'truchet', n: cmd.n, spacing: cmd.spacing, angle: cmd.angle, seed: cmd.seed, motifs: cmd.motifs });
     case 'bullseye': return JSON.stringify({ type: 'bullseye', cx: cmd.cx, cy: cmd.cy });
     case 'grid':     return JSON.stringify({ type: 'grid', cx: cmd.cx, cy: cmd.cy });
     case 'pen':      return JSON.stringify({ type: 'pen', position: cmd.pos });
@@ -150,7 +143,6 @@ export function cmdLabel(cmd: PlotCmd): string {
     case 'bullseye': return `bullseye (${f(cmd.cx)},${f(cmd.cy)})`;
     case 'grid':     return `grid (${f(cmd.cx)},${f(cmd.cy)})`;
     case 'wobbly':   return `wobbly (${f(cmd.cx)},${f(cmd.cy)}) r=${f(cmd.r)}${rep(cmd.cycles)}`;
-    case 'truchet':  return `truchet ${cmd.n}×${cmd.n} sp=${cmd.spacing} ang=${cmd.angle}°`;
     case 'border':   return 'border';
     case 'home':     return 'home';
     case 'sethome':  return 'sethome';
@@ -290,11 +282,6 @@ export function parseJsonScript(
         const ol = o.outline === false || o.outline === 0 ? 0 : 1;
         results.push({ idx, raw, query:
           `wobbly?cx=${num('cx',0)}&cy=${num('cy',0)}&r=${num('r',0)}&bound_r=${num('bound_r',0)}&wobble=${num('wobble',0.4)}&harmonics=${num('harmonics',3)}&seed=${num('seed',42)}&cycles=${num('cycles',1)}&fill=${num('fill_mode',0)}&angle=${num('hatch_angle',0)}&spacing=${num('spacing',3)}&outline=${ol}` });
-        return;
-      }
-      case 'truchet': {
-        results.push({ idx, raw, query:
-          `truchet?n=${num('n',4)}&spacing=${num('spacing',3)}&angle=${num('angle',45)}&seed=${num('seed',42)}&motifs=${num('motifs',0)}` });
         return;
       }
       case 'bullseye':
@@ -578,272 +565,6 @@ export function motionToQuery(key: keyof MotionParams, val: number, m: MotionPar
   return '';
 }
 
-// ---- Truchet (Carlson 2018 winged motifs) -------------------------
-// Mirrors the firmware's tk_* generator in main.c BIT-FOR-BIT (same LCG, same
-// row-major motif picks, same geometry), so the preview is exactly what the
-// plotter draws. If you change one side, change the other.
-
-export const TRUCHET_MOTIF_NAMES = ['\\', '/', '-', '|', '+.', 'x.', '+',
-  'fne', 'fsw', 'fnw', 'fse', 'tn', 'ts', 'te', 'tw'] as const;
-export const TRUCHET_DEFAULT_MASK = 0x07a3;  // \ / x. fne fsw fnw fse
-const TRUCHET_MIN_CELL = 40;
-// Per-motif: bit e set = edge e (0=N,1=E,2=S,3=W) carries a dot, not a strip.
-const TM_DOT_EDGES = [0, 0, 5, 10, 15, 0, 0, 12, 3, 6, 9, 4, 1, 8, 2];
-
-type Pt = { x: number; y: number; pen: boolean };
-
-function buildTruchetPath(cmd: TruchetCmd, pts: Pt[]): void {
-  const xmin = -cmd.left, xmax = cmd.right, ymin = -cmd.down, ymax = cmd.up;
-  const W = xmax - xmin, H = ymax - ymin;
-  if (W <= 0 || H <= 0) return;
-
-  let n = Math.max(1, Math.floor(cmd.n));
-  let sz = W / n;
-  if (sz < TRUCHET_MIN_CELL) {
-    n = Math.max(1, Math.floor(W / TRUCHET_MIN_CELL));
-    sz = W / n;
-  }
-  let rows = Math.max(1, Math.floor(H / sz));
-  while (n * rows > 1024) rows--;
-  const ccx = (xmin + xmax) / 2, ccy = (ymin + ymax) / 2;
-  const gx = ccx - n * sz / 2, gy = ccy - rows * sz / 2;
-  const erx = W / 2, ery = H / 2;
-  const ellipse = cmd.shape === 'ellipse';
-
-  let mask = (cmd.motifs & 0x7fff) || TRUCHET_DEFAULT_MASK;
-  const motifs: number[] = [];
-  for (let i = 0; i < 15; i++) if (mask & (1 << i)) motifs.push(i);
-
-  // Same LCG as firmware tk_rand(): picks consumed row-major BEFORE drawing.
-  let s = cmd.seed >>> 0;
-  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return (s >>> 16) & 0x7fff; };
-  const picks: number[] = [];
-  for (let i = 0; i < n * rows; i++) picks.push(motifs[rnd() % motifs.length]);
-
-  // Pen sink with work-area clipping (mirror of tk_seg/tk_clip_seg).
-  let px = NaN, py = NaN, down = false;
-  const clipSeg = (x0: number, y0: number, x1: number, y1: number): [number, number] | null => {
-    let t0 = 0, t1 = 1;
-    const dx = x1 - x0, dy = y1 - y0;
-    const ps = [-dx, dx, -dy, dy];
-    const qs = [x0 - xmin, xmax - x0, y0 - ymin, ymax - y0];
-    for (let k = 0; k < 4; k++) {
-      if (Math.abs(ps[k]) < 1e-9) { if (qs[k] < 0) return null; }
-      else {
-        const r = qs[k] / ps[k];
-        if (ps[k] < 0) { if (r > t0) t0 = r; } else { if (r < t1) t1 = r; }
-      }
-    }
-    if (ellipse) {
-      const ex = (x0 - ccx) / erx, ey = (y0 - ccy) / ery;
-      const fx = dx / erx, fy = dy / ery;
-      const a = fx * fx + fy * fy, b = 2 * (ex * fx + ey * fy), c = ex * ex + ey * ey - 1;
-      if (a < 1e-12) { if (c > 0) return null; }
-      else {
-        const disc = b * b - 4 * a * c;
-        if (disc < 0) return null;
-        const sq = Math.sqrt(disc);
-        const u0 = (-b - sq) / (2 * a), u1 = (-b + sq) / (2 * a);
-        if (u0 > t0) t0 = u0;
-        if (u1 < t1) t1 = u1;
-      }
-    }
-    return t1 > t0 ? [t0, t1] : null;
-  };
-  const seg = (x0: number, y0: number, x1: number, y1: number) => {
-    const c = clipSeg(x0, y0, x1, y1);
-    if (!c) { down = false; return; }
-    const ax = x0 + (x1 - x0) * c[0], ay = y0 + (y1 - y0) * c[0];
-    const bx = x0 + (x1 - x0) * c[1], by = y0 + (y1 - y0) * c[1];
-    const contig = down && Math.abs(ax - px) < 0.05 && Math.abs(ay - py) < 0.05;
-    if (!contig) pts.push({ x: ax, y: ay, pen: false });
-    pts.push({ x: bx, y: by, pen: true });
-    px = bx; py = by; down = true;
-  };
-  const arc = (acx: number, acy: number, r: number, a0: number, a1: number) => {
-    const nseg = Math.max(4, Math.round(Math.abs(a1 - a0) / 360 * Math.max(12, r * 1.2)));
-    let lx = acx + r * Math.cos(a0 * Math.PI / 180), ly = acy + r * Math.sin(a0 * Math.PI / 180);
-    for (let k = 1; k <= nseg; k++) {
-      const a = (a0 + (a1 - a0) * k / nseg) * Math.PI / 180;
-      const nx = acx + r * Math.cos(a), ny = acy + r * Math.sin(a);
-      seg(lx, ly, nx, ny);
-      lx = nx; ly = ny;
-    }
-  };
-
-  // Corner angle ranges (Y-down): NW 0..90, NE 90..180, SE 180..270, SW 270..360.
-  const strokes = (m: number, x0: number, y0: number) => {
-    const A = sz / 3, B = 2 * sz / 3;
-    const nwx = x0, nwy = y0, nex = x0 + sz, ney = y0;
-    const sex = x0 + sz, sey = y0 + sz, swx = x0, swy = y0 + sz;
-    switch (m) {
-      case 0:  arc(nex, ney, A, 90, 180); arc(nex, ney, B, 90, 180);
-               arc(swx, swy, A, 270, 360); arc(swx, swy, B, 270, 360); break;
-      case 1:  arc(nwx, nwy, A, 0, 90); arc(nwx, nwy, B, 0, 90);
-               arc(sex, sey, A, 180, 270); arc(sex, sey, B, 180, 270); break;
-      case 2:  seg(x0, y0 + A, x0 + sz, y0 + A); seg(x0 + sz, y0 + B, x0, y0 + B); break;
-      case 3:  seg(x0 + A, y0, x0 + A, y0 + sz); seg(x0 + B, y0 + sz, x0 + B, y0); break;
-      case 4:  break;
-      case 5:  arc(nwx, nwy, A, 0, 90); arc(swx, swy, A, 270, 360);
-               arc(sex, sey, A, 180, 270); arc(nex, ney, A, 90, 180); break;
-      case 6:  seg(x0, y0 + A, x0 + A, y0 + A); seg(x0 + B, y0 + A, x0 + sz, y0 + A);
-               seg(x0, y0 + B, x0 + A, y0 + B); seg(x0 + B, y0 + B, x0 + sz, y0 + B);
-               seg(x0 + A, y0, x0 + A, y0 + A); seg(x0 + A, y0 + B, x0 + A, y0 + sz);
-               seg(x0 + B, y0, x0 + B, y0 + A); seg(x0 + B, y0 + B, x0 + B, y0 + sz); break;
-      case 7:  arc(nex, ney, A, 90, 180); arc(nex, ney, B, 90, 180); break;
-      case 8:  arc(swx, swy, A, 270, 360); arc(swx, swy, B, 270, 360); break;
-      case 9:  arc(nwx, nwy, A, 0, 90); arc(nwx, nwy, B, 0, 90); break;
-      case 10: arc(sex, sey, A, 180, 270); arc(sex, sey, B, 180, 270); break;
-      case 11: seg(x0, y0 + B, x0 + sz, y0 + B); arc(nwx, nwy, A, 0, 90); arc(nex, ney, A, 90, 180); break;
-      case 12: seg(x0, y0 + A, x0 + sz, y0 + A); arc(swx, swy, A, 270, 360); arc(sex, sey, A, 180, 270); break;
-      case 13: seg(x0 + A, y0, x0 + A, y0 + sz); arc(nex, ney, A, 90, 180); arc(sex, sey, A, 180, 270); break;
-      case 14: seg(x0 + B, y0, x0 + B, y0 + sz); arc(nwx, nwy, A, 0, 90); arc(swx, swy, A, 270, 360); break;
-    }
-  };
-  const MID = [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]];
-  const DOT_A0 = [0, 90, 180, 270];
-  const dotHalf = (e: number, x0: number, y0: number, outer: boolean) => {
-    const a0 = DOT_A0[e] + (outer ? 180 : 0);
-    arc(x0 + MID[e][0] * sz, y0 + MID[e][1] * sz, sz / 6, a0, a0 + 180);
-  };
-
-  const d2 = (u: number, v: number, a: number, b: number) => (u - a) * (u - a) + (v - b) * (v - b);
-  const R1 = 1 / 9, R2 = 4 / 9, RD = 1 / 36;
-  const ANN = (u: number, v: number, a: number, b: number) => { const d = d2(u, v, a, b); return d >= R1 && d <= R2; };
-  const QD = (u: number, v: number, a: number, b: number) => d2(u, v, a, b) < R1;
-  const insideMotif = (m: number, u: number, v: number): boolean => {
-    switch (m) {
-      case 0:  return ANN(u, v, 1, 0) || ANN(u, v, 0, 1);
-      case 1:  return ANN(u, v, 0, 0) || ANN(u, v, 1, 1);
-      case 2:  return v >= 1 / 3 && v <= 2 / 3;
-      case 3:  return u >= 1 / 3 && u <= 2 / 3;
-      case 4:  return false;
-      case 5:  return !(QD(u, v, 0, 0) || QD(u, v, 1, 0) || QD(u, v, 1, 1) || QD(u, v, 0, 1));
-      case 6:  return (v >= 1 / 3 && v <= 2 / 3) || (u >= 1 / 3 && u <= 2 / 3);
-      case 7:  return ANN(u, v, 1, 0);
-      case 8:  return ANN(u, v, 0, 1);
-      case 9:  return ANN(u, v, 0, 0);
-      case 10: return ANN(u, v, 1, 1);
-      case 11: return v <= 2 / 3 && !QD(u, v, 0, 0) && !QD(u, v, 1, 0);
-      case 12: return v >= 1 / 3 && !QD(u, v, 0, 1) && !QD(u, v, 1, 1);
-      case 13: return u >= 1 / 3 && !QD(u, v, 1, 0) && !QD(u, v, 1, 1);
-      case 14: return u <= 2 / 3 && !QD(u, v, 0, 0) && !QD(u, v, 0, 1);
-      default: return false;
-    }
-  };
-  const excluded = (m: number, u: number, v: number): boolean =>
-    insideMotif(m, u, v) ||
-    d2(u, v, 0.5, 0) <= RD || d2(u, v, 1, 0.5) <= RD ||
-    d2(u, v, 0.5, 1) <= RD || d2(u, v, 0, 0.5) <= RD;
-
-  // Per-motif hatch boundary candidates (unit coords): circles + axis lines.
-  const CNR = [[0, 0], [1, 0], [1, 1], [0, 1]];  // NW NE SE SW
-  const motifCircles = (m: number): number[][] => {
-    const c: number[][] = MID.map(p => [p[0], p[1], 1 / 6]);
-    const add = (ci: number, r: number) => c.push([CNR[ci][0], CNR[ci][1], r]);
-    switch (m) {
-      case 0:  add(1, 1 / 3); add(1, 2 / 3); add(3, 1 / 3); add(3, 2 / 3); break;
-      case 1:  add(0, 1 / 3); add(0, 2 / 3); add(2, 1 / 3); add(2, 2 / 3); break;
-      case 5:  add(0, 1 / 3); add(1, 1 / 3); add(2, 1 / 3); add(3, 1 / 3); break;
-      case 7:  add(1, 1 / 3); add(1, 2 / 3); break;
-      case 8:  add(3, 1 / 3); add(3, 2 / 3); break;
-      case 9:  add(0, 1 / 3); add(0, 2 / 3); break;
-      case 10: add(2, 1 / 3); add(2, 2 / 3); break;
-      case 11: add(0, 1 / 3); add(1, 1 / 3); break;
-      case 12: add(3, 1 / 3); add(2, 1 / 3); break;
-      case 13: add(1, 1 / 3); add(2, 1 / 3); break;
-      case 14: add(0, 1 / 3); add(3, 1 / 3); break;
-    }
-    return c;
-  };
-  const motifLines = (m: number): { u: number[]; v: number[] } => {
-    switch (m) {
-      case 2:  return { u: [], v: [1 / 3, 2 / 3] };
-      case 3:  return { u: [1 / 3, 2 / 3], v: [] };
-      case 6:  return { u: [1 / 3, 2 / 3], v: [1 / 3, 2 / 3] };
-      case 11: return { u: [], v: [2 / 3] };
-      case 12: return { u: [], v: [1 / 3] };
-      case 13: return { u: [1 / 3], v: [] };
-      case 14: return { u: [2 / 3], v: [] };
-      default: return { u: [], v: [] };
-    }
-  };
-
-  const hatchTile = (m: number, x0: number, y0: number) => {
-    const spacing = cmd.spacing;
-    const th = cmd.angle * Math.PI / 180;
-    const dx = Math.cos(th), dy = Math.sin(th);
-    const nx = -Math.sin(th), ny = Math.cos(th);
-    const circles = motifCircles(m), lines = motifLines(m);
-    const offs = [x0 * nx + y0 * ny, (x0 + sz) * nx + y0 * ny,
-                  x0 * nx + (y0 + sz) * ny, (x0 + sz) * nx + (y0 + sz) * ny];
-    const k0 = Math.ceil(Math.min(...offs) / spacing), k1 = Math.floor(Math.max(...offs) / spacing);
-    for (let k = k0; k <= k1; k++) {
-      const lx = k * spacing * nx, ly = k * spacing * ny;
-      // clip the infinite hatch line to the tile square
-      let s0 = -1e9, s1 = 1e9;
-      const ps = [-dx, dx, -dy, dy];
-      const qs = [lx - x0, x0 + sz - lx, ly - y0, y0 + sz - ly];
-      let miss = false;
-      for (let i = 0; i < 4; i++) {
-        if (Math.abs(ps[i]) < 1e-7) { if (qs[i] < 0) { miss = true; break; } }
-        else {
-          const r = qs[i] / ps[i];
-          if (ps[i] < 0) { if (r > s0) s0 = r; } else { if (r < s1) s1 = r; }
-        }
-      }
-      if (miss || s1 <= s0) continue;
-      const ts: number[] = [s0, s1];
-      for (const [cu, cv, cr] of circles) {
-        const ccx2 = x0 + cu * sz, ccy2 = y0 + cv * sz, r = cr * sz;
-        const ex = lx - ccx2, ey = ly - ccy2;
-        const b = 2 * (ex * dx + ey * dy), c = ex * ex + ey * ey - r * r;
-        const disc = b * b - 4 * c;
-        if (disc < 0) continue;
-        const sq = Math.sqrt(disc);
-        for (const t of [(-b - sq) / 2, (-b + sq) / 2])
-          if (t > s0 && t < s1) ts.push(t);
-      }
-      for (const c of lines.u)
-        if (Math.abs(dx) > 1e-7) { const t = (x0 + c * sz - lx) / dx; if (t > s0 && t < s1) ts.push(t); }
-      for (const c of lines.v)
-        if (Math.abs(dy) > 1e-7) { const t = (y0 + c * sz - ly) / dy; if (t > s0 && t < s1) ts.push(t); }
-      ts.sort((a, b) => a - b);
-      const keep: [number, number][] = [];
-      for (let i = 0; i + 1 < ts.length; i++) {
-        if (ts[i + 1] - ts[i] < 0.05) continue;
-        const tm = (ts[i] + ts[i + 1]) / 2;
-        const pu = (lx + tm * dx - x0) / sz, pv = (ly + tm * dy - y0) / sz;
-        if (!excluded(m, pu, pv)) keep.push([ts[i], ts[i + 1]]);
-      }
-      for (let i = 0; i < keep.length; i++) {
-        const [a, b] = keep[(k & 1) ? keep.length - 1 - i : i];
-        if (k & 1) seg(lx + b * dx, ly + b * dy, lx + a * dx, ly + a * dy);
-        else       seg(lx + a * dx, ly + a * dy, lx + b * dx, ly + b * dy);
-      }
-    }
-  };
-
-  for (let ri = 0; ri < rows; ri++) {
-    for (let c2 = 0; c2 < n; c2++) {
-      const ci = (ri & 1) ? (n - 1 - c2) : c2;  // serpentine, like the firmware
-      const tx = gx + ci * sz, ty = gy + ri * sz;
-      if (tx > xmax || tx + sz < xmin || ty > ymax || ty + sz < ymin) continue;
-      const m = picks[ri * n + ci];
-      strokes(m, tx, ty);
-      for (let e = 0; e < 4; e++) {
-        const gridEdge = (e === 0 && ri === 0) || (e === 2 && ri === rows - 1) ||
-                         (e === 3 && ci === 0) || (e === 1 && ci === n - 1);
-        if (TM_DOT_EDGES[m] & (1 << e)) dotHalf(e, tx, ty, false);
-        if (gridEdge) dotHalf(e, tx, ty, true);
-      }
-      if (cmd.spacing >= 0.5) hatchTile(m, tx, ty);
-    }
-  }
-}
-
-// ---- canvas path simulation (for visual animation) ---------------
-
 export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[] {
   const pts: { x: number; y: number; pen: boolean }[] = [];
   if (cmd.type === 'goto') {
@@ -938,8 +659,6 @@ export function buildPath(cmd: PlotCmd): { x: number; y: number; pen: boolean }[
       pts2d.push({ x: cmd.cx + ri * Math.cos(theta), y: cmd.cy + ri * Math.sin(theta) });
     }
     pts2d.forEach((p, i) => pts.push({ x: p.x, y: p.y, pen: i !== 0 }));
-  } else if (cmd.type === 'truchet') {
-    buildTruchetPath(cmd, pts);
   } else if (cmd.type === 'bullseye') {
     for (let ri = 0; ri < 4; ri++) {
       const rad = 20 + ri * 20;

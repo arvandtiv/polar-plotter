@@ -100,7 +100,6 @@ Rules:
 | `plot_circle` | Circle, optionally filled. | `cx,cy,r, cycles, fill_mode(0-2), hatch_angle, spacing, outline` |
 | `plot_square` | Axis-aligned square, same fill options. `size` = full side length. | `cx,cy,size, cycles, fill_mode, hatch_angle, spacing, outline` |
 | `plot_wobbly` | Organic blob via radial Fourier series — great for clouds, foliage, rocks. | `cx,cy,r, bound_r, wobble(0-1), harmonics(1-8), seed, cycles` |
-| `plot_truchet` | Full-canvas Truchet tiling (Carlson 2018). White ribbon motifs through a hatched field. | `n, spacing, angle, seed, motifs[]` |
 | `plot_bullseye` | Calibration crosshair + rings at a point. | `cx, cy` |
 | `plot_grid` | Calibration grid — 10×10 lines, 8 mm spacing, centred on `(cx,cy)`. | `cx, cy` |
 | `plot_border` | Trace the work-area boundary once pen-down. | — |
@@ -234,7 +233,7 @@ This makes `plot_polylines` safe even for spirals that naturally overshoot.
 Each draw command waits until physically done; configuration commands (`bounds`, `matrix`,
 `grid_select`, `grid_clear`) execute immediately.
 
-**Draw types:** `goto, line, arc, circle, square, wobbly, truchet, bullseye, grid, border, pen, home, sethome, stop, speed, accel, current`
+**Draw types:** `goto, line, arc, circle, square, wobbly, bullseye, grid, border, pen, home, sethome, stop, speed, accel, current`
 
 **Config types (immediate, no queue):** `bounds, matrix, grid_select, grid_clear`
 
@@ -978,46 +977,6 @@ without stopping.
 | `spacing` | float | — | 3 | 0.5–20 mm | Fill line spacing |
 | `outline` | int | — | 1 | `0` or `1` | Suppress the outer blob outline |
 
-#### `truchet` — full-canvas Carlson Truchet tiling
-```json
-{ "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42 }
-{ "type": "truchet", "n": 6, "spacing": 2, "angle": 30, "seed": 7, "motifs": 1955 }
-```
-| Field | Type | Required | Default | Range | Notes |
-|-------|------|----------|---------|-------|-------|
-| `n` | int | — | 4 | 1–13 (auto-clamped) | Cells per axis. Firmware enforces a minimum cell size of **40 mm** — n is silently reduced until cells are ≥ 40 mm. For a ~520 mm canvas width the hard max is ~13. |
-| `spacing` | float | — | 3 | 0.5–10 mm | Hatch line spacing within each ribbon motif |
-| `angle` | float | — | 45 | 0–360° | Global hatch field angle |
-| `seed` | int | — | 42 | any int | Random layout seed — selects which motif each cell gets |
-| `motifs` | int | — | 1955 | 1–32767 (15-bit) | Bitmask of enabled ribbon types. `0` is treated as the firmware default (= 1955 = `0x7A3`). |
-
-**Truchet motif bitmask reference** — `motifs` field is a bitfield; OR the bits you want:
-
-| Bit | Value | Symbol | Description |
-|-----|-------|--------|-------------|
-| 0 | 1 | `\` | Diagonal slash (top-left → bottom-right) |
-| 1 | 2 | `/` | Diagonal backslash (top-right → bottom-left) |
-| 2 | 4 | `-` | Horizontal bar |
-| 3 | 8 | `\|` | Vertical bar |
-| 4 | 16 | `+.` | Plus with rounded dots |
-| 5 | 32 | `x.` | X-cross with rounded dots |
-| 6 | 64 | `+` | Plain plus cross |
-| 7 | 128 | `fne` | Fan arc — north-east quadrant |
-| 8 | 256 | `fsw` | Fan arc — south-west quadrant |
-| 9 | 512 | `fnw` | Fan arc — north-west quadrant |
-| 10 | 1024 | `fse` | Fan arc — south-east quadrant |
-| 11 | 2048 | `tn` | Diagonal tile, north bias |
-| 12 | 4096 | `ts` | Diagonal tile, south bias |
-| 13 | 8192 | `te` | Diagonal tile, east bias |
-| 14 | 16384 | `tw` | Diagonal tile, west bias |
-
-Default `0x7A3` = 1955 = bits 0+1+5+7+8+9+10 = `\`, `/`, `x.`, `fne`, `fsw`, `fnw`, `fse`.
-
-**Example presets:**
-- Diagonal only: `motifs: 3` (bits 0+1 = `\` + `/`)
-- Fans only: `motifs: 1920` (bits 7–10)
-- All straight: `motifs: 92` (bits 2+3+4+6 = `-`, `|`, `+.`, `+`)
-- All motifs: `motifs: 32767`
 
 #### `bullseye` — calibration crosshair + concentric rings
 ```json
@@ -1407,7 +1366,6 @@ Draw commands inside an active cell use **cell-local coordinates**: `(0,0)` = ce
   { "type": "grid_select",
     "cols": 2, "rows": 2, "padding_mm": 5, "col": 0, "row": 1,
     "full_xn": -260, "full_xp": 260, "full_yn": -115, "full_yp": 273 },
-  { "type": "truchet", "n": 3, "spacing": 3, "seed": 42 },
 
   { "type": "grid_select",
     "cols": 2, "rows": 2, "padding_mm": 5, "col": 1, "row": 1,
@@ -1504,7 +1462,6 @@ To convert a `plot_script` for the console:
 | `plot_circle` | Draw | Circle, optional fill |
 | `plot_square` | Draw | Square, optional fill |
 | `plot_wobbly` | Draw | Organic blob via Fourier series |
-| `plot_truchet` | Draw | Full-canvas Carlson Truchet tiling |
 | `plot_bullseye` | Calibration | Crosshair + rings at a point |
 | `plot_grid` | Calibration | 10×10 line grid at a point |
 | `plot_border` | Calibration | Trace work-area boundary |

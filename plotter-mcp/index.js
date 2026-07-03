@@ -214,7 +214,7 @@ async function batchSend(queries, { timeoutMs = 600_000 } = {}) {
 
 const server = new McpServer({
   name:    'polar-plotter',
-  version: '1.6.1',
+  version: '1.7.0',
 }, {
   instructions: [
     'This server drives a hanging V-plotter (polargraph). Coordinates are in mm.',
@@ -591,55 +591,6 @@ Examples:
   }),
 );
 
-// plot_truchet ────────────────────────────────────────────────────────────────
-// Motif names (Carlson, Bridges 2018) → firmware bitmask bits.
-const TRUCHET_MOTIFS = {
-  '\\': 0, '/': 1, '-': 2, '|': 3, '+.': 4, 'x.': 5, '+': 6,
-  fne: 7, fsw: 8, fnw: 9, fse: 10, tn: 11, ts: 12, te: 13, tw: 14,
-};
-const TRUCHET_DEFAULT = ['\\', '/', 'x.', 'fne', 'fsw', 'fnw', 'fse'];
-
-server.tool(
-  'plot_truchet',
-  `Draw a Truchet tiling over the whole work area using Carlson's winged tile
-motifs (Bridges 2018): strips of width cell/3 meeting the cell edges at the 1/3
-and 2/3 points, so ribbons connect seamlessly cell-to-cell. The motif ribbons
-are left as white paper; the background (negative space) is hatched with
-globally aligned lines, so white channels wind through a continuous hatched
-field. This is a long-running job: hatching a full work area takes serious pen
-time — coarser spacing (3–4 mm) plots much faster.
-
-n = number of grid columns (cell size = work-area width / n, clamped to
->= 40 mm). Rows are derived from the height. seed makes the pattern
-reproducible. motifs picks which tile shapes appear — mixing 2–3 shapes gives
-the richest emergent forms. Available motifs:
-  \\\\ /        diagonal arc ribbons
-  - |         straight bars (with dots)
-  +           crossing bars
-  x.          centre blob
-  +.          four dots
-  fne fsw fnw fse   "frowns": one corner arc + two dots
-  tn ts te tw       "tees": bar + stem + one dot
-
-In ellipse work-area mode the pattern is clipped to the ellipse boundary.`,
-  {
-    n:        z.number().int().min(1).max(64).default(4).describe('Grid columns — cell size = width/n, clamped to >= 40 mm (default 4)'),
-    spacing:  z.number().min(0).default(3).describe('Hatch line spacing in mm; 0 = outlines only, no hatching (default 3)'),
-    angle:    z.number().default(45).describe('Hatch angle in degrees (default 45)'),
-    seed:     z.number().int().min(0).default(42).describe('Random seed — same seed = same pattern (default 42)'),
-    motifs:   z.array(z.enum(Object.keys(TRUCHET_MOTIFS))).default(TRUCHET_DEFAULT)
-                .describe('Motif names to draw from (default: arcs + frowns + blob)'),
-  },
-  async ({ n, spacing, angle, seed, motifs }) => {
-    const mask = motifs.reduce((m, name) => m | (1 << TRUCHET_MOTIFS[name]), 0);
-    return {
-      content: [{ type: 'text', text: ok(await drawAndWait(
-        `truchet?n=${n}&spacing=${spacing}&angle=${angle}&seed=${seed}&motifs=${mask}`,
-      )) }],
-    };
-  },
-);
-
 // plot_bullseye ──────────────────────────────────────────────────────────────
 server.tool(
   'plot_bullseye',
@@ -802,7 +753,6 @@ Each command object must have a "type" field plus the parameters for that type:
   { "type": "accel",   "amax": 300 }
   { "type": "current", "run_ma": 500, "hold_ma": 150 }
   { "type": "wobbly",  "cx": 0, "cy": 0, "r": 60, "wobble": 0.5, "harmonics": 4, "seed": 7 }
-  { "type": "truchet", "n": 4, "spacing": 3, "angle": 45, "seed": 42, "motifs": 1955 }
   { "type": "bullseye","cx": 0, "cy": 0 }
   { "type": "grid",    "cx": 0, "cy": 0 }
 
@@ -1099,7 +1049,7 @@ server.tool(
 This is the lowest-level drawing tool — pass arrays of (x,y) points and the MCP
 compiles them to goto/pen/line firmware sequences and sends them with flow control.
 
-Use this when the firmware's fixed primitives (circle, square, wobbly, truchet)
+Use this when the firmware's fixed primitives (circle, square, wobbly)
 can't express the shape you want. You compute the points; this tool sends them.
 
 The tool handles pen management for each path:
@@ -1591,17 +1541,6 @@ function buildEndpoint(cmd) {
         `&bound_r=${p.bound_r ?? 0}&wobble=${p.wobble ?? 0.4}` +
         `&harmonics=${p.harmonics ?? 3}&seed=${p.seed ?? 42}&cycles=${p.cycles ?? 1}`
       );
-
-    case 'truchet': {
-      // motifs: either a numeric firmware bitmask or an array of motif names.
-      const mask = Array.isArray(p.motifs)
-        ? p.motifs.reduce((m, name) => m | (1 << (TRUCHET_MOTIFS[name] ?? 0)), 0)
-        : (p.motifs ?? 0);
-      return (
-        `truchet?n=${p.n ?? 4}&spacing=${p.spacing ?? 3}` +
-        `&angle=${p.angle ?? 45}&seed=${p.seed ?? 42}&motifs=${mask}`
-      );
-    }
 
     case 'bullseye':
       return `bullseye?cx=${p.cx ?? 0}&cy=${p.cy ?? 0}`;

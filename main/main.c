@@ -197,7 +197,6 @@ static void do_draw_bullseye(float cx, float cy);
 static void do_draw_grid(float cx, float cy);
 static void do_draw_wobbly(float cx, float cy, float r, float bound_r, float wobble, int harmonics, int seed, int cycles,
                            int fill_mode, float hatch_angle, float hatch_spacing, bool outline);
-static void do_draw_truchet(float cx, float cy, int n, float spacing, float angle_deg, int seed, uint32_t mask);
 
 static void init_geometry(void)
 {
@@ -1194,335 +1193,6 @@ static void do_draw_wobbly(float cx2, float cy2, float r, float bound_r,
 #undef WOBBLY_MAX_PTS
 }
 
-/* ---- Truchet tiling — verbatim from ESP32 build ---- */
-enum {
-    TM_BS = 0, TM_FS, TM_HB, TM_VB, TM_DOTS, TM_BLOB, TM_PLUS,
-    TM_FNE, TM_FSW, TM_FNW, TM_FSE,
-    TM_TN, TM_TS, TM_TE, TM_TW,
-    TM_COUNT
-};
-#define TRUCHET_ALL_MASK      ((1u << TM_COUNT) - 1u)
-#define TRUCHET_DEFAULT_MASK  0x07A3u
-#define TRUCHET_MIN_CELL_MM   40.0f
-#define TRUCHET_MAX_CELLS     1024
-
-static const uint8_t tm_dot_edges[TM_COUNT] = {
-    0, 0, 5, 10, 15, 0, 0,
-    12, 3, 6, 9,
-    4, 1, 8, 2,
-};
-
-static uint32_t s_tk_rng;
-static inline uint32_t tk_rand(void)
-{
-    s_tk_rng = s_tk_rng * 1664525u + 1013904223u;
-    return (s_tk_rng >> 16) & 0x7fff;
-}
-
-static struct { float x, y; bool down, valid; } s_tk_pen;
-
-static void tk_break(void)
-{
-    path_end();
-    if (s_tk_pen.down) { pen_lift(); s_tk_pen.down = false; }
-    s_tk_pen.valid = false;
-}
-
-static bool tk_clip_seg(float x0, float y0, float x1, float y1, float *t0, float *t1)
-{
-    *t0 = 0.0f; *t1 = 1.0f;
-    float dx = x1 - x0, dy = y1 - y0;
-    float ps[4] = { -dx, dx, -dy, dy };
-    float qs[4] = { x0 - g_x_min, g_x_max - x0, y0 - g_y_min, g_y_max - y0 };
-    for (int k = 0; k < 4; k++) {
-        if (fabsf(ps[k]) < 1e-9f) {
-            if (qs[k] < 0.0f) return false;
-        } else {
-            float r = qs[k] / ps[k];
-            if (ps[k] < 0.0f) { if (r > *t0) *t0 = r; }
-            else               { if (r < *t1) *t1 = r; }
-        }
-    }
-    if (g_bounds_ellipse) {
-        float ccx, ccy, rx2, ry2;
-        ellipse_norm(0, 0, &ccx, &ccy, &rx2, &ry2);
-        if (rx2 <= 0.0f || ry2 <= 0.0f) return false;
-        float ex = (x0 - ccx) / rx2, ey = (y0 - ccy) / ry2;
-        float fx = dx / rx2,          fy = dy / ry2;
-        float a = fx * fx + fy * fy;
-        float b = 2.0f * (ex * fx + ey * fy);
-        float c = ex * ex + ey * ey - 1.0f;
-        if (a < 1e-12f) {
-            if (c > 0.0f) return false;
-        } else {
-            float disc = b * b - 4.0f * a * c;
-            if (disc < 0.0f) return false;
-            float sq = sqrtf(disc);
-            float u0 = (-b - sq) / (2.0f * a), u1 = (-b + sq) / (2.0f * a);
-            if (u0 > *t0) *t0 = u0;
-            if (u1 < *t1) *t1 = u1;
-        }
-    }
-    return *t1 > *t0;
-}
-
-static void tk_seg(float x0, float y0, float x1, float y1)
-{
-    if (motion_should_abort()) return;
-    float t0, t1;
-    if (!tk_clip_seg(x0, y0, x1, y1, &t0, &t1)) { tk_break(); return; }
-    float ax = x0 + (x1 - x0) * t0, ay = y0 + (y1 - y0) * t0;
-    float bx = x0 + (x1 - x0) * t1, by = y0 + (y1 - y0) * t1;
-    bool contig = s_tk_pen.valid && s_tk_pen.down &&
-                  fabsf(ax - s_tk_pen.x) < 0.05f &&
-                  fabsf(ay - s_tk_pen.y) < 0.05f;
-    if (!contig) {
-        path_end();
-        if (s_tk_pen.down) pen_lift();
-        s_tk_pen.down = false;
-        move_to_xy(ax, ay);
-        if (motion_should_abort()) return;
-        pen_drop();
-        s_tk_pen.down = true;
-        path_begin(ax, ay);
-    }
-    path_to(bx, by);
-    s_tk_pen.x = bx; s_tk_pen.y = by; s_tk_pen.valid = true;
-}
-
-static void tk_arc(float cx2, float cy2, float r, float a0_deg, float a1_deg)
-{
-    int n_full = plt_arc_segments(r, CIRCLE_CHORD_ERR_MM);
-    int n = (int)ceilf(fabsf(a1_deg - a0_deg) / 360.0f * (float)n_full);
-    if (n < 4) n = 4;
-    float px = cx2 + r * cosf(a0_deg * PLT_PI / 180.0f);
-    float py = cy2 + r * sinf(a0_deg * PLT_PI / 180.0f);
-    for (int k = 1; k <= n && !g_job_abort; k++) {
-        float a = (a0_deg + (a1_deg - a0_deg) * (float)k / (float)n) * PLT_PI / 180.0f;
-        float nx = cx2 + r * cosf(a), ny = cy2 + r * sinf(a);
-        tk_seg(px, py, nx, ny);
-        px = nx; py = ny;
-    }
-}
-
-static void tk_dot_half(int e, float x0, float y0, float sz, bool outer)
-{
-    static const float mu[4] = { 0.5f, 1.0f, 0.5f, 0.0f };
-    static const float mv[4] = { 0.0f, 0.5f, 1.0f, 0.5f };
-    static const float a_in[4] = { 0.0f, 90.0f, 180.0f, 270.0f };
-    float a0 = a_in[e] + (outer ? 180.0f : 0.0f);
-    tk_arc(x0 + mu[e] * sz, y0 + mv[e] * sz, sz / 6.0f, a0, a0 + 180.0f);
-}
-
-static void tk_motif_strokes(int m, float x0, float y0, float sz)
-{
-    const float A = sz / 3.0f, B = 2.0f * sz / 3.0f;
-    const float nwx = x0,      nwy = y0;
-    const float nex = x0 + sz, ney = y0;
-    const float sex = x0 + sz, sey = y0 + sz;
-    const float swx = x0,      swy = y0 + sz;
-    switch (m) {
-    case TM_BS:
-        tk_arc(nex,ney,A,90,180); tk_arc(nex,ney,B,90,180);
-        tk_arc(swx,swy,A,270,360); tk_arc(swx,swy,B,270,360); break;
-    case TM_FS:
-        tk_arc(nwx,nwy,A,0,90); tk_arc(nwx,nwy,B,0,90);
-        tk_arc(sex,sey,A,180,270); tk_arc(sex,sey,B,180,270); break;
-    case TM_HB:
-        tk_seg(x0,y0+A,x0+sz,y0+A); tk_seg(x0+sz,y0+B,x0,y0+B); break;
-    case TM_VB:
-        tk_seg(x0+A,y0,x0+A,y0+sz); tk_seg(x0+B,y0+sz,x0+B,y0); break;
-    case TM_DOTS: break;
-    case TM_BLOB:
-        tk_arc(nwx,nwy,A,0,90); tk_arc(swx,swy,A,270,360);
-        tk_arc(sex,sey,A,180,270); tk_arc(nex,ney,A,90,180); break;
-    case TM_PLUS:
-        tk_seg(x0,y0+A,x0+A,y0+A); tk_seg(x0+B,y0+A,x0+sz,y0+A);
-        tk_seg(x0,y0+B,x0+A,y0+B); tk_seg(x0+B,y0+B,x0+sz,y0+B);
-        tk_seg(x0+A,y0,x0+A,y0+A); tk_seg(x0+A,y0+B,x0+A,y0+sz);
-        tk_seg(x0+B,y0,x0+B,y0+A); tk_seg(x0+B,y0+B,x0+B,y0+sz); break;
-    case TM_FNE: tk_arc(nex,ney,A,90,180); tk_arc(nex,ney,B,90,180); break;
-    case TM_FSW: tk_arc(swx,swy,A,270,360); tk_arc(swx,swy,B,270,360); break;
-    case TM_FNW: tk_arc(nwx,nwy,A,0,90); tk_arc(nwx,nwy,B,0,90); break;
-    case TM_FSE: tk_arc(sex,sey,A,180,270); tk_arc(sex,sey,B,180,270); break;
-    case TM_TN: tk_seg(x0,y0+B,x0+sz,y0+B);
-        tk_arc(nwx,nwy,A,0,90); tk_arc(nex,ney,A,90,180); break;
-    case TM_TS: tk_seg(x0,y0+A,x0+sz,y0+A);
-        tk_arc(swx,swy,A,270,360); tk_arc(sex,sey,A,180,270); break;
-    case TM_TE: tk_seg(x0+A,y0,x0+A,y0+sz);
-        tk_arc(nex,ney,A,90,180); tk_arc(sex,sey,A,180,270); break;
-    case TM_TW: tk_seg(x0+B,y0,x0+B,y0+sz);
-        tk_arc(nwx,nwy,A,0,90); tk_arc(swx,swy,A,270,360); break;
-    default: break;
-    }
-}
-
-static inline float tk_d2(float u, float v, float px, float py)
-{ float dx = u-px, dy = v-py; return dx*dx+dy*dy; }
-
-static bool tk_inside_motif(int m, float u, float v)
-{
-    const float R1=1.0f/9.0f, R2=4.0f/9.0f;
-    #define ANN(cx2,cy2) (tk_d2(u,v,cx2,cy2)>=R1 && tk_d2(u,v,cx2,cy2)<=R2)
-    #define QD(cx2,cy2)  (tk_d2(u,v,cx2,cy2)<R1)
-    switch(m){
-    case TM_BS:   return ANN(1,0)||ANN(0,1);
-    case TM_FS:   return ANN(0,0)||ANN(1,1);
-    case TM_HB:   return v>=1.0f/3&&v<=2.0f/3;
-    case TM_VB:   return u>=1.0f/3&&u<=2.0f/3;
-    case TM_DOTS: return false;
-    case TM_BLOB: return !(QD(0,0)||QD(1,0)||QD(1,1)||QD(0,1));
-    case TM_PLUS: return (v>=1.0f/3&&v<=2.0f/3)||(u>=1.0f/3&&u<=2.0f/3);
-    case TM_FNE:  return ANN(1,0);
-    case TM_FSW:  return ANN(0,1);
-    case TM_FNW:  return ANN(0,0);
-    case TM_FSE:  return ANN(1,1);
-    case TM_TN:   return v<=2.0f/3&&!QD(0,0)&&!QD(1,0);
-    case TM_TS:   return v>=1.0f/3&&!QD(0,1)&&!QD(1,1);
-    case TM_TE:   return u>=1.0f/3&&!QD(1,0)&&!QD(1,1);
-    case TM_TW:   return u<=2.0f/3&&!QD(0,0)&&!QD(0,1);
-    default:      return false;
-    }
-    #undef ANN
-    #undef QD
-}
-
-static bool tk_hatch_excluded(int m, float u, float v)
-{
-    const float RD=1.0f/36.0f;
-    if(tk_inside_motif(m,u,v)) return true;
-    return tk_d2(u,v,0.5f,0.0f)<=RD || tk_d2(u,v,1.0f,0.5f)<=RD ||
-           tk_d2(u,v,0.5f,1.0f)<=RD || tk_d2(u,v,0.0f,0.5f)<=RD;
-}
-
-static void tk_hatch_tile(int m, float x0, float y0, float sz,
-                           float angle_deg, float spacing)
-{
-    float circ[12][3]; int nc=0;
-    static const float mid[4][2]={{0.5f,0},{1,0.5f},{0.5f,1},{0,0.5f}};
-    for(int e=0;e<4;e++){circ[nc][0]=mid[e][0];circ[nc][1]=mid[e][1];circ[nc][2]=1.0f/6.0f;nc++;}
-    static const float cnr[4][2]={{0,0},{1,0},{1,1},{0,1}};
-    #define ADD_C(ci,r2) do{circ[nc][0]=cnr[ci][0];circ[nc][1]=cnr[ci][1];circ[nc][2]=(r2);nc++;}while(0)
-    switch(m){
-    case TM_BS: ADD_C(1,1.0f/3);ADD_C(1,2.0f/3);ADD_C(3,1.0f/3);ADD_C(3,2.0f/3);break;
-    case TM_FS: ADD_C(0,1.0f/3);ADD_C(0,2.0f/3);ADD_C(2,1.0f/3);ADD_C(2,2.0f/3);break;
-    case TM_BLOB: ADD_C(0,1.0f/3);ADD_C(1,1.0f/3);ADD_C(2,1.0f/3);ADD_C(3,1.0f/3);break;
-    case TM_FNE: ADD_C(1,1.0f/3);ADD_C(1,2.0f/3);break;
-    case TM_FSW: ADD_C(3,1.0f/3);ADD_C(3,2.0f/3);break;
-    case TM_FNW: ADD_C(0,1.0f/3);ADD_C(0,2.0f/3);break;
-    case TM_FSE: ADD_C(2,1.0f/3);ADD_C(2,2.0f/3);break;
-    case TM_TN:  ADD_C(0,1.0f/3);ADD_C(1,1.0f/3);break;
-    case TM_TS:  ADD_C(3,1.0f/3);ADD_C(2,1.0f/3);break;
-    case TM_TE:  ADD_C(1,1.0f/3);ADD_C(2,1.0f/3);break;
-    case TM_TW:  ADD_C(0,1.0f/3);ADD_C(3,1.0f/3);break;
-    default: break;
-    }
-    #undef ADD_C
-    float lu[2], lv[2]; int nlu=0, nlv=0;
-    switch(m){
-    case TM_HB:   lv[nlv++]=1.0f/3;lv[nlv++]=2.0f/3;break;
-    case TM_VB:   lu[nlu++]=1.0f/3;lu[nlu++]=2.0f/3;break;
-    case TM_PLUS: lv[nlv++]=1.0f/3;lv[nlv++]=2.0f/3;lu[nlu++]=1.0f/3;lu[nlu++]=2.0f/3;break;
-    case TM_TN:   lv[nlv++]=2.0f/3;break;
-    case TM_TS:   lv[nlv++]=1.0f/3;break;
-    case TM_TE:   lu[nlu++]=1.0f/3;break;
-    case TM_TW:   lu[nlu++]=2.0f/3;break;
-    default: break;
-    }
-    float th=angle_deg*PLT_PI/180.0f;
-    float dx2=cosf(th), dy2=sinf(th);
-    float nx2=-sinf(th), ny2=cosf(th);
-    float offs[4]={x0*nx2+y0*ny2,(x0+sz)*nx2+y0*ny2,x0*nx2+(y0+sz)*ny2,(x0+sz)*nx2+(y0+sz)*ny2};
-    float omin=offs[0], omax=offs[0];
-    for(int i=1;i<4;i++){if(offs[i]<omin)omin=offs[i];if(offs[i]>omax)omax=offs[i];}
-    int k0=(int)ceilf(omin/spacing), k1=(int)floorf(omax/spacing);
-    for(int k=k0;k<=k1&&!motion_should_abort();k++){
-        float lx2=(float)k*spacing*nx2, ly2=(float)k*spacing*ny2;
-        float s0,s1;
-        if(!clip_to_rect(x0+sz*0.5f,y0+sz*0.5f,sz*0.5f,lx2,ly2,dx2,dy2,&s0,&s1)) continue;
-        float ts[32]; int nt=0;
-        ts[nt++]=s0; ts[nt++]=s1;
-        for(int i=0;i<nc&&nt<30;i++){
-            float u0,u1;
-            if(clip_to_circle(x0+circ[i][0]*sz,y0+circ[i][1]*sz,circ[i][2]*sz,lx2,ly2,dx2,dy2,&u0,&u1)){
-                if(u0>s0&&u0<s1)ts[nt++]=u0;
-                if(u1>s0&&u1<s1)ts[nt++]=u1;
-            }
-        }
-        for(int i=0;i<nlu&&nt<31;i++){
-            if(fabsf(dx2)>1e-7f){float t=(x0+lu[i]*sz-lx2)/dx2;if(t>s0&&t<s1)ts[nt++]=t;}
-        }
-        for(int i=0;i<nlv&&nt<31;i++){
-            if(fabsf(dy2)>1e-7f){float t=(y0+lv[i]*sz-ly2)/dy2;if(t>s0&&t<s1)ts[nt++]=t;}
-        }
-        for(int i=1;i<nt;i++){float v=ts[i];int j=i-1;while(j>=0&&ts[j]>v){ts[j+1]=ts[j];j--;}ts[j+1]=v;}
-        float keep[16][2]; int nk=0;
-        for(int i=0;i+1<nt&&nk<16;i++){
-            if(ts[i+1]-ts[i]<0.05f) continue;
-            float tm2=0.5f*(ts[i]+ts[i+1]);
-            float pu=(lx2+tm2*dx2-x0)/sz, pv=(ly2+tm2*dy2-y0)/sz;
-            if(!tk_hatch_excluded(m,pu,pv)){keep[nk][0]=ts[i];keep[nk][1]=ts[i+1];nk++;}
-        }
-        for(int i=0;i<nk;i++){
-            int idx=(k&1)?(nk-1-i):i;
-            float a=keep[idx][0], b=keep[idx][1];
-            if(k&1){float tmp=a;a=b;b=tmp;}
-            tk_seg(lx2+a*dx2,ly2+a*dy2,lx2+b*dx2,ly2+b*dy2);
-        }
-    }
-}
-
-static void do_draw_truchet(float cx2, float cy2, int n, float spacing,
-                             float angle_deg, int seed, uint32_t mask)
-{
-    static uint8_t picks[TRUCHET_MAX_CELLS];
-    mask &= TRUCHET_ALL_MASK;
-    if(mask==0) mask=TRUCHET_DEFAULT_MASK;
-    int motifs[TM_COUNT], nm=0;
-    for(int i=0;i<TM_COUNT;i++) if(mask&(1u<<i)) motifs[nm++]=i;
-    float W=g_x_max-g_x_min, H=g_y_max-g_y_min;
-    if(n<1) n=1;
-    float sz=W/(float)n;
-    if(sz<TRUCHET_MIN_CELL_MM){
-        n=(int)(W/TRUCHET_MIN_CELL_MM);
-        if(n<1)n=1;
-        sz=W/(float)n;
-        web_log("truchet: cells clamped to >=%.0f mm -> %d cols",(double)TRUCHET_MIN_CELL_MM,n);
-    }
-    int rows=(int)(H/sz);
-    if(rows<1) rows=1;
-    while(n*rows>TRUCHET_MAX_CELLS) rows--;
-    if(isnan(cx2)) cx2=0.5f*(g_x_min+g_x_max);
-    if(isnan(cy2)) cy2=0.5f*(g_y_min+g_y_max);
-    float gx=cx2-(float)n*sz*0.5f, gy=cy2-(float)rows*sz*0.5f;
-    s_tk_rng=(uint32_t)seed;
-    for(int i=0;i<n*rows;i++) picks[i]=(uint8_t)motifs[tk_rand()%(uint32_t)nm];
-    tmc5072_enable(&tmc, true);
-    s_tk_pen.down=false; s_tk_pen.valid=false;
-    pen_lift();
-    web_log("truchet: %dx%d cells of %.0f mm, %d motifs, hatch %.1f mm @ %.0f deg",
-            n,rows,(double)sz,nm,(double)spacing,(double)angle_deg);
-    for(int ri=0;ri<rows&&!motion_should_abort();ri++){
-        for(int c2=0;c2<n&&!motion_should_abort();c2++){
-            int ci=(ri&1)?(n-1-c2):c2;
-            float tx=gx+(float)ci*sz, ty=gy+(float)ri*sz;
-            if(tx>g_x_max||tx+sz<g_x_min||ty>g_y_max||ty+sz<g_y_min) continue;
-            int m2=picks[ri*n+ci];
-            tk_motif_strokes(m2,tx,ty,sz);
-            for(int e=0;e<4;e++){
-                bool grid_edge=(e==0&&ri==0)||(e==2&&ri==rows-1)||
-                               (e==3&&ci==0)||(e==1&&ci==n-1);
-                if(tm_dot_edges[m2]&(1u<<e)) tk_dot_half(e,tx,ty,sz,false);
-                if(grid_edge)                 tk_dot_half(e,tx,ty,sz,true);
-            }
-            if(spacing>=0.5f) tk_hatch_tile(m2,tx,ty,sz,angle_deg,spacing);
-        }
-    }
-    tk_break();
-    pen_lift();
-    emit_pos_event();
-}
-
 /* ---- Exported to web layer ---- */
 
 bool plotter_in_bounds(float x, float y)
@@ -1609,7 +1279,6 @@ static const char *wcmd_name(wcmd_type_t t)
     case WCMD_RAMP:     return "ramp";
     case WCMD_CURRENT:  return "current";
     case WCMD_WOBBLY:   return "wobbly";
-    case WCMD_TRUCHET:  return "truchet";
     default:            return "?";
     }
 }
@@ -1676,11 +1345,7 @@ static void web_draw_task(void *arg)
                 snprintf(g_job_desc, sizeof(g_job_desc), "wobbly (%.0f,%.0f) r=%.0f",
                          (double)cmd.p[0],(double)cmd.p[1],(double)cmd.p[2]);
                 break;
-            case WCMD_TRUCHET:
-                snprintf(g_job_desc, sizeof(g_job_desc), "truchet %d sp=%.1f ang=%.0f",
-                         (int)cmd.p[2],(double)cmd.p[3],(double)cmd.p[4]);
-                break;
-            default:
+                default:
                 snprintf(g_job_desc, sizeof(g_job_desc), "%s", wcmd_name(cmd.type));
                 break;
             }
@@ -1756,12 +1421,6 @@ static void web_draw_task(void *arg)
                            cmd.p[4],(int)cmd.p[5],(int)cmd.p[6],(int)cmd.p[7],
                            (int)cmd.p[8],cmd.p[9],cmd.p[10],cmd.p[11]!=0.0f);
             emit_pos_event(); web_log("wobbly done"); break;
-        case WCMD_TRUCHET:
-            web_log("truchet n=%d spacing=%.1f angle=%.0f seed=%d motifs=0x%x",
-                    (int)cmd.p[2],(double)cmd.p[3],(double)cmd.p[4],(int)cmd.p[5],(unsigned)cmd.p[6]);
-            do_draw_truchet(cmd.p[0],cmd.p[1],(int)cmd.p[2],cmd.p[3],
-                            cmd.p[4],(int)cmd.p[5],(uint32_t)cmd.p[6]);
-            web_log("truchet done"); break;
         case WCMD_SETHOME:
             web_log("sethome"); reset_affine_matrix(); set_origin_here(); emit_pos_event(); web_log("sethome done"); break;
         case WCMD_BOUNDS:
@@ -2044,17 +1703,6 @@ static int cmd_wobbly(int argc, char **argv)
     do_draw_wobbly(cx2,cy2,r,bound_r,wobble,harmonics,seed,cycles, fill,hang,hsp,true);
     printf("wobbly done\n"); return 0;
 }
-static int cmd_truchet(int argc, char **argv)
-{
-    if (argc < 2) { printf("usage: truchet <n_cols> [spacing] [angle] [seed] [mask_hex]\n"); return 0; }
-    int n=atoi(argv[1]);
-    float spacing=(argc>=3)?atof(argv[2]):3.0f;
-    float angle=(argc>=4)?atof(argv[3]):45.0f;
-    int seed=(argc>=5)?atoi(argv[4]):42;
-    uint32_t mask=(argc>=6)?(uint32_t)strtoul(argv[5],NULL,16):TRUCHET_DEFAULT_MASK;
-    do_draw_truchet(NAN,NAN,n,spacing,angle,seed,mask);
-    printf("truchet done\n"); return 0;
-}
 static int cmd_pen(int argc, char **argv)
 {
     if (argc < 2) { printf("usage: pen <up|down|degrees>\n"); return 0; }
@@ -2161,7 +1809,6 @@ static const cmd_entry_t s_cmds[] = {
     { "circle",    "Draw circle: circle <cx> <cy> <r> [cycles] ...",   cmd_circle    },
     { "square",    "Draw square: square <cx> <cy> <size> [cycles] ...",cmd_square    },
     { "wobbly",    "Random closed curve",                               cmd_wobbly    },
-    { "truchet",   "Truchet tiling: truchet <n_cols> [spacing] ...",   cmd_truchet   },
     { "bullseye",  "Calibration crosshair: bullseye [cx cy]",          cmd_bullseye  },
     { "grid",      "Calibration grid: grid [cx cy]",                   cmd_grid      },
     { "where",     "Read position (x,y) mm from XACTUAL",              cmd_where     },

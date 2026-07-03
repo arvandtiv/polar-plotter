@@ -392,22 +392,6 @@ static void handle_wobbly(int sock, const char *qs)
     resp_enqueue(sock, "wobbly queued", &c);
 }
 
-static void handle_truchet(int sock, const char *qs)
-{
-    wcmd_t c = { .type = WCMD_TRUCHET };
-    c.p[0] = qf(qs, "cx",      NAN);
-    c.p[1] = qf(qs, "cy",      NAN);
-    c.p[2] = qf(qs, "n",       4.0f);
-    c.p[3] = qf(qs, "spacing", 3.0f);
-    c.p[4] = qf(qs, "angle",  45.0f);
-    c.p[5] = qf(qs, "seed",   42.0f);
-    c.p[6] = qf(qs, "motifs",  0.0f);
-    if (c.p[2] < 1.0f || c.p[2] > 64.0f) {
-        resp_json(sock, "error", "n must be 1..64"); return;
-    }
-    resp_enqueue(sock, "truchet queued", &c);
-}
-
 static void handle_sethome(int sock, const char *qs)
 {
     (void)qs;
@@ -811,7 +795,6 @@ static const route_t s_routes[] = {
     { "/api/grid",       handle_grid       },
     { "/api/border",     handle_border     },
     { "/api/wobbly",     handle_wobbly     },
-    { "/api/truchet",    handle_truchet    },
     { "/api/sethome",    handle_sethome    },
     { "/api/bounds",     handle_bounds     },
     { "/api/matrix",     handle_matrix     },

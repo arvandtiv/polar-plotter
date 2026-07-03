@@ -93,7 +93,7 @@ cell bounds are transient and never persisted.)
 The lowest-level vocabulary every doorway shares:
 
 `goto` · `line` · `arc` · `circle` · `square` · `wobbly` (random closed blob) ·
-`truchet` (winged-tile tiling) · `bullseye` / `grid` / `border` (calibration aids) ·
+`bullseye` / `grid` / `border` (calibration aids) ·
 `pen` · `home` · `sethome`.
 
 Plus **fills** (none · hatch · concentric), optional **outline**, and a `cycles` count to

@@ -1,6 +1,7 @@
 // Square generator — equal-sided box with optional rotation. Registers on import.
 
 import { register, num, type Module } from "../registry";
+import { shapeFillSection, applyShapeFill } from "./fill";
 import { rotate } from "../geom";
 import type { Frame, Path, Pt } from "../frame";
 
@@ -22,6 +23,7 @@ export const squareModule: Module = {
     { title: "Ink", fields: [
       { key: "cycles", label: "Retrace", type: "range", min: 1, max: 5, step: 1, unit: "×", default: 1 },
     ]},
+    shapeFillSection(),
   ],
   generate(params): Frame {
     const s = num(params, "size", 100);
@@ -35,8 +37,9 @@ export const squareModule: Module = {
       { x: cx + h, y: cy + h }, { x: cx - h, y: cy + h },
     ];
     if (rot) pts = rotate(pts, rot, cx, cy);
-    const path: Path = { points: pts, closed: true, cycles };
-    return { widthMm: s, heightMm: s, paths: [path], meta: { title: "Square" } };
+    return { widthMm: s, heightMm: s,
+             paths: applyShapeFill(pts, params, cycles),
+             meta: { title: "Square" } };
   },
 };
 
