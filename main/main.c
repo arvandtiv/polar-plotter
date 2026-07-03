@@ -663,6 +663,7 @@ static void wait_both_near(int32_t tl, int32_t tr, int32_t lookahead, int timeou
 static struct {
     bool    active, first, have_pend;
     int32_t cur_l, cur_r, pend_l, pend_r;
+    float   cur_x, cur_y, pend_x, pend_y;   /* logical mm of cur/pend (turn-angle calc) */
     float   x, y;
 } s_path;
 
@@ -671,25 +672,41 @@ static void path_begin(float x0, float y0)
     clamp_xy(&x0, &y0);
     plt_xy_to_steps(&g_geom, x0, y0, &s_path.cur_l, &s_path.cur_r);
     s_path.x = x0; s_path.y = y0;
+    s_path.cur_x = x0; s_path.cur_y = y0;
+    s_path.pend_x = x0; s_path.pend_y = y0;
     s_path.active = true; s_path.first = true; s_path.have_pend = false;
 }
 
-static void path_emit(bool last)
+/* Emit the pending waypoint. Interior joints (Phase 2.5, motion doc §5.4):
+ * `la_mm` = curvature-aware hand-off distance — the next target is released when
+ * both motors are within la_mm, and the cruise is CAPPED at the fastest speed that
+ * can still stop within la_mm at the base DMAX. The cap scales both motors' VMAX
+ * by the same factor (ratio preserved), so the ramp never enters its decel phase
+ * mid-segment — the equal-absolute-rate decel from unequal velocities is what
+ * wobbled large fast shapes. Straights/gentle curves get la up to
+ * FLOW_LOOKAHEAD_MAX_MM (fast clean cruise); tight turns fall back to
+ * LINE_LOOKAHEAD_MM, which also naturally slows the pen into the corner. */
+static void path_emit(bool last, float la_mm)
 {
     if (g_estop) return;   /* stop feeding the chip new targets the instant e-stop fires */
     int32_t tl = s_path.pend_l, tr = s_path.pend_r;
-    if (s_path.first || last)
+    if (s_path.first || last) {
         tmc5072_move_scaled_from(&tmc, tr, tl, s_path.cur_r, s_path.cur_l);
-    else
-        tmc5072_move_rate_matched(&tmc, tr, tl, s_path.cur_r, s_path.cur_l);
+    } else {
+        float a_us = (float)tmc.base_ramp.dmax * TMC5072_ACC_UNIT;       /* µsteps/s² */
+        float v_us = sqrtf(2.0f * a_us * la_mm * g_geom.steps_per_mm);   /* µsteps/s  */
+        uint32_t vcap = (uint32_t)(v_us / TMC5072_VEL_UNIT);             /* chip units */
+        tmc5072_move_rate_matched(&tmc, tr, tl, s_path.cur_r, s_path.cur_l, vcap);
+    }
     s_path.first = false;
     s_path.cur_l = tl; s_path.cur_r = tr;
+    s_path.cur_x = s_path.pend_x; s_path.cur_y = s_path.pend_y;
     s_path.have_pend = false;
     if (last) {
         wait_reached(MOTOR_THETA, MOVE_TIMEOUT_MS);
         wait_reached(MOTOR_RHO,   MOVE_TIMEOUT_MS);
     } else {
-        int32_t lookahead = (int32_t)(LINE_LOOKAHEAD_MM * g_geom.steps_per_mm);
+        int32_t lookahead = (int32_t)(la_mm * g_geom.steps_per_mm);
         wait_both_near(tl, tr, lookahead, MOVE_TIMEOUT_MS);
     }
 }
@@ -711,8 +728,18 @@ static void path_to(float x, float y)
         int32_t rl = s_path.have_pend ? s_path.pend_l : s_path.cur_l;
         int32_t rr = s_path.have_pend ? s_path.pend_r : s_path.cur_r;
         if (sl == rl && sr == rr) continue;
-        if (s_path.have_pend) path_emit(false);
-        s_path.pend_l = sl; s_path.pend_r = sr; s_path.have_pend = true;
+        if (s_path.have_pend) {
+            /* Hand-off distance from the turn angle AT the pending waypoint (its
+             * outgoing direction is only known now that the next point exists). */
+            float la = plt_flow_lookahead_mm(
+                s_path.pend_x - s_path.cur_x, s_path.pend_y - s_path.cur_y,
+                px - s_path.pend_x,           py - s_path.pend_y,
+                CIRCLE_CHORD_ERR_MM, LINE_LOOKAHEAD_MM, FLOW_LOOKAHEAD_MAX_MM);
+            path_emit(false, la);
+        }
+        s_path.pend_l = sl; s_path.pend_r = sr;
+        s_path.pend_x = px; s_path.pend_y = py;
+        s_path.have_pend = true;
     }
     s_path.x = x; s_path.y = y;
 }
@@ -722,7 +749,7 @@ static void path_end(void)
     if (!s_path.active) return;
     s_path.active = false;
     if (motion_should_abort()) return;
-    if (s_path.have_pend) path_emit(true);
+    if (s_path.have_pend) path_emit(true, LINE_LOOKAHEAD_MM);
 }
 
 static void draw_line_mm(float x0, float y0, float x1, float y1)

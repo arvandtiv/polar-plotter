@@ -68,6 +68,11 @@
 #define HATCH_SPACING_MM     3.0f
 #define LINE_SEG_MM          5.0f
 #define LINE_LOOKAHEAD_MM    2.0f
+/* Max curvature-aware hand-off release (Phase 2.5): straights/gentle curves release
+ * the next streamed target up to this early so the ramp cruises through joints
+ * instead of decelerating toward every waypoint. Bounded by the kinematic line-bow
+ * over the release window (same budget as LINE_SEG_MM, ~2.5×). */
+#define FLOW_LOOKAHEAD_MAX_MM 8.0f
 
 /* WiFi credentials */
 #define WIFI_SSID         "BUBSUNNY"

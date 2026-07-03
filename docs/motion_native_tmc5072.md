@@ -166,4 +166,31 @@ other command type, a spatial discontinuity, pause/E-STOP, or a 250 ms dry queue
 ends the stroke with a clean synchronized stop. Old firmware ignores the flag; old
 clients simply never set it.
 
+### 5.4 Phase 2.5 (2026-07-03): curvature-aware look-ahead + ratio-safe cruise cap
+
+Field report after Phase 2: SMALL-radius curves plotted solid, LARGE ones showed tiny
+periodic wobbles. Mechanism: small shapes never get fast; long gentle paths let the
+ramp build speed — and in positioning mode the chip plans a STOP at every interior
+waypoint. At cruise, its decel distance ≫ the fixed 2 mm hand-off, so every ~5 mm
+segment became decel→retarget→re-accel, and since both motors decelerate at the same
+ABSOLUTE rate from DIFFERENT velocities, the ratio (= path direction) distorted at
+every joint. The old fixed look-ahead also acted as a hidden speed governor
+(√(2·a·2 mm) ≈ 11 mm/s at stock DMAX).
+
+Fix, two coupled parts per interior joint:
+1. **Curvature-aware hand-off** (`plt_flow_lookahead_mm`, host-tested): release the
+   next target D early, bounded by the rubber-band deviation D²/(8·r_local) ≤ the
+   0.3 mm chord budget, with r_local ≈ seg/θ from the turn angle at the pending
+   waypoint. Straights/gentle arcs → `FLOW_LOOKAHEAD_MAX_MM` (8 mm, bounded by the
+   kinematic line-bow budget); tight turns → the old 2 mm.
+2. **Ratio-safe cruise cap** (`tmc5072_move_rate_matched` vmax_cap): interior VMAX
+   pairs are clamped so the ramp can still stop within the hand-off distance
+   (v ≤ √(2·DMAX·la)) — both motors scaled by the SAME factor, ratio preserved. The
+   ramp never enters its decel phase mid-segment → no sawtooth, no wobble; the pen
+   also naturally slows into tight in-path corners.
+
+Net: large shapes get BOTH solid lines and a higher clean cruise than the old
+implicit ceiling (≈26 mm/s stock at la=8; scales with the `ramp` dmaxr knob — a
+brisk-stop recipe raises the clean cruise further). Small shapes unchanged.
+
 Not yet done: D anchor-arc primitive, F coolStep.

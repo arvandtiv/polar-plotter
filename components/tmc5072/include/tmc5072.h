@@ -135,11 +135,18 @@ void      tmc5072_set_ramp_shape(tmc5072_t *dev, float a1_ratio, uint32_t v1,
                                   uint32_t vstop, uint32_t tzerowait);
 void      tmc5072_set_ramp_scale(tmc5072_t *dev, int motor, float scale);
 
+/* Internal-oscillator unit conversions (CLK16 grounded → fCLK ≈ 13.2 MHz, datasheet):
+ *   velocity: v[µsteps/s]  = reg × fCLK / 2^24
+ *   accel:    a[µsteps/s²] = reg × fCLK² / 2^41                                    */
+#define TMC5072_FCLK_HZ    13200000.0f
+#define TMC5072_VEL_UNIT   (TMC5072_FCLK_HZ / 16777216.0f)                 /* ≈ 0.787 */
+#define TMC5072_ACC_UNIT   ((TMC5072_FCLK_HZ * TMC5072_FCLK_HZ) / 2199023255552.0f) /* ≈ 79.2 */
+
 void      tmc5072_move_coordinated(tmc5072_t *dev, int32_t target0, int32_t target1);
 void      tmc5072_move_scaled_from(tmc5072_t *dev, int32_t t0, int32_t t1,
                                     int32_t from0, int32_t from1);
-void      tmc5072_move_rate_matched(tmc5072_t *dev, int32_t t0, int32_t t1,
-                                     int32_t from0, int32_t from1);
+void      tmc5072_move_rate_matched(tmc5072_t *dev, int32_t target0, int32_t target1,
+                                     int32_t from0, int32_t from1, uint32_t vmax_cap);
 void      tmc5072_move_to(tmc5072_t *dev, int motor, int32_t position);
 int32_t   tmc5072_position(tmc5072_t *dev, int motor);
 bool      tmc5072_position_reached(tmc5072_t *dev, int motor);
