@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback , useMemo } from 'react';
 import { apiGet, apiBatch, getStatus, getStoredIp, storeIp, sseUrl, type RawStatus } from '../lib/api';
 import { loadPapers, savePapers, type Paper } from '../lib/papers';
 export type { Paper } from '../lib/papers';
@@ -43,6 +43,7 @@ export interface PlotterStatus {
   drvOk: boolean; drvFlags: string;
   motion?: { vmax: number; amax: number; run_ma: number; hold_ma: number };
   matrix?: { a: number; b: number; c: number; d: number; tx: number; ty: number };
+  bounds?: { xn: number; xp: number; yn: number; yp: number; ellipse?: boolean };
 }
 // One row in the Autonomous job list. The firmware only tracks job CURSORS (not the
 // MCP's full plan), so labels are captured as `current` advances; not-yet-run jobs
@@ -164,6 +165,7 @@ import {
   gridClearQueries,
   hydrateGridCommands,
   type GridCtx,
+  isIdentityMatrix,
 } from '../lib/gridScript';
 export type { GeneratorSpec };
 
@@ -904,6 +906,7 @@ export function usePlotter() {
         enqueued: s.enqueued, current: s.current, done: s.done, pending: s.pending,
         idle: s.idle, aborting: s.aborting, paused: s.paused, estop: !!s.estop, job: s.job,
         drvOk: s.drv_ok, drvFlags: s.drv_flags, motion: s.motion, matrix: s.matrix,
+        bounds: s.bounds,
       });
 
       // Artwork-ready notification: detect the queue DRAINING (pending > 0 → 0).
@@ -1177,6 +1180,33 @@ export function usePlotter() {
     if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
   }, [pushLog]);
 
+  /* ---- Workspace "home" tracking (the 1×1 full-area state) ----------------------
+   * THE authoritative check, derived from LIVE firmware state and nothing else:
+   * home ⇔ the live matrix is identity AND the live bounds equal the console's full
+   * Work Area (±0.5 mm). Anything else — a grid cell's bounds, a leftover affine
+   * offset, a half-restored state (e.g. `home` resets the matrix but NOT the bounds)
+   * — is DISPLACED: `home` and Walk-limits would trace a shifted/shrunken zone. */
+  const workspaceHome: 'home' | 'displaced' | 'unknown' = useMemo(() => {
+    if (!status?.bounds) return 'unknown';
+    const ident = isIdentityMatrix(status.matrix);
+    const b = status.bounds;
+    const match =
+      Math.abs(b.xn + bounds.left) <= 0.5 && Math.abs(b.xp - bounds.right) <= 0.5 &&
+      Math.abs(b.yn + bounds.up) <= 0.5 && Math.abs(b.yp - bounds.down) <= 0.5;
+    return ident !== false && match ? 'home' : 'displaced';
+  }, [status, bounds]);
+
+  /** One-click recovery: push the full Work Area bounds (queued, FIFO-safe behind any
+   *  pending draws) then identity matrix — the same pair grid_clear applies. */
+  const restoreWorkspace = useCallback(async () => {
+    pushLog('cmd', '> restore full work area (bounds + identity matrix)');
+    const bw = await sendAndWait(boundsToQuery(boundsRef.current));
+    if (bw !== 'ok') { pushLog('err', `[workspace] bounds restore failed (${bw})`); return; }
+    setMatrixState({ ...IDENTITY_PARAMS });
+    if (ipRef.current) await apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+    pushLog('ok', '[workspace] full work area restored — home & walk-limits are true again');
+  }, [pushLog, sendAndWait]);
+
   // Apply a saved preset: load into the editor AND push to the firmware.
   const applyMatrix = useCallback((m: Matrix) => {
     const vals: MatrixParams = { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty };
@@ -1219,6 +1249,7 @@ export function usePlotter() {
     status, jobs, currentJob,
     papers, applyPaper, savePaper, renamePaper, deletePaper,
     matrix, matrices, setMatrixVal, applyMatrixVals, resetMatrix,
+    workspaceHome, restoreWorkspace,
     applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
     setBounds, commitBounds,

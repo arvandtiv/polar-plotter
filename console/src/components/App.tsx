@@ -2045,6 +2045,13 @@ export default function App() {
                 P.notifyDone ? 'border-cyanx/40 bg-cyanx/10' : 'border-ink-700 opacity-60 hover:opacity-100'}`}>
               {P.notifyDone ? '🔔' : '🔕'}
             </button>
+            {connected && P.workspaceHome === 'displaced' && (
+              <button onClick={() => P.restoreWorkspace()}
+                title="The machine's live work area / matrix is NOT the full 1×1 home workspace (a grid cell or affine offset is active) — Home and Walk-limits would trace a displaced zone. Click to restore the full Work Area + identity matrix."
+                className="flex items-center gap-1 rounded-lg border border-amber-600/60 bg-amber-950/40 px-2.5 py-1.5 text-[11px] font-bold text-amber-300 animate-pulse">
+                ⚠ CELL/OFFSET
+              </button>
+            )}
             <IpInput ip={P.ip} onSave={P.setIp} />
             <StatusChip connected={connected} />
           </div>
@@ -2248,20 +2255,27 @@ export default function App() {
                 <Readout label="Pending" value={status?.pending ?? 0} unit="job" />
                 <Readout label="Done" value={status?.done ?? 0} unit="" />
               </div>
-              {(() => {
-                // Prefer the LIVE firmware matrix (a script/MCP may have changed it since
-                // the editor was seeded); fall back to the editor values.
+              {P.workspaceHome === 'displaced' && (() => {
+                // THE authoritative check (usePlotter.workspaceHome): home ⇔ live matrix
+                // is identity AND live bounds equal the full Work Area. Anything else —
+                // cell bounds, leftover offset, or a HALF-restored state (`home` resets
+                // the matrix but not the bounds) — displaces Home and Walk-limits.
                 const m = status?.matrix ?? matrix;
-                if (Math.abs(m.tx) <= 0.5 && Math.abs(m.ty) <= 0.5) return null;
+                const lb = status?.bounds;
                 const ag = activeGridMatching(m);   // known cell only if it matches tx/ty
+                const offsetOn = Math.abs(m.tx) > 0.5 || Math.abs(m.ty) > 0.5;
                 return (
-                  <div className="mt-2 rounded border border-amber-700/50 bg-amber-950/40 px-2.5 py-1.5 text-[11px] text-amber-200">
+                  <div className="mt-2 rounded border border-amber-600/60 bg-amber-950/50 px-2.5 py-1.5 text-[11px] text-amber-200">
+                    <b>⚠ Work area is NOT the full wall</b> — Home and Walk-limits will trace a displaced zone.{' '}
                     {ag
-                      ? <>Grid cell <b>({ag.col},{ag.row})</b> of <b>{ag.cols}×{ag.rows}</b> active
-                          (pad {ag.padding_mm} mm) — {ag.cellW}×{ag.cellH} mm at global ({ag.cx}, {ag.cy}). Position is cell-local.</>
-                      : <>Affine offset active (tx={m.tx.toFixed(1)}, ty={m.ty.toFixed(1)}) — position is cell-local
-                          (cell set outside this console — grid layout unknown).</>}
-                    {' '}Click <button type="button" className="underline hover:text-amber-100" onClick={() => P.resetMatrix()}>↺ Identity</button> or Home to reset.
+                      ? <>Grid cell <b>({ag.col},{ag.row})</b> of <b>{ag.cols}×{ag.rows}</b> active — {ag.cellW}×{ag.cellH} mm at ({ag.cx}, {ag.cy}).</>
+                      : offsetOn
+                        ? <>Affine offset tx={m.tx.toFixed(1)}, ty={m.ty.toFixed(1)}{lb ? <> · bounds x:[{lb.xn.toFixed(0)}..{lb.xp.toFixed(0)}] y:[{lb.yn.toFixed(0)}..{lb.yp.toFixed(0)}]</> : null} (set outside this console).</>
+                        : lb
+                          ? <>Matrix is identity but the firmware bounds x:[{lb.xn.toFixed(0)}..{lb.xp.toFixed(0)}] y:[{lb.yn.toFixed(0)}..{lb.yp.toFixed(0)}] don't match the Work Area (leftover cell clip).</>
+                          : null}
+                    {' '}<button type="button" className="font-semibold underline hover:text-amber-100"
+                      onClick={() => P.restoreWorkspace()}>⛶ Restore full area</button>
                   </div>
                 );
               })()}
@@ -2328,6 +2342,15 @@ export default function App() {
                       {bounds.left + bounds.right}×{bounds.up + bounds.down} mm
                     </span>
                   </div>
+                  {P.workspaceHome === 'displaced' && (
+                    <div className="mt-2 rounded border border-amber-600/60 bg-amber-950/50 px-2.5 py-1.5 text-[11px] text-amber-200">
+                      <b>⚠ The firmware is NOT at the 1×1 home workspace</b> (grid cell bounds and/or an
+                      affine offset are live) — this walk would trace a <b>displaced border</b>, not the wall
+                      edge shown above.{' '}
+                      <button type="button" className="font-semibold underline hover:text-amber-100"
+                        onClick={() => P.restoreWorkspace()}>⛶ Restore full area first</button>
+                    </div>
+                  )}
                   <p className="mt-2 text-[11px] leading-relaxed text-ink-500">
                     Traces the active work-area boundary once (pen down) so you can compare the
                     firmware's reachable edge against the physical machine.
