@@ -2234,6 +2234,18 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Btn variant="primary"  onClick={() => P.enqueue({ type: 'home' })}>⌂ Home</Btn>
                   <Btn                    onClick={() => P.enqueue({ type: 'sethome' })}>Set Home</Btn>
+                  {/* Workspace reset: back to the 1×1 home area (full bounds + identity matrix).
+                      Amber-lit whenever the live firmware state is displaced from it. */}
+                  <button onClick={() => P.restoreWorkspace()}
+                    title={P.workspaceHome === 'displaced'
+                      ? 'Work area is NOT the full wall (cell bounds / affine offset live) — click to restore full bounds + identity matrix'
+                      : 'Re-assert the full work area + identity matrix (already at 1×1 home)'}
+                    className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                      P.workspaceHome === 'displaced'
+                        ? 'border-amber-500/70 bg-amber-950/40 text-amber-300 animate-pulse'
+                        : 'border-ink-700 text-ink-400 hover:text-cyanx hover:border-cyanx/40'}`}>
+                    ⛶ Reset area
+                  </button>
                   <Btn variant={pen.down ? 'default' : 'go'} onClick={() => P.enqueue({ type: 'pen', pos: 'up' })}>Pen Up</Btn>
                   <Btn variant={pen.down ? 'go' : 'default'} onClick={() => P.enqueue({ type: 'pen', pos: 'down' })}>Pen Down</Btn>
                   <div className="ml-auto flex items-center gap-2">
