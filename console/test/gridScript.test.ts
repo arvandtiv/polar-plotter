@@ -6,6 +6,7 @@ import {
   resolveGridCtx,
   isIdentityMatrix,
   activeCellFor,
+  cellLocalBounds,
 } from "../src/lib/gridScript.ts";
 
 let fails = 0;
@@ -82,6 +83,28 @@ console.log("[7] activeCellFor — cell identity that survives a cell-local affi
      activeCellFor({ tx: 55, ty: -16 }, { xn: -276, xp: 263, yn: -115, yp: 273 }) === null);
   delete store["plotter.activeGrid"];
   ok("no record -> null", activeCellFor({ tx: 45, ty: -12 }, cellBounds) === null);
+}
+
+console.log("[8] cellLocalBounds — auto-fit clip so the warped output stays in the cell");
+{
+  const cell = { cellW: 87.6, cellH: 74.3 };
+  const I = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+  const plain = cellLocalBounds(cell, I);
+  ok("identity -> plain cell box", Math.abs(plain.xp - 43.8) < 0.01 && Math.abs(plain.yp - 37.15) < 0.01,
+     JSON.stringify(plain));
+  const d15 = cellLocalBounds(cell, { ...I, d: 1.5 });
+  ok("d=1.5 -> y clip shrunk /1.5 (aspect-true scale)",
+     Math.abs(d15.yp - 37.15 / 1.5) < 0.05 && Math.abs(d15.xp - 43.8 / 1.5) < 0.05, JSON.stringify(d15));
+  ok("warped image of d=1.5 box fits the cell", 1.5 * d15.yp <= 37.15 + 0.01);
+  const half = cellLocalBounds(cell, { ...I, a: 0.5, d: 0.5 });
+  ok("uniform 0.5 shrink -> clip GROWS 2x (still contained after warp)",
+     Math.abs(half.yp - 2 * 37.15) < 0.05 && Math.abs(half.xp - 2 * 43.8) < 0.05, JSON.stringify(half));
+  const sh = cellLocalBounds(cell, { ...I, tx: 10 });
+  ok("local tx eats clearance", sh.xp < 43.8 - 5, JSON.stringify(sh));
+  const rot = cellLocalBounds(cell, { a: 0.866, b: -0.5, c: 0.5, d: 0.866, tx: 0, ty: 0 });
+  const okx = 0.866 * rot.xp + 0.5 * rot.yp <= 43.8 + 0.05;
+  const oky = 0.5 * rot.xp + 0.866 * rot.yp <= 37.15 + 0.05;
+  ok("30-degree rotation image fits the cell", okx && oky, JSON.stringify(rot));
 }
 
 console.log("[6] isIdentityMatrix — stale-cell detection from /api/status");

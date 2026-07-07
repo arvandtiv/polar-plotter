@@ -167,6 +167,7 @@ import {
   type GridCtx,
   isIdentityMatrix,
   activeCellFor,
+  cellLocalBounds,
 } from '../lib/gridScript';
 export type { GeneratorSpec };
 
@@ -756,7 +757,7 @@ export function usePlotter() {
   // the live matrix is still a pure placement (identity linear + offset) so cell-local
   // affine edits can compose with it even though we have no local grid record. Sticky
   // until the workspace returns to the 1×1 home.
-  const adoptedCellRef = useRef<{ cx: number; cy: number } | null>(null);
+  const adoptedCellRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
 
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
@@ -910,7 +911,9 @@ export function usePlotter() {
         if (linearIdent && !offset) {
           adoptedCellRef.current = null;                      // pure identity → no cell
         } else if (linearIdent && offset && !activeCellFor(m, s.bounds)) {
-          adoptedCellRef.current = { cx: m.tx, cy: m.ty };    // external pure placement
+          // external pure placement: bounds are still the plain cell clip → capture dims
+          adoptedCellRef.current = { cx: m.tx, cy: m.ty,
+                                     w: s.bounds.xp - s.bounds.xn, h: s.bounds.yp - s.bounds.yn };
         }
       }
 
@@ -1210,12 +1213,14 @@ export function usePlotter() {
    * CELL-LOCAL: the firmware receives  [a b; c d]  with  tx+centreX, ty+centreY.
    * Cell identity comes from the console's grid record matched by BOUNDS (survives
    * composition), or an adopted external (MCP) placement. */
-  const cellBase: { cx: number; cy: number; label: string } | null = useMemo(() => {
+  const cellBase: { cx: number; cy: number; w: number; h: number; label: string } | null = useMemo(() => {
     const ag = activeCellFor(status?.matrix, status?.bounds);
-    if (ag) return { cx: ag.cx, cy: ag.cy, label: `cell (${ag.col},${ag.row}) of ${ag.cols}×${ag.rows}` };
+    if (ag) return { cx: ag.cx, cy: ag.cy, w: ag.cellW, h: ag.cellH,
+                     label: `cell (${ag.col},${ag.row}) of ${ag.cols}×${ag.rows}` };
     if (adoptedCellRef.current && workspaceHome === 'displaced') {
       const b = adoptedCellRef.current;
-      return { cx: b.cx, cy: b.cy, label: `external cell at (${b.cx.toFixed(1)}, ${b.cy.toFixed(1)})` };
+      return { cx: b.cx, cy: b.cy, w: b.w, h: b.h,
+               label: `external cell at (${b.cx.toFixed(1)}, ${b.cy.toFixed(1)})` };
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1229,29 +1234,51 @@ export function usePlotter() {
     return b ? { ...v, tx: v.tx + b.cx, ty: v.ty + b.cy } : v;
   }, []);
 
+  /** Apply a cell-local matrix: AUTO-FIT the cell's logical clip first (queued,
+   *  FIFO-safe), then the composed matrix. The firmware clips PRE-affine, so with
+   *  e.g. d=1.5 the plain cell box would let points land physically OUTSIDE the
+   *  cell (the reported overflow); shrinking the clip to cellLocalBounds makes the
+   *  WARPED output stay inside the cell — and generators, which read live bounds,
+   *  auto-size their art so it fills the cell exactly after the warp. */
+  const applyCellLocalMatrix = useCallback(async (vals: MatrixParams) => {
+    const b = cellBaseRef.current;
+    const ep = matrixToQuery(composeWithCell(vals));
+    if (!b) {
+      pushLog('cmd', `> ${ep}`);
+      if (ipRef.current) await apiGet(ipRef.current, ep).catch(() => {});
+      return;
+    }
+    const clip = cellLocalBounds({ cellW: b.w, cellH: b.h }, vals);
+    const bq = `bounds?xn=${clip.xn}&xp=${clip.xp}&yn=${clip.yn}&yp=${clip.yp}&shape=0`;
+    pushLog('cmd', `> ${bq}  (cell-local clip auto-fit)`);
+    const bw = await sendAndWait(bq);
+    if (bw !== 'ok') { pushLog('err', `[matrix] cell clip auto-fit failed (${bw}) — matrix NOT applied`); return; }
+    pushLog('cmd', `> ${ep}`);
+    pushLog('sys', `[matrix] applied WITHIN ${b.label} — composed with centre (${b.cx}, ${b.cy}); ` +
+                   `logical clip auto-fit to ${clip.xp * 2}×${clip.yp * 2} mm so the warped result stays inside the cell`);
+    if (ipRef.current) await apiGet(ipRef.current, ep).catch(() => {});
+  }, [pushLog, composeWithCell, sendAndWait]);
+
   // Edit one of the 6 live values (does NOT push to firmware until applyMatrixVals).
   const setMatrixVal = useCallback((key: keyof MatrixParams, val: number) => {
     setMatrixState((m) => ({ ...m, [key]: val }));
   }, []);
 
-  // Push the current live values to the firmware session (cell-composed when inside one).
+  // Push the current live values to the firmware session (cell-composed + clip
+  // auto-fit when inside a cell).
   const applyMatrixVals = useCallback(() => {
-    const b = cellBaseRef.current;
-    const ep = matrixToQuery(composeWithCell(matrixRef.current));
-    pushLog('cmd', `> ${ep}`);
-    if (b) pushLog('sys', `[matrix] applied WITHIN ${b.label} — composed with centre (${b.cx}, ${b.cy})`);
-    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
-  }, [pushLog, composeWithCell]);
+    void applyCellLocalMatrix(matrixRef.current);
+  }, [applyCellLocalMatrix]);
 
-  // Reset to identity: inside a cell = back to the PLAIN cell placement (the cell
-  // survives); at home = true identity.
+  // Reset to identity: inside a cell = back to the PLAIN cell placement + plain
+  // cell clip (the cell survives); at home = true identity.
   const resetMatrix = useCallback(() => {
     const b = cellBaseRef.current;
     setMatrixState({ ...IDENTITY_PARAMS });
-    const ep = matrixToQuery(composeWithCell({ ...IDENTITY_PARAMS }));
-    pushLog('cmd', b ? `> matrix identity (within ${b.label})` : '> matrix identity');
-    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
-  }, [pushLog, composeWithCell]);
+    if (b) { void applyCellLocalMatrix({ ...IDENTITY_PARAMS }); return; }
+    pushLog('cmd', '> matrix identity');
+    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
+  }, [pushLog, applyCellLocalMatrix]);
 
 
   /** One-click recovery: push the full Work Area bounds (queued, FIFO-safe behind any
@@ -1271,9 +1298,9 @@ export function usePlotter() {
     const b = cellBaseRef.current;
     const vals: MatrixParams = { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty };
     setMatrixState(vals);
-    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(composeWithCell(vals))).catch(() => {});
+    void applyCellLocalMatrix(vals);
     pushLog('ok', `[matrix] ${m.name}${b ? ` (within ${b.label})` : ''}`);
-  }, [pushLog, composeWithCell]);
+  }, [pushLog, applyCellLocalMatrix]);
 
   const saveMatrix = useCallback((name: string) => {
     const v = matrixRef.current;

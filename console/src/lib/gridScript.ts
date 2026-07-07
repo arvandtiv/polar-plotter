@@ -239,9 +239,46 @@ export function activeCellFor(
   if (!liveBounds) return null;
   const ag = loadActiveGrid();
   if (!ag) return null;
-  const bw = Math.abs(liveBounds.xn + ag.cellW / 2) <= tolMm && Math.abs(liveBounds.xp - ag.cellW / 2) <= tolMm;
-  const bh = Math.abs(liveBounds.yn + ag.cellH / 2) <= tolMm && Math.abs(liveBounds.yp - ag.cellH / 2) <= tolMm;
-  return bw && bh ? ag : null;
+  // Plain cell clip, OR the auto-fit clip of the HYPOTHESISED cell-local affine
+  // (local linear = live linear; local shift = live shift minus this cell's centre).
+  const candidates = [
+    { xn: -ag.cellW / 2, xp: ag.cellW / 2, yn: -ag.cellH / 2, yp: ag.cellH / 2 },
+  ];
+  if (m && ['a', 'b', 'c', 'd'].every((k) => Number.isFinite((m as Record<string, unknown>)[k] as number))) {
+    const mm = m as { a: number; b: number; c: number; d: number; tx: number; ty: number };
+    candidates.push(cellLocalBounds(ag, { ...mm, tx: mm.tx - ag.cx, ty: mm.ty - ag.cy }));
+  }
+  for (const c of candidates) {
+    if (Math.abs(liveBounds.xn - c.xn) <= tolMm && Math.abs(liveBounds.xp - c.xp) <= tolMm &&
+        Math.abs(liveBounds.yn - c.yn) <= tolMm && Math.abs(liveBounds.yp - c.yp) <= tolMm) return ag;
+  }
+  return null;
+}
+
+/** The cell-LOCAL logical clip for a cell with a cell-local affine active: the largest
+ *  aspect-true box whose image under  p' = L·p + t_local  stays inside the cell rect
+ *  (±W/2 × ±H/2). The firmware clips PRE-affine (logical space), so without this a
+ *  d=1.5 warp lets logical points inside the plain cell box land PHYSICALLY outside
+ *  the cell. For the box (±u, ±v): max|x'| = |a|u + |b|v + |tx| ≤ W/2 and
+ *  max|y'| = |c|u + |d|v + |ty| ≤ H/2; keeping u:v = W:H gives one scale s.
+ *  Identity → the plain cell box. s may exceed 1 (shrinking warps allow a larger
+ *  logical canvas); capped at 20 against degenerate matrices. */
+export function cellLocalBounds(
+  cell: { cellW: number; cellH: number },
+  local: { a: number; b: number; c: number; d: number; tx: number; ty: number },
+): { xn: number; xp: number; yn: number; yp: number } {
+  const hW = cell.cellW / 2, hH = cell.cellH / 2;
+  const availX = Math.max(0.5, hW - Math.abs(local.tx));
+  const availY = Math.max(0.5, hH - Math.abs(local.ty));
+  const dx = Math.abs(local.a) * hW + Math.abs(local.b) * hH;
+  const dy = Math.abs(local.c) * hW + Math.abs(local.d) * hH;
+  const sx = dx > 1e-9 ? availX / dx : Infinity;
+  const sy = dy > 1e-9 ? availY / dy : Infinity;
+  const s = Math.min(20, Math.min(sx, sy));
+  // floor to 0.01 mm (toward zero) so the rounded clip can never round UP past containment
+  const fl2 = (n: number) => Math.floor(n * 100) / 100;
+  const xp = fl2(s * hW), yp = fl2(s * hH);
+  return { xn: -xp, xp, yn: -yp, yp };
 }
 
 /** Bake metadata into each grid_select / grid_clear so commands are self-contained. */
