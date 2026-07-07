@@ -224,6 +224,26 @@ export function activeGridMatching(
   return Math.abs(ag.cx - m.tx) <= tolMm && Math.abs(ag.cy - m.ty) <= tolMm ? ag : null;
 }
 
+/** Cell identification that SURVIVES a composed affine: matches the stored cell by the
+ *  live matrix offset OR by the live firmware BOUNDS equalling the cell's ±W/2 × ±H/2
+ *  clip. Once the user sculpts a cell-local affine (matrix tx/ty = centre + user offset),
+ *  the tx/ty test fails but the bounds — which only grid_select/clear touch — still name
+ *  the cell. */
+export function activeCellFor(
+  m: { tx: number; ty: number } | undefined | null,
+  liveBounds: { xn: number; xp: number; yn: number; yp: number } | undefined | null,
+  tolMm = 0.5,
+): ActiveGridInfo | null {
+  const byMatrix = activeGridMatching(m, tolMm);
+  if (byMatrix) return byMatrix;
+  if (!liveBounds) return null;
+  const ag = loadActiveGrid();
+  if (!ag) return null;
+  const bw = Math.abs(liveBounds.xn + ag.cellW / 2) <= tolMm && Math.abs(liveBounds.xp - ag.cellW / 2) <= tolMm;
+  const bh = Math.abs(liveBounds.yn + ag.cellH / 2) <= tolMm && Math.abs(liveBounds.yp - ag.cellH / 2) <= tolMm;
+  return bw && bh ? ag : null;
+}
+
 /** Bake metadata into each grid_select / grid_clear so commands are self-contained. */
 export function hydrateGridCommands<T extends { type?: string }>(
   commands: T[],

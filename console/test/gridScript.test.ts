@@ -5,6 +5,7 @@ import {
   computeCell,
   resolveGridCtx,
   isIdentityMatrix,
+  activeCellFor,
 } from "../src/lib/gridScript.ts";
 
 let fails = 0;
@@ -56,6 +57,31 @@ console.log("[3] resolveGridCtx: live bounds override flipped inline full_*");
   // grid_clear (no cols/rows) still gets authoritative bounds.
   const clr = resolveGridCtx({ type: "grid_clear", full_xn: -276, full_xp: 263, full_yn: -273, full_yp: 115 }, live)!;
   ok("grid_clear bounds from live ctx", clr.full_yn === -115 && clr.full_yp === 273);
+}
+
+console.log("[7] activeCellFor — cell identity that survives a cell-local affine");
+{
+  // simulate a stored active-grid record via a localStorage shim
+  const store: Record<string, string> = {};
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (k: string) => store[k] ?? null,
+    setItem: (k: string, v: string) => { store[k] = v; },
+    removeItem: (k: string) => { delete store[k]; },
+  };
+  const ag = { cols: 3, rows: 3, padding_mm: 5, full_xn: -276, full_xp: 263, full_yn: -115, full_yp: 273,
+               col: 1, row: 2, cellW: 87.6, cellH: 74.3, cx: 45, cy: -12 };
+  store["plotter.activeGrid"] = JSON.stringify(ag);
+  const cellBounds = { xn: -43.8, xp: 43.8, yn: -37.15, yp: 37.15 };
+  ok("pure placement matches by matrix",
+     activeCellFor({ tx: 45, ty: -12 }, cellBounds)?.col === 1);
+  ok("COMPOSED affine (tx shifted) still matches by BOUNDS",
+     activeCellFor({ tx: 45 + 10, ty: -12 - 4 }, cellBounds)?.col === 1);
+  ok("composed + no bounds -> null (cannot confirm)",
+     activeCellFor({ tx: 55, ty: -16 }, null) === null);
+  ok("full-area bounds -> no cell",
+     activeCellFor({ tx: 55, ty: -16 }, { xn: -276, xp: 263, yn: -115, yp: 273 }) === null);
+  delete store["plotter.activeGrid"];
+  ok("no record -> null", activeCellFor({ tx: 45, ty: -12 }, cellBounds) === null);
 }
 
 console.log("[6] isIdentityMatrix — stale-cell detection from /api/status");

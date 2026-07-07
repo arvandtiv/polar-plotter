@@ -24,7 +24,7 @@ import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../
 import { decodeBgcode } from '../lib/bgcode';
 import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
 import { compileFrame, expandGenerator } from '../lib/runPipeline';
-import { computeCell, gridClearQueries, saveActiveGrid, clearActiveGrid, activeGridMatching } from '../lib/gridScript';
+import { computeCell, gridClearQueries, saveActiveGrid, clearActiveGrid, activeCellFor } from '../lib/gridScript';
 import type { Frame } from '../lib/frame';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
 import { evaluate, type Layer, type LayerGroup } from '../lib/pipeline';
@@ -1414,8 +1414,8 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
     // Embed the machine context (work area + active cell setup) so the file records
     // where the design was meant to land — and say so in the log.
     const m = status?.matrix ?? null;
-    const ag = activeGridMatching(m);
-    const cellActive = !!m && (Math.abs(m.tx) > 0.5 || Math.abs(m.ty) > 0.5);
+    const ag = activeCellFor(m, status?.bounds);   // bounds-aware: survives a cell-local affine
+    const cellActive = !!ag || (!!m && (Math.abs(m.tx) > 0.5 || Math.abs(m.ty) > 0.5));
     const context: ExportContext = {
       exported_at: new Date().toISOString(),
       work_area: { xn: -bounds.left, xp: bounds.right, yn: -bounds.up, yp: bounds.down, shape: bounds.shape },
@@ -2164,6 +2164,14 @@ export default function App() {
                 </Card>
 
                 <Card title="Affine matrix" icon="⧉" accent="#7c3aed" collapsible>
+                  {P.cellBase && (
+                    <div className="mb-3 rounded border border-violet-600/50 bg-violet-950/40 px-2.5 py-1.5 text-[11px] text-violet-200">
+                      ⧉ <b>{P.cellBase.label}</b> is active — these values apply <b>CELL-LOCALLY</b>: the
+                      linear part warps around the cell centre, tx/ty shift within it (the firmware receives
+                      them composed with the placement at ({P.cellBase.cx}, {P.cellBase.cy}), so the cell
+                      stays put). ↺ Identity = back to the plain cell.
+                    </div>
+                  )}
                   <p className="mb-3 text-[12px] leading-relaxed text-ink-400">
                     Warps the logical drawing space before the belt math:
                     <span className="font-mono text-ink-300"> x′ = a·x + b·y + tx</span>,
@@ -2274,7 +2282,7 @@ export default function App() {
                 // the matrix but not the bounds) — displaces Home and Walk-limits.
                 const m = status?.matrix ?? matrix;
                 const lb = status?.bounds;
-                const ag = activeGridMatching(m);   // known cell only if it matches tx/ty
+                const ag = activeCellFor(m, status?.bounds);   // bounds-aware: survives a cell-local affine
                 const offsetOn = Math.abs(m.tx) > 0.5 || Math.abs(m.ty) > 0.5;
                 return (
                   <div className="mt-2 rounded border border-amber-600/60 bg-amber-950/50 px-2.5 py-1.5 text-[11px] text-amber-200">

@@ -166,6 +166,7 @@ import {
   hydrateGridCommands,
   type GridCtx,
   isIdentityMatrix,
+  activeCellFor,
 } from '../lib/gridScript';
 export type { GeneratorSpec };
 
@@ -751,6 +752,11 @@ export function usePlotter() {
   const sseWasOpen  = useRef(false);
   const pollFails   = useRef(0);
   const drainRef    = useRef<{ startDone: number; startTime: number } | null>(null);
+  // Cell placement adopted from OUTSIDE the console (MCP grid_select): captured while
+  // the live matrix is still a pure placement (identity linear + offset) so cell-local
+  // affine edits can compose with it even though we have no local grid record. Sticky
+  // until the workspace returns to the 1×1 home.
+  const adoptedCellRef = useRef<{ cx: number; cy: number } | null>(null);
 
   // Refs that mirror state — needed for callbacks that close over the initial
   // value and would otherwise see stale data (EventSource handlers, setInterval).
@@ -893,11 +899,31 @@ export function usePlotter() {
           hold: s.motion.hold_ma,
         });
       }
+      // Adopt an externally-set (MCP) cell placement while it is still pure — identity
+      // linear part with an offset — so the Affine card can compose edits with it.
+      // Cleared once the machine is back at the full area with identity.
+      if (s.matrix && s.bounds) {
+        const m = s.matrix;
+        const linearIdent = Math.abs(m.a - 1) < 1e-3 && Math.abs(m.b) < 1e-3 &&
+                            Math.abs(m.c) < 1e-3 && Math.abs(m.d - 1) < 1e-3;
+        const offset = Math.abs(m.tx) > 0.5 || Math.abs(m.ty) > 0.5;
+        if (linearIdent && !offset) {
+          adoptedCellRef.current = null;                      // pure identity → no cell
+        } else if (linearIdent && offset && !activeCellFor(m, s.bounds)) {
+          adoptedCellRef.current = { cx: m.tx, cy: m.ty };    // external pure placement
+        }
+      }
+
       // Reflect the firmware's ACTIVE matrix into the editor (identity at startup) —
-      // read-only seeding, never an apply.
+      // read-only seeding, never an apply. With a cell active, the editor holds the
+      // CELL-LOCAL matrix, so subtract the cell centre from the live translation.
       if (!matrixSeeded.current && s.matrix) {
         matrixSeeded.current = true;
-        setMatrixState({ ...s.matrix });
+        const ag = activeCellFor(s.matrix, s.bounds);
+        const base = ag ? { cx: ag.cx, cy: ag.cy } : adoptedCellRef.current;
+        setMatrixState(base
+          ? { ...s.matrix, tx: s.matrix.tx - base.cx, ty: s.matrix.ty - base.cy }
+          : { ...s.matrix });
       }
 
       if (s.job && s.current > 0) jobLabels.current.set(s.current, s.job);
@@ -1160,26 +1186,6 @@ export function usePlotter() {
     setPapers(next); savePapers(next);
   }, []);
 
-  // ---- affine matrix (live editor + presets) -------------------
-  // Edit one of the 6 live values (does NOT push to firmware until applyMatrixVals).
-  const setMatrixVal = useCallback((key: keyof MatrixParams, val: number) => {
-    setMatrixState((m) => ({ ...m, [key]: val }));
-  }, []);
-
-  // Push the current live values to the firmware session.
-  const applyMatrixVals = useCallback(() => {
-    const ep = matrixToQuery(matrixRef.current);
-    pushLog('cmd', `> ${ep}`);
-    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
-  }, [pushLog]);
-
-  // Reset to identity (passthrough) in both the editor and the firmware.
-  const resetMatrix = useCallback(() => {
-    setMatrixState({ ...IDENTITY_PARAMS });
-    pushLog('cmd', '> matrix identity');
-    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(IDENTITY_PARAMS)).catch(() => {});
-  }, [pushLog]);
-
   /* ---- Workspace "home" tracking (the 1×1 full-area state) ----------------------
    * THE authoritative check, derived from LIVE firmware state and nothing else:
    * home ⇔ the live matrix is identity AND the live bounds equal the console's full
@@ -1196,6 +1202,58 @@ export function usePlotter() {
     return ident !== false && match ? 'home' : 'displaced';
   }, [status, bounds]);
 
+  // ---- affine matrix (live editor + presets) -------------------
+  /* Active grid cell the affine edits must COMPOSE with. The cell mechanism IS the
+   * matrix (identity linear + tx/ty = cell centre), so pushing the editor's values
+   * raw would wipe the placement and displace the whole cell (the reported bug:
+   * "changing d throws off the cell"). While a cell is active, editor values are
+   * CELL-LOCAL: the firmware receives  [a b; c d]  with  tx+centreX, ty+centreY.
+   * Cell identity comes from the console's grid record matched by BOUNDS (survives
+   * composition), or an adopted external (MCP) placement. */
+  const cellBase: { cx: number; cy: number; label: string } | null = useMemo(() => {
+    const ag = activeCellFor(status?.matrix, status?.bounds);
+    if (ag) return { cx: ag.cx, cy: ag.cy, label: `cell (${ag.col},${ag.row}) of ${ag.cols}×${ag.rows}` };
+    if (adoptedCellRef.current && workspaceHome === 'displaced') {
+      const b = adoptedCellRef.current;
+      return { cx: b.cx, cy: b.cy, label: `external cell at (${b.cx.toFixed(1)}, ${b.cy.toFixed(1)})` };
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, workspaceHome]);
+  const cellBaseRef = useRef(cellBase); cellBaseRef.current = cellBase;
+
+  /** Compose cell-local editor values with the active cell placement (passthrough
+   *  when no cell is active). */
+  const composeWithCell = useCallback((v: MatrixParams): MatrixParams => {
+    const b = cellBaseRef.current;
+    return b ? { ...v, tx: v.tx + b.cx, ty: v.ty + b.cy } : v;
+  }, []);
+
+  // Edit one of the 6 live values (does NOT push to firmware until applyMatrixVals).
+  const setMatrixVal = useCallback((key: keyof MatrixParams, val: number) => {
+    setMatrixState((m) => ({ ...m, [key]: val }));
+  }, []);
+
+  // Push the current live values to the firmware session (cell-composed when inside one).
+  const applyMatrixVals = useCallback(() => {
+    const b = cellBaseRef.current;
+    const ep = matrixToQuery(composeWithCell(matrixRef.current));
+    pushLog('cmd', `> ${ep}`);
+    if (b) pushLog('sys', `[matrix] applied WITHIN ${b.label} — composed with centre (${b.cx}, ${b.cy})`);
+    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
+  }, [pushLog, composeWithCell]);
+
+  // Reset to identity: inside a cell = back to the PLAIN cell placement (the cell
+  // survives); at home = true identity.
+  const resetMatrix = useCallback(() => {
+    const b = cellBaseRef.current;
+    setMatrixState({ ...IDENTITY_PARAMS });
+    const ep = matrixToQuery(composeWithCell({ ...IDENTITY_PARAMS }));
+    pushLog('cmd', b ? `> matrix identity (within ${b.label})` : '> matrix identity');
+    if (ipRef.current) apiGet(ipRef.current, ep).catch(() => {});
+  }, [pushLog, composeWithCell]);
+
+
   /** One-click recovery: push the full Work Area bounds (queued, FIFO-safe behind any
    *  pending draws) then identity matrix — the same pair grid_clear applies. */
   const restoreWorkspace = useCallback(async () => {
@@ -1207,13 +1265,15 @@ export function usePlotter() {
     pushLog('ok', '[workspace] full work area restored — home & walk-limits are true again');
   }, [pushLog, sendAndWait]);
 
-  // Apply a saved preset: load into the editor AND push to the firmware.
+  // Apply a saved preset: load into the editor AND push to the firmware
+  // (cell-composed when inside a cell — presets are cell-local too).
   const applyMatrix = useCallback((m: Matrix) => {
+    const b = cellBaseRef.current;
     const vals: MatrixParams = { a: m.a, b: m.b, c: m.c, d: m.d, tx: m.tx, ty: m.ty };
     setMatrixState(vals);
-    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(vals)).catch(() => {});
-    pushLog('ok', `[matrix] ${m.name}`);
-  }, [pushLog]);
+    if (ipRef.current) apiGet(ipRef.current, matrixToQuery(composeWithCell(vals))).catch(() => {});
+    pushLog('ok', `[matrix] ${m.name}${b ? ` (within ${b.label})` : ''}`);
+  }, [pushLog, composeWithCell]);
 
   const saveMatrix = useCallback((name: string) => {
     const v = matrixRef.current;
@@ -1249,6 +1309,7 @@ export function usePlotter() {
     status, jobs, currentJob,
     papers, applyPaper, savePaper, renamePaper, deletePaper,
     matrix, matrices, setMatrixVal, applyMatrixVals, resetMatrix,
+    cellBase,
     workspaceHome, restoreWorkspace,
     applyMatrix, saveMatrix, renameMatrix, deleteMatrix,
     setMotion, commitMotion,
