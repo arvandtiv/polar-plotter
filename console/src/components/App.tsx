@@ -1375,6 +1375,26 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
     setLayers((ls) => ls.map((l) => (l.groupId === gid ? { ...l, groupId: undefined } : l)));
     if (selId === gid) setSelId('');
   };
+  // Replicate a group AS WHAT IT IS: deep-copy every member layer (params intact,
+  // fresh ids) into a new group carrying the same transform, nudged +10/+10 mm so
+  // the copy is visible & selectable instead of sitting invisibly on the original.
+  const duplicateGroup = (gid: string) => {
+    const src = groups.find((g) => g.id === gid);
+    if (!src) return;
+    const nid = newGroupId();
+    const copy: LayerGroup = { ...src, id: nid, name: `${src.name} copy`, tx: src.tx + 10, ty: src.ty + 10 };
+    const members = layers.filter((l) => l.groupId === gid);
+    const cloned: Layer[] = members.map((l) => ({
+      id: newLayerId(),
+      moduleKey: l.moduleKey,
+      params: { ...l.params },
+      groupId: nid,
+    }));
+    setGroups((gs) => [...gs, copy]);
+    setLayers((ls) => [...ls, ...cloned]);
+    setSelId(nid);
+    pushLog('ok', `[studio] duplicated group "${src.name}" → "${copy.name}" (${cloned.length} layer${cloned.length === 1 ? '' : 's'})`);
+  };
   const removeFromGroup = (lid: string) =>
     setLayers((ls) => ls.map((l) => (l.id === lid ? { ...l, groupId: undefined } : l)));
   const updateGroup = (gid: string, key: keyof Omit<LayerGroup, 'id'>, val: string | number) =>
@@ -1618,6 +1638,9 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
                                 onChange={(e) => updateGroup(grp.id, 'name', e.target.value)}
                                 className="flex-1 bg-transparent text-[12px] font-semibold text-violet-300 outline-none min-w-0 focus:text-violet-200" />
                             </button>
+                            <button onClick={() => duplicateGroup(grp.id)} disabled={busy}
+                              className="text-ink-500 hover:text-violet-300 disabled:opacity-30 text-[11px]"
+                              title="Duplicate group (copies all its layers + transform)">⧉</button>
                             <button onClick={() => disbandGroup(grp.id)} disabled={busy}
                               className="text-ink-500 hover:text-stop disabled:opacity-30 text-[11px]" title="Disband group">✕</button>
                           </div>
