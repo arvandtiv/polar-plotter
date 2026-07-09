@@ -275,15 +275,74 @@ function concentricRings(poly, spacing) {
   }
   return out;
 }
+function orbitRings(poly, spacing, fx, fy, spiral = false) {
+  const b = bounds(poly);
+  if (!b) return [];
+  const sp = Math.max(0.5, spacing);
+  let rMaxSq = 0, rMin = Infinity;
+  for (const p of poly) {
+    const d = Math.hypot(p.x - fx, p.y - fy);
+    rMaxSq = Math.max(rMaxSq, d * d);
+    rMin = Math.min(rMin, d);
+  }
+  const rMax = Math.sqrt(rMaxSq);
+  const inside2 = pointInPoly(poly, fx, fy);
+  const rStart = inside2 ? sp : Math.max(sp, Math.floor(rMin / sp) * sp);
+  const out = [];
+  const ringPts = (r2, a0, a1) => {
+    const n = Math.min(720, Math.max(24, Math.ceil(r2 * (a1 - a0) / 1.5)));
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (a1 - a0) * i / n;
+      pts.push({ x: fx + r2 * Math.cos(a), y: fy + r2 * Math.sin(a) });
+    }
+    return pts;
+  };
+  if (spiral) {
+    const pts = [];
+    const thMax = rMax / sp * 2 * Math.PI;
+    let th = inside2 ? 0.4 : rStart / sp * 2 * Math.PI;
+    while (th <= thMax) {
+      const r2 = sp * th / (2 * Math.PI);
+      pts.push({ x: fx + r2 * Math.cos(th), y: fy + r2 * Math.sin(th) });
+      th += Math.min(0.3, 1.5 / Math.max(1, r2));
+    }
+    for (const piece of clipPolylineToPolygon(pts, poly, true))
+      if (piece.length > 1) out.push({ points: piece });
+    return out;
+  }
+  for (let r2 = rStart; r2 <= rMax; r2 += sp) {
+    const ring = ringPts(r2, 0, 2 * Math.PI);
+    if (inside2 && r2 < rMin) {
+      out.push({ points: ring, closed: true });
+      continue;
+    }
+    for (const piece of clipPolylineToPolygon(ring, poly, true))
+      if (piece.length > 1) out.push({ points: piece });
+  }
+  return out;
+}
+function pointInPoly(poly, x, y) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], bb = poly[j];
+    if (a.y > y !== bb.y > y && x < (bb.x - a.x) * (y - a.y) / (bb.y - a.y) + a.x) c = !c;
+  }
+  return c;
+}
 function shapeFillSection() {
   return { title: "Fill", fields: [
     { key: "fill", label: "Fill", type: "select", default: "none", options: [
       { value: "none", label: "None (outline only)" },
       { value: "hatch", label: "Hatch" },
-      { value: "concentric", label: "Concentric" }
+      { value: "concentric", label: "Concentric" },
+      { value: "orbit", label: "Around point (rings)" },
+      { value: "spiral", label: "Around point (spiral)" }
     ] },
     { key: "hatchAngle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 45 },
     { key: "hatchSpacing", label: "Fill spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
+    { key: "focusX", label: "Point X (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+    { key: "focusY", label: "Point Y (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
     { key: "outline", label: "Outline", type: "toggle", default: true }
   ] };
 }
@@ -293,9 +352,12 @@ function applyShapeFill(poly, params, cycles) {
   const spacing = Math.max(0.5, num(params, "hatchSpacing", 3));
   const angle = num(params, "hatchAngle", 45);
   const paths = [];
+  const fx = num(params, "focusX", 0), fy = num(params, "focusY", 0);
   if (outline || mode === "none") paths.push({ points: poly, closed: true, cycles });
   if (mode === "hatch") paths.push(...hatchPolygon(poly, spacing, angle));
   else if (mode === "concentric") paths.push(...concentricRings(poly, spacing));
+  else if (mode === "orbit") paths.push(...orbitRings(poly, spacing, fx, fy, false));
+  else if (mode === "spiral") paths.push(...orbitRings(poly, spacing, fx, fy, true));
   return paths;
 }
 var fillModule = {
@@ -311,10 +373,17 @@ var fillModule = {
         label: "Mode",
         type: "select",
         default: "hatch",
-        options: [{ value: "hatch", label: "Hatch" }, { value: "concentric", label: "Concentric" }]
+        options: [
+          { value: "hatch", label: "Hatch" },
+          { value: "concentric", label: "Concentric" },
+          { value: "orbit", label: "Around point (rings)" },
+          { value: "spiral", label: "Around point (spiral)" }
+        ]
       },
       { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
       { key: "angle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "\xB0", default: 45 },
+      { key: "fx", label: "Point X (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "fy", label: "Point Y (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
       { key: "keepOutline", label: "Keep outlines", type: "toggle", default: true }
     ] }
   ],
@@ -324,10 +393,11 @@ var fillModule = {
     const spacing = Math.max(0.5, num(params, "spacing", 3));
     const angle = num(params, "angle", 45);
     const keepOutline = params.keepOutline !== false;
+    const fx = num(params, "fx", 0), fy = num(params, "fy", 0);
     const out = keepOutline ? [...lower.paths] : lower.paths.filter((p) => !p.closed);
     for (const path of lower.paths) {
       if (!path.closed || path.points.length < 3) continue;
-      out.push(...mode === "concentric" ? concentricRings(path.points, spacing) : hatchPolygon(path.points, spacing, angle));
+      out.push(...mode === "concentric" ? concentricRings(path.points, spacing) : mode === "orbit" ? orbitRings(path.points, spacing, fx, fy, false) : mode === "spiral" ? orbitRings(path.points, spacing, fx, fy, true) : hatchPolygon(path.points, spacing, angle));
     }
     return { ...lower, paths: out, meta: { title: "Fill" } };
   }
