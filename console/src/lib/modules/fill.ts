@@ -43,6 +43,73 @@ export function concentricRings(poly: Pt[], spacing: number): Path[] {
   return out;
 }
 
+/** Concentric fill around an ARBITRARY focus point — inside or even OUTSIDE the shape:
+ *  circles (or one continuous spiral) centred on (fx, fy), CLIPPED to the polygon, so
+ *  every arc terminates exactly on the border. Ripples from a dropped stone, truncated
+ *  by the shape. Clipped circles are true circular arcs, so the compiler's arc-fitter
+ *  collapses them into firmware `arc` jobs (fast, silky plotting). */
+export function orbitRings(poly: Pt[], spacing: number, fx: number, fy: number, spiral = false): Path[] {
+  const b = bounds(poly);
+  if (!b) return [];
+  const sp = Math.max(0.5, spacing);
+  // radial band of the polygon as seen from the focus
+  let rMaxSq = 0, rMin = Infinity;
+  for (const p of poly) {
+    const d = Math.hypot(p.x - fx, p.y - fy);
+    rMaxSq = Math.max(rMaxSq, d * d);
+    rMin = Math.min(rMin, d);
+  }
+  const rMax = Math.sqrt(rMaxSq);
+  // inside focus → rings start at `spacing`; outside → skip the empty gap up to the shape
+  const inside = pointInPoly(poly, fx, fy);
+  const rStart = inside ? sp : Math.max(sp, Math.floor(rMin / sp) * sp);
+  const out: Path[] = [];
+
+  const ringPts = (r: number, a0: number, a1: number): Pt[] => {
+    const n = Math.min(720, Math.max(24, Math.ceil((r * (a1 - a0)) / 1.5)));
+    const pts: Pt[] = [];
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + ((a1 - a0) * i) / n;
+      pts.push({ x: fx + r * Math.cos(a), y: fy + r * Math.sin(a) });
+    }
+    return pts;
+  };
+
+  if (spiral) {
+    // one continuous Archimedean spiral r = sp·θ/2π, weaving around the focus out to
+    // the border; the clip splits it into the pieces that lie inside the shape.
+    const pts: Pt[] = [];
+    const thMax = (rMax / sp) * 2 * Math.PI;
+    let th = inside ? 0.4 : (rStart / sp) * 2 * Math.PI;
+    while (th <= thMax) {
+      const r = (sp * th) / (2 * Math.PI);
+      pts.push({ x: fx + r * Math.cos(th), y: fy + r * Math.sin(th) });
+      th += Math.min(0.3, 1.5 / Math.max(1, r));   // ~1.5 mm steps along the coil
+    }
+    for (const piece of clipPolylineToPolygon(pts, poly, true))
+      if (piece.length > 1) out.push({ points: piece });
+    return out;
+  }
+
+  for (let r = rStart; r <= rMax; r += sp) {
+    const ring = ringPts(r, 0, 2 * Math.PI);
+    if (inside && r < rMin) { out.push({ points: ring, closed: true }); continue; }  // fully inside: unclipped full ring
+    for (const piece of clipPolylineToPolygon(ring, poly, true))
+      if (piece.length > 1) out.push({ points: piece });
+  }
+  return out;
+}
+
+// even-odd point-in-polygon (for choosing the ring start radius)
+function pointInPoly(poly: Pt[], x: number, y: number): boolean {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], bb = poly[j];
+    if ((a.y > y) !== (bb.y > y) && x < ((bb.x - a.x) * (y - a.y)) / (bb.y - a.y) + a.x) c = !c;
+  }
+  return c;
+}
+
 /* ---- Shared shape-fill capability (ported from the firmware Draw primitives) ------
  * The old Draw tab's circle/square/wobbly cards offered fill none/hatch/concentric +
  * hatch angle/spacing + outline toggle, executed firmware-side. These two helpers give
@@ -54,9 +121,13 @@ export function shapeFillSection(): Section {
       { value: "none",       label: "None (outline only)" },
       { value: "hatch",      label: "Hatch" },
       { value: "concentric", label: "Concentric" },
+      { value: "orbit",      label: "Around point (rings)" },
+      { value: "spiral",     label: "Around point (spiral)" },
     ]},
     { key: "hatchAngle",   label: "Hatch angle",  type: "range", min: -90, max: 90, step: 1,   unit: "°",  default: 45 },
     { key: "hatchSpacing", label: "Fill spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
+    { key: "focusX",       label: "Point X (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+    { key: "focusY",       label: "Point Y (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
     { key: "outline",      label: "Outline",      type: "toggle", default: true },
   ]};
 }
@@ -70,9 +141,12 @@ export function applyShapeFill(poly: Pt[], params: ParamValues, cycles: number):
   const spacing = Math.max(0.5, num(params, "hatchSpacing", 3));
   const angle = num(params, "hatchAngle", 45);
   const paths: Path[] = [];
+  const fx = num(params, "focusX", 0), fy = num(params, "focusY", 0);
   if (outline || mode === "none") paths.push({ points: poly, closed: true, cycles });
   if (mode === "hatch")           paths.push(...hatchPolygon(poly, spacing, angle));
   else if (mode === "concentric") paths.push(...concentricRings(poly, spacing));
+  else if (mode === "orbit")      paths.push(...orbitRings(poly, spacing, fx, fy, false));
+  else if (mode === "spiral")     paths.push(...orbitRings(poly, spacing, fx, fy, true));
   return paths;
 }
 
@@ -85,9 +159,16 @@ export const fillModule: Module = {
   sections: [
     { title: "Fill", fields: [
       { key: "mode", label: "Mode", type: "select", default: "hatch",
-        options: [{ value: "hatch", label: "Hatch" }, { value: "concentric", label: "Concentric" }] },
+        options: [
+          { value: "hatch", label: "Hatch" },
+          { value: "concentric", label: "Concentric" },
+          { value: "orbit", label: "Around point (rings)" },
+          { value: "spiral", label: "Around point (spiral)" },
+        ] },
       { key: "spacing", label: "Spacing", type: "range", min: 0.5, max: 20, step: 0.5, unit: "mm", default: 3 },
       { key: "angle", label: "Hatch angle", type: "range", min: -90, max: 90, step: 1, unit: "°", default: 45 },
+      { key: "fx", label: "Point X (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
+      { key: "fy", label: "Point Y (around-point)", type: "range", min: -300, max: 300, step: 1, unit: "mm", default: 0 },
       { key: "keepOutline", label: "Keep outlines", type: "toggle", default: true },
     ]},
   ],
@@ -98,10 +179,15 @@ export const fillModule: Module = {
     const angle = num(params, "angle", 45);
     const keepOutline = params.keepOutline !== false;
 
+    const fx = num(params, "fx", 0), fy = num(params, "fy", 0);
     const out: Path[] = keepOutline ? [...lower.paths] : lower.paths.filter((p) => !p.closed);
     for (const path of lower.paths) {
       if (!path.closed || path.points.length < 3) continue;
-      out.push(...(mode === "concentric" ? concentricRings(path.points, spacing) : hatchPolygon(path.points, spacing, angle)));
+      // around-point modes share ONE global focus — ripples run across every object
+      out.push(...(mode === "concentric" ? concentricRings(path.points, spacing)
+                 : mode === "orbit"      ? orbitRings(path.points, spacing, fx, fy, false)
+                 : mode === "spiral"     ? orbitRings(path.points, spacing, fx, fy, true)
+                 : hatchPolygon(path.points, spacing, angle)));
     }
     return { ...lower, paths: out, meta: { title: "Fill" } };
   },
