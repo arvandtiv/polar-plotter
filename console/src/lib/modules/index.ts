@@ -32,6 +32,7 @@ import "./mask";
 import "./fill";
 import "./warp";
 import "./text";
+import "./textPath";
 import "./image-linework";
 import "./image-halftone";
 import "./image-squiggle";
