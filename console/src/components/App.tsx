@@ -1352,6 +1352,19 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
     if (selId === id) setSelId(next[next.length - 1]?.id ?? '');
     return next;
   });
+  // Duplicate one layer as what it is: same module + params (deep-copied), same
+  // group membership, inserted right AFTER the original so the copy sits beside it
+  // in the stack; selection jumps to the copy for immediate editing.
+  const duplicateLayer = (id: string) => {
+    setLayers((ls) => {
+      const i = ls.findIndex((l) => l.id === id);
+      if (i < 0) return ls;
+      const src = ls[i];
+      const copy: Layer = { id: newLayerId(), moduleKey: src.moduleKey, params: { ...src.params }, groupId: src.groupId };
+      setSelId(copy.id);
+      return [...ls.slice(0, i + 1), copy, ...ls.slice(i + 1)];
+    });
+  };
   const move = (id: string, dir: -1 | 1) => setLayers((ls) => {
     const i = ls.findIndex((l) => l.id === id), j = i + dir;
     if (i < 0 || j < 0 || j >= ls.length) return ls;
@@ -1687,6 +1700,9 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
                           className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Up">↑</button>
                         <button onClick={() => move(l.id, 1)} disabled={i === layers.length - 1 || busy}
                           className="text-ink-500 hover:text-cyanx disabled:opacity-30 text-[12px]" title="Down">↓</button>
+                        <button onClick={() => duplicateLayer(l.id)} disabled={busy}
+                          className="text-ink-500 hover:text-violet-300 disabled:opacity-30 text-[11px]"
+                          title="Duplicate layer (same params; stays in its group)">⧉</button>
                         {grp ? (
                           <button onClick={() => removeFromGroup(l.id)} disabled={busy}
                             className="text-ink-500 hover:text-amber-400 disabled:opacity-30 text-[11px]" title="Remove from group">⊗</button>
