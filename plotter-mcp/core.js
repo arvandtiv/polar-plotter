@@ -4165,7 +4165,7 @@ function mergeFrames(a, b) {
     meta: b.meta ?? a.meta
   };
 }
-function applyGroupTransform(frame, g) {
+function applyGroupTransform(frame, g, px, py) {
   if (g.tx === 0 && g.ty === 0 && g.rotateDeg === 0) return frame;
   const rad = g.rotateDeg * Math.PI / 180;
   const cos = Math.cos(rad), sin = Math.sin(rad);
@@ -4173,23 +4173,48 @@ function applyGroupTransform(frame, g) {
     ...frame,
     paths: frame.paths.map((path) => ({
       ...path,
-      points: path.points.map((p) => ({
-        x: p.x * cos - p.y * sin + g.tx,
-        y: p.x * sin + p.y * cos + g.ty
-      }))
+      points: path.points.map((p) => {
+        const x = p.x - px, y = p.y - py;
+        return {
+          x: x * cos - y * sin + px + g.tx,
+          y: x * sin + y * cos + py + g.ty
+        };
+      })
     }))
   };
 }
 function evaluate(layers, bounds2, groups = [], image, font) {
   const groupMap = new Map(groups.map((g) => [g.id, g]));
+  const memberCache = /* @__PURE__ */ new Map();
+  const ext = /* @__PURE__ */ new Map();
+  for (const layer of layers) {
+    if (!layer.groupId || !groupMap.has(layer.groupId)) continue;
+    const mod = getModule(layer.moduleKey);
+    if (!mod || mod.kind !== "make") continue;
+    const out = mod.generate(layer.params, { bounds: bounds2, lowerFrame: emptyFrame(bounds2), image, font });
+    memberCache.set(layer.id, out);
+    const e = ext.get(layer.groupId) ?? { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    for (const path of out.paths) for (const p of path.points) {
+      if (p.x < e.x0) e.x0 = p.x;
+      if (p.x > e.x1) e.x1 = p.x;
+      if (p.y < e.y0) e.y0 = p.y;
+      if (p.y > e.y1) e.y1 = p.y;
+    }
+    ext.set(layer.groupId, e);
+  }
   let acc = emptyFrame(bounds2);
   for (const layer of layers) {
     const mod = getModule(layer.moduleKey);
     if (!mod) continue;
-    let out = mod.generate(layer.params, { bounds: bounds2, lowerFrame: acc, image, font });
+    let out = memberCache.get(layer.id) ?? mod.generate(layer.params, { bounds: bounds2, lowerFrame: acc, image, font });
     if (mod.kind === "make" && layer.groupId) {
       const g = groupMap.get(layer.groupId);
-      if (g) out = applyGroupTransform(out, g);
+      const e = ext.get(layer.groupId);
+      if (g) {
+        const px = e && e.x0 <= e.x1 ? (e.x0 + e.x1) / 2 : 0;
+        const py = e && e.y0 <= e.y1 ? (e.y0 + e.y1) / 2 : 0;
+        out = applyGroupTransform(out, g, px, py);
+      }
     }
     acc = mod.kind === "modify" ? out : mergeFrames(acc, out);
   }
