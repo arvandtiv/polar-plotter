@@ -56,7 +56,7 @@ export const DEFAULTS = {
   // run de-rated 600→400 mA to match the firmware default (board_config.h) — a pen
   // gondola needs little torque and run current is the multi-hour-plot heat source.
   motion: { vmax: 350000, amax: 1690, run: 940, hold: 440 },
-  bounds: { left: 276, right: 263, up: 115, down: 273, shape: 'rect' as BoundsShape },
+  bounds: { left: 269, right: 270, up: 115, down: 273, shape: 'rect' as BoundsShape },
 };
 
 // ---- bounds localStorage persistence --------------------------------
@@ -70,6 +70,9 @@ function loadBounds(): PlotterBounds {
       const b = JSON.parse(raw);
       if (typeof b.left === 'number' && typeof b.right === 'number' &&
           typeof b.up   === 'number' && typeof b.down  === 'number') {
+        // migrate the pre-2026-07 default (276/263) to the re-measured machine
+        // values (269/270) — customised values are left untouched.
+        if (b.left === 276 && b.right === 263) { b.left = 269; b.right = 270; }
         return { left: b.left, right: b.right, up: b.up, down: b.down,
                  shape: b.shape === 'ellipse' ? 'ellipse' : 'rect' };
       }
