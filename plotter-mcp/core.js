@@ -4229,30 +4229,67 @@ function simplifyFrame(frame, tol = 0.2) {
 }
 var ORIGIN = { x: 0, y: 0 };
 function optimizeOrder(frame, start = ORIGIN) {
-  const remaining = frame.paths.filter((p) => p.points.length > 0).map(clonePath);
+  const paths = frame.paths.filter((p) => p.points.length > 0).map(clonePath);
+  const n = paths.length;
+  if (n < 2) return { ...frame, paths };
+  const ex = new Float64Array(2 * n), ey = new Float64Array(2 * n);
+  for (let k = 0; k < n; k++) {
+    const pts = paths[k].points;
+    ex[2 * k] = pts[0].x;
+    ey[2 * k] = pts[0].y;
+    ex[2 * k + 1] = pts[pts.length - 1].x;
+    ey[2 * k + 1] = pts[pts.length - 1].y;
+  }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < 2 * n; i++) {
+    if (ex[i] < x0) x0 = ex[i];
+    if (ex[i] > x1) x1 = ex[i];
+    if (ey[i] < y0) y0 = ey[i];
+    if (ey[i] > y1) y1 = ey[i];
+  }
+  const span = Math.max(x1 - x0, y1 - y0, 1e-6);
+  const cell = Math.max(1e-6, span / Math.max(4, Math.ceil(Math.sqrt(n))));
+  const cols = Math.floor((x1 - x0) / cell) + 1;
+  const rows = Math.floor((y1 - y0) / cell) + 1;
+  const gx = (x) => Math.min(cols - 1, Math.max(0, Math.floor((x - x0) / cell)));
+  const gy = (y) => Math.min(rows - 1, Math.max(0, Math.floor((y - y0) / cell)));
+  const grid = Array.from({ length: cols * rows }, () => []);
+  for (let i = 0; i < 2 * n; i++) grid[gy(ey[i]) * cols + gx(ex[i])].push(i);
+  const used = new Uint8Array(n);
   const ordered = [];
-  let cur = start;
-  while (remaining.length) {
-    let best = 0, bestD = Infinity, bestRev = false;
-    for (let k = 0; k < remaining.length; k++) {
-      const pts = remaining[k].points;
-      const ds = dist(cur, pts[0]);
-      const de = dist(cur, pts[pts.length - 1]);
-      if (ds < bestD) {
-        bestD = ds;
-        best = k;
-        bestRev = false;
+  let cx = start.x, cy = start.y;
+  for (let picked = 0; picked < n; picked++) {
+    let bestK = -1, bestRev = false, bestD2 = Infinity;
+    const consider = (i) => {
+      const k = i >> 1;
+      if (used[k]) return;
+      const dx = ex[i] - cx, dy = ey[i] - cy;
+      const d2 = dx * dx + dy * dy;
+      const rev = (i & 1) === 1;
+      if (d2 < bestD2 || d2 === bestD2 && bestK >= 0 && (k < bestK || k === bestK && !rev && bestRev)) {
+        bestD2 = d2;
+        bestK = k;
+        bestRev = rev;
       }
-      if (de < bestD) {
-        bestD = de;
-        best = k;
-        bestRev = true;
+    };
+    const cgx = gx(cx), cgy = gy(cy);
+    for (let r2 = 0; r2 < Math.max(cols, rows); r2++) {
+      if (bestK >= 0 && (r2 - 1) * cell > Math.sqrt(bestD2)) break;
+      const xa = cgx - r2, xb = cgx + r2, ya = cgy - r2, yb = cgy + r2;
+      for (let X = Math.max(0, xa); X <= Math.min(cols - 1, xb); X++) {
+        for (let Y = Math.max(0, ya); Y <= Math.min(rows - 1, yb); Y++) {
+          if (r2 > 0 && X !== xa && X !== xb && Y !== ya && Y !== yb) continue;
+          for (const i of grid[Y * cols + X]) consider(i);
+        }
       }
     }
-    const chosen = remaining.splice(best, 1)[0];
+    const chosen = paths[bestK];
+    used[bestK] = 1;
     if (bestRev) chosen.points.reverse();
     ordered.push(chosen);
-    cur = chosen.points[chosen.points.length - 1];
+    const last = chosen.points[chosen.points.length - 1];
+    cx = last.x;
+    cy = last.y;
   }
   return { ...frame, paths: ordered };
 }

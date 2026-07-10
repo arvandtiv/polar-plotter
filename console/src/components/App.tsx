@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useDeferredValue, memo } from 'react';
 import {
   usePlotter,
   parseJsonScript,
@@ -23,7 +23,8 @@ import { apiGet } from '../lib/api';
 import { digestGcode, type PenMode, type PlaceMode, type GcodeResult } from '../lib/gcode';
 import { decodeBgcode } from '../lib/bgcode';
 import { optimizeOrder, simplifyFrame, buildProgressPaths } from '../lib/toolpath';
-import { compileFrame, expandGenerator } from '../lib/runPipeline';
+import { expandGenerator } from '../lib/runPipeline';
+import { compile } from '../lib/compile';
 import { computeCell, gridClearQueries, saveActiveGrid, clearActiveGrid, activeCellFor } from '../lib/gridScript';
 import type { Frame } from '../lib/frame';
 import { listModules, getModule, defaultsOf } from '../lib/registry';
@@ -1201,29 +1202,66 @@ function GcodeSelect<T extends string>({ label, value, opts, onChange, disabled 
 // "make" module, so new generators (S5+) appear here with zero UI wiring.
 // v1.3 / S17 (Day 23-24): live Frame preview with a drawing-order scrubber. Draws the
 // active (optimised, progress-sliced) frame in plotter coords. Self-contained SVG.
-function FramePreview({ bounds, frame, contain = false }: { bounds: PlotterBounds; frame: Frame; contain?: boolean }) {
+/* Canvas-based preview (was SVG): large artworks (>10k paths / >100k points) made
+ * the SVG version build thousands of <polyline> DOM nodes with string-joined point
+ * lists on EVERY React re-render — including the 1 Hz status poll — which is what
+ * dragged the whole interface down. A 2D canvas draws the same frame in one pass
+ * inside an effect that only fires when the frame/bounds actually change, and
+ * React.memo keeps unrelated re-renders away entirely. No path-count cap needed. */
+const FramePreview = memo(function FramePreview({ bounds, frame, contain = false }: {
+  bounds: PlotterBounds; frame: Frame; contain?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { left, right, up, down } = bounds;
   const pad = Math.max(20, (left + right) * 0.06);
-  const vbX = -left - pad, vbY = -up - pad, vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
-  const sw = vbW / 400;
-  const CAP = 6000;   // guard against pathological path counts freezing the SVG
-  const shown = frame.paths.slice(0, CAP);
+  const vbW = left + right + 2 * pad, vbH = up + down + 2 * pad;
+
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+    // internal resolution: sharp on hidpi, bounded so huge walls stay cheap
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.round(900 * dpr);
+    const H = Math.round((W * vbH) / vbW);
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    const sc = W / vbW;
+    const X = (x: number) => (x + left + pad) * sc;
+    const Y = (y: number) => (y + up + pad) * sc;
+
+    ctx.clearRect(0, 0, W, H);
+    // work-area sheet
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = Math.max(1, 1.2 * sc * (vbW / 400));
+    ctx.beginPath();
+    ctx.rect(X(-left), Y(-up), (left + right) * sc, (up + down) * sc);
+    ctx.fill(); ctx.stroke();
+    // paths — one stroke pass, no DOM
+    ctx.strokeStyle = '#7c3aed';
+    ctx.lineWidth = Math.max(0.8, 1.2 * sc * (vbW / 400));
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const p of frame.paths) {
+      const pts = p.points;
+      if (pts.length < 2) continue;
+      ctx.moveTo(X(pts[0].x), Y(pts[0].y));
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(X(pts[i].x), Y(pts[i].y));
+      if (p.closed && pts.length > 2) ctx.lineTo(X(pts[0].x), Y(pts[0].y));
+    }
+    ctx.stroke();
+  }, [frame, left, right, up, down, pad, vbW, vbH]);
+
   return (
     <div className={contain ? 'h-full w-full overflow-hidden' : 'rounded-lg border border-ink-800 bg-ink-950 overflow-hidden'}>
-      <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+      <canvas ref={canvasRef}
         className={contain ? 'h-full w-full' : 'w-full'}
-        style={contain ? { display: 'block' } : { aspectRatio: `${vbW} / ${vbH}`, display: 'block' }}
-        preserveAspectRatio="xMidYMid meet">
-        <rect x={-left} y={-up} width={left + right} height={up + down} fill="#ffffff" stroke="#cbd5e1" strokeWidth={sw * 1.2} rx={sw} />
-        {shown.map((p, i) => {
-          const pts = p.closed && p.points.length > 2 ? [...p.points, p.points[0]] : p.points;
-          return <polyline key={i} points={pts.map((pt) => `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`).join(' ')}
-            fill="none" stroke="#7c3aed" strokeWidth={sw * 1.2} strokeLinejoin="round" strokeLinecap="round" />;
-        })}
-      </svg>
+        style={contain ? { display: 'block', objectFit: 'contain' } : { aspectRatio: `${vbW} / ${vbH}`, display: 'block', width: '100%' }} />
     </div>
   );
-}
+});
 
 // ---- Studio layer-stack persistence (localStorage) ----
 const STUDIO_KEY = 'plotterStudioLayers';
@@ -1331,10 +1369,21 @@ function StudioPage({ P, status, moving, bounds, topControls }: {
     () => evaluate(layers, { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down }, groups, image, font),
     [layers, groups, bounds.left, bounds.right, bounds.up, bounds.down, image, font],
   );
-  const optFrame = useMemo(() => optimizeOrder(simplifyFrame(frame)), [frame]);
+  // Heavy pipeline work runs on a DEFERRED copy of the frame (React yields to keep
+  // typing/sliders responsive during rapid edits) and the expensive simplify+optimize
+  // pass runs ONCE — `queries` compiles the already-optimized frame instead of
+  // redoing the whole chain (it used to run twice per edit).
+  const dFrame = useDeferredValue(frame);
+  const optFrame = useMemo(
+    () => optimizeOrder(dFrame.meta?.noSimplify ? dFrame : simplifyFrame(dFrame)),
+    [dFrame],
+  );
   const queries = useMemo(
-    () => compileFrame(frame, plotterBounds(bounds), { arcTol: useArcs ? 0.3 : undefined }),
-    [frame, useArcs, bounds.left, bounds.right, bounds.up, bounds.down],
+    () => compile(optFrame, {
+      clipBounds: { left: bounds.left, right: bounds.right, up: bounds.up, down: bounds.down },
+      arcTol: useArcs ? 0.3 : undefined,
+    }),
+    [optFrame, useArcs, bounds.left, bounds.right, bounds.up, bounds.down],
   );
   const previewFrame = useMemo(() => buildProgressPaths(optFrame, orderPct / 100), [optFrame, orderPct]);
   // arc? jobs are drawn segments just like line? — count both, or a circles-only
